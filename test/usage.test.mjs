@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import {
   CREDIT_COSTS,
   PLAN_GRANTS,
+  MEDIA_ACTIONS,
+  planAllowsMedia,
   costFor,
   bucketState,
   monthKey,
@@ -219,8 +221,10 @@ describe('recordUsage / usageThisMonth', () => {
 });
 
 describe('checkBucket / PLAN_GRANTS', () => {
-  it('grants match the plan table', () => {
-    assert.deepEqual(PLAN_GRANTS, { free: 0, buddy: 10000, buddy_media: 25000, helmian_connect: 25000 });
+  it('grants match the fitted settlement table (2026-11-01)', () => {
+    assert.deepEqual(PLAN_GRANTS, {
+      free: 100, starter: 2000, buddy: 7500, buddy_media: 15000, helmian_connect: 24000,
+    });
   });
 
   it('buddy plan: grant minus this month usage', async () => {
@@ -228,9 +232,9 @@ describe('checkBucket / PLAN_GRANTS', () => {
     db.seed({ tenantId: TENANT_A, micros: 2_500_000, at: new Date() }); // 2500 credits
     const state = await checkBucket(db, TENANT_A, { plan: 'buddy' });
     assert.equal(state.plan, 'buddy');
-    assert.equal(state.granted, 10000);
+    assert.equal(state.granted, 7500);
     assert.equal(state.used, 2500);
-    assert.equal(state.remaining, 7500);
+    assert.equal(state.remaining, 5000);
     assert.equal(state.exhausted, false);
   });
 
@@ -239,13 +243,17 @@ describe('checkBucket / PLAN_GRANTS', () => {
     db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'helmian_connect', status: 'active' });
     const state = await checkBucket(db, TENANT_A);
     assert.equal(state.plan, 'helmian_connect');
-    assert.equal(state.granted, 25000);
+    assert.equal(state.granted, 24000);
     assert.deepEqual(await getEntitlement(db, TENANT_A),
       { tenant_id: TENANT_A, plan: 'helmian_connect', status: 'active' });
   });
 
-  it('free and unknown plans grant 0 and read exhausted', async () => {
+  it('free grants the pinned 100-credit taste; unknown and missing plans grant 0', async () => {
     const db = new FakeDb();
+    const free = await checkBucket(db, TENANT_A, { plan: 'free' });
+    assert.equal(free.granted, 100);
+    assert.equal(free.exhausted, false);
+    db.seed({ tenantId: TENANT_A, micros: 100_000, at: new Date() }); // the whole 100 spent
     assert.equal((await checkBucket(db, TENANT_A, { plan: 'free' })).exhausted, true);
     assert.equal((await checkBucket(db, TENANT_A, { plan: 'platinum' })).granted, 0);
     assert.equal((await checkBucket(db, TENANT_A, null)).granted, 0);
@@ -259,8 +267,8 @@ describe('checkBucket / PLAN_GRANTS', () => {
     db.seedGrant({ tenantId: TENANT_B, credits: 9000 }); // someone else's
     const state = await checkBucket(db, TENANT_A, { plan: 'buddy' });
     assert.equal(state.grants, 5000);
-    assert.equal(state.granted, 10000 + 5000);
-    assert.equal(state.remaining, 15000);
+    assert.equal(state.granted, 7500 + 5000);
+    assert.equal(state.remaining, 12500);
   });
 });
 
@@ -303,14 +311,24 @@ describe('meterGate', () => {
       const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 100 });
       assert.equal(gate.meter, true);
       assert.equal(gate.allowed, true);
-      assert.equal(gate.state.remaining, 10000);
+      assert.equal(gate.state.remaining, 7500);
     }));
 
-  it('enforced + server key + free plan: denied credits_exhausted',
+  it('enforced + server key + free plan: the 100-credit taste covers chat',
     withSecret('test-secret', async () => {
       const db = new FakeDb();
       db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
-      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 1 });
+      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 1, action: 'chat' });
+      assert.equal(gate.allowed, true);
+      assert.equal(gate.state.remaining, 100);
+    }));
+
+  it('enforced + server key + free plan, taste spent: denied credits_exhausted',
+    withSecret('test-secret', async () => {
+      const db = new FakeDb();
+      db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
+      db.seed({ tenantId: TENANT_A, micros: 100_000, at: new Date() }); // all 100 credits
+      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 1, action: 'chat' });
       assert.equal(gate.allowed, false);
       assert.equal(gate.reason, 'credits_exhausted');
       assert.equal(gate.state.remaining, 0);
@@ -331,7 +349,7 @@ describe('meterGate', () => {
       assert.equal(gate.reason, 'metering_unavailable');
     }));
 
-  it('denyMetering shapes: 402 exhausted, 503 unavailable, 401 no tenant', () => {
+  it('denyMetering shapes: 402 exhausted, 503 unavailable, 401 no tenant, 403 media not included', () => {
     const r1 = fakeRes();
     denyMetering(r1, { reason: 'credits_exhausted', state: { remaining: 0 } });
     assert.equal(r1.statusCode, 402);
@@ -343,6 +361,12 @@ describe('meterGate', () => {
     const r3 = fakeRes();
     denyMetering(r3, { reason: 'tenant_required', state: null });
     assert.equal(r3.statusCode, 401);
+    // The entitlement-failure shape, mirroring the relay Connect gate's
+    // 403 { error: 'helmian_connect_required' }.
+    const r4 = fakeRes();
+    denyMetering(r4, { reason: 'media_not_included', state: { plan: 'free', remaining: 100 } });
+    assert.equal(r4.statusCode, 403);
+    assert.deepEqual(r4.body, { error: 'media_not_included', plan: 'free' });
   });
 
   it('recordMetered writes only when the gate metered', async () => {
@@ -353,4 +377,88 @@ describe('meterGate', () => {
     assert.equal(await recordMetered({ meter: true }, db, args), true);
     assert.equal(db.ledger.length, 1);
   });
+});
+
+describe('fitted bucket edges + Free media capability (billing/grants bite)', () => {
+  const FITTED = { starter: 2000, buddy: 7500, buddy_media: 15000, helmian_connect: 24000 };
+
+  for (const [plan, grant] of Object.entries(FITTED)) {
+    it(`${plan}: one credit under the fitted edge is allowed, at the edge is denied`,
+      withSecret('test-secret', async () => {
+        const under = new FakeDb();
+        under.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan, status: 'active' });
+        under.seed({ tenantId: TENANT_A, micros: (grant - 1) * 1000, at: new Date() });
+        const okGate = await meterGate({ db: under, tenantId: TENANT_A, keySource: 'env', estCredits: 1, action: 'chat' });
+        assert.equal(okGate.allowed, true);
+        assert.equal(okGate.state.remaining, 1);
+
+        const at = new FakeDb();
+        at.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan, status: 'active' });
+        at.seed({ tenantId: TENANT_A, micros: grant * 1000, at: new Date() });
+        const noGate = await meterGate({ db: at, tenantId: TENANT_A, keySource: 'env', estCredits: 1, action: 'chat' });
+        assert.equal(noGate.allowed, false);
+        assert.equal(noGate.reason, 'credits_exhausted');
+        assert.equal(noGate.state.remaining, 0);
+      }));
+  }
+
+  it('planAllowsMedia: only the Free plan excludes media by definition', () => {
+    assert.equal(planAllowsMedia('free'), false);
+    for (const plan of ['starter', 'buddy', 'buddy_media', 'helmian_connect']) {
+      assert.equal(planAllowsMedia(plan), true, plan);
+    }
+    assert.deepEqual([...MEDIA_ACTIONS].sort(), ['image', 'video', 'video_higgsfield', 'video_omni']);
+  });
+
+  it('free + image at FULL balance: denied media_not_included — capability, not balance',
+    withSecret('test-secret', async () => {
+      const db = new FakeDb();
+      db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
+      // No usage at all: the whole 100-credit taste is unspent and the
+      // 5-credit image would fit the balance easily. The denial must
+      // therefore be the capability refusal, never credits_exhausted.
+      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 5, action: 'image' });
+      assert.equal(gate.allowed, false);
+      assert.equal(gate.reason, 'media_not_included');
+      assert.equal(gate.state.plan, 'free');
+      assert.equal(gate.state.remaining, 100);
+    }));
+
+  it('free + video actions: every media action is refused by capability',
+    withSecret('test-secret', async () => {
+      for (const action of ['video', 'video_omni', 'video_higgsfield']) {
+        const db = new FakeDb();
+        db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
+        const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 30, action });
+        assert.equal(gate.allowed, false, action);
+        assert.equal(gate.reason, 'media_not_included', action);
+      }
+    }));
+
+  it('free + media with a spent bucket still reports capability, not balance',
+    withSecret('test-secret', async () => {
+      const db = new FakeDb();
+      db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
+      db.seed({ tenantId: TENANT_A, micros: 100_000, at: new Date() }); // taste fully spent
+      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 5, action: 'image' });
+      assert.equal(gate.reason, 'media_not_included'); // capability is checked first
+    }));
+
+  it('paid plan + media: capability passes and the bucket alone decides',
+    withSecret('test-secret', async () => {
+      const db = new FakeDb();
+      db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'starter', status: 'active' });
+      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 5, action: 'image' });
+      assert.equal(gate.allowed, true);
+      assert.equal(gate.state.remaining, 2000);
+    }));
+
+  it('compat mode: the capability check never fires (metering is off entirely)',
+    withSecret(null, async () => {
+      const db = new FakeDb();
+      db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
+      const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 5, action: 'image' });
+      assert.deepEqual(gate, { meter: false, allowed: true, state: null });
+      assert.equal(db.queryCount, 0);
+    }));
 });

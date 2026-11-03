@@ -17,6 +17,7 @@ import { resolveHandlerTenant } from '../../lib/tenant.js';
 import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
 import { randomUUID } from 'node:crypto';
 import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 
 const blobPrefix = (userId) => `thinkinbuddy/videos/${userId}/`;
 
@@ -49,6 +50,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
   }
 
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
   const avatarId = req.body?.avatarId || DEFAULT_AVATAR_ID;
   const voiceId  = req.body?.voiceId  || DEFAULT_VOICE_ID;
   const aspect = (req.body?.aspect || 'portrait').toLowerCase();
@@ -62,7 +70,20 @@ export default async function handler(req, res) {
   // Kid-safe gate: moderate the script via OpenAI BEFORE calling HeyGen
   // (audit §2 gap 1 — this handler used to send it straight through).
   // Same pattern and refusal shape as video-runway.js.
-  const { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 3); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
+  let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  if (resolvedTenant.enforced && resolvedTenant.tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[video-heygen] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
   const mod = await isAllowed(prompt, getKey(req, 'OPENAI_API_KEY'), { failClosed });
   if (!mod.allowed) {
     console.warn('[video-heygen] prompt blocked by moderation:', mod.reason);
@@ -83,7 +104,7 @@ export default async function handler(req, res) {
   // shouldMeter in lib/usage.js.
   const heygenReqId = randomUUID();
   const heygenEst = costFor('video', { seconds: heygenEstSeconds });
-  const heygenGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: heygenEst });
+  const heygenGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: heygenEst, action: 'video' });
   if (!heygenGate.allowed) return denyMetering(res, heygenGate);
 
   try {
@@ -144,7 +165,7 @@ export default async function handler(req, res) {
     if (!dl.ok) return res.status(502).json({ result: 'HeyGen content download failed' });
     const buf = Buffer.from(await dl.arrayBuffer());
     const ts = Date.now();
-    const key = `${blobPrefix(userId)}${ts}.mp4`;
+    const key = `${blobPrefix(mediaUserId)}${ts}.mp4`;
     const blob = await put(key, buf, {
       access: 'public',
       contentType: 'video/mp4',
@@ -154,7 +175,7 @@ export default async function handler(req, res) {
 
     try {
       await put(
-        `${blobPrefix(userId)}${ts}.meta.json`,
+        `${blobPrefix(mediaUserId)}${ts}.meta.json`,
         JSON.stringify({ prompt, provider: 'heygen', avatarId, voiceId, dim }),
         { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken },
       );

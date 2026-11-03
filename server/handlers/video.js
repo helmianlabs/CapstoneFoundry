@@ -21,7 +21,7 @@ import { resolveHandlerTenant } from '../../lib/tenant.js';
 import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
 import { randomUUID } from 'node:crypto';
 import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
-import { getProfile, getProfileDb, profileSafety } from '../../lib/profile.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { saveMediaMemory } from '../../lib/mediaMemory.js';
 
 export const config = { maxDuration: 300 };
@@ -122,6 +122,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
   }
 
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
   const aspect = (req.body?.aspect || 'landscape').toLowerCase();
   const ratio = ASPECT_TO_RATIO[aspect] || ASPECT_TO_RATIO.landscape;
   const seconds = [5, 10].includes(parseInt(req.body?.seconds, 10))
@@ -135,16 +142,18 @@ export default async function handler(req, res) {
   if (!runwayKey) return res.status(500).json({ result: 'RUNWAY_API_KEY not configured' });
   if (!blobToken) return res.status(500).json({ result: 'BLOB_READ_WRITE_TOKEN not configured' });
 
-  // Hosted mode: the tenant profile decides fail-closed (lib/profile.js
-  // profileSafety) when a profile row exists; request inputs are the
-  // fallback, and compat mode never queries a profile.
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
   let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
   if (resolvedTenant.enforced && resolvedTenant.tenantId) {
-    try {
-      const profile = await getProfile(getProfileDb, resolvedTenant.tenantId);
-      if (profile) ({ failClosed } = profileSafety(profile));
-    } catch (e) {
-      console.error('[video] profile load failed — request safety inputs used:', e?.message || e);
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[video] profile safety unresolved (${resolved.source}) — safe default applied`);
     }
   }
   const mod = await isAllowed(prompt, openaiKey, { failClosed });
@@ -161,14 +170,14 @@ export default async function handler(req, res) {
   // shouldMeter in lib/usage.js.
   const vidReqId = randomUUID();
   const vidEst = costFor('video', { seconds });
-  const vidGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: vidEst });
+  const vidGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: vidEst, action: 'video' });
   if (!vidGate.allowed) return denyMetering(res, vidGate);
 
   try {
     // 1. Start frame (skipped when the caller supplies one).
     const promptImage =
       req.body?.promptImage ||
-      (await makeStartFrame({ prompt, aspect, apiKey: openaiKey, blobToken, userId }));
+      (await makeStartFrame({ prompt, aspect, apiKey: openaiKey, blobToken, userId: mediaUserId }));
 
     // 2. Runway image-to-video.
     const job = await startRunwayTask({
@@ -206,7 +215,7 @@ export default async function handler(req, res) {
     if (!dl.ok) return res.status(502).json({ result: 'Runway content download failed' });
     const buf = Buffer.from(await dl.arrayBuffer());
     const ts = Date.now();
-    const blob = await put(`${blobPrefix(userId)}${ts}.mp4`, buf, {
+    const blob = await put(`${blobPrefix(mediaUserId)}${ts}.mp4`, buf, {
       access: 'public',
       contentType: 'video/mp4',
       addRandomSuffix: false,
@@ -214,7 +223,7 @@ export default async function handler(req, res) {
     });
     try {
       await put(
-        `${blobPrefix(userId)}${ts}.meta.json`,
+        `${blobPrefix(mediaUserId)}${ts}.meta.json`,
         JSON.stringify({ prompt, provider: 'runway-i2v', ratio, seconds }),
         { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken },
       );
@@ -224,7 +233,7 @@ export default async function handler(req, res) {
 
     // 5. Media memory (fire-and-forget — never fail the response on it).
     saveMediaMemory({
-      userId,
+      userId: mediaUserId,
       type: 'video',
       blobUrl: blob.url,
       prompt,

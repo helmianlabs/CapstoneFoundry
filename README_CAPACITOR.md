@@ -1,6 +1,6 @@
 # ThinkinBuddy (Mark) — Android APK via Capacitor
 
-**Strategy:** thin-shell remote-URL. The Capacitor WebView loads `https://thinkinbuddy.vercel.app` at runtime. No web assets are bundled. The Vercel deploy is completely unchanged.
+**Strategy:** thin-shell remote-URL. The Capacitor WebView loads `https://thinkbuddy-sandy.vercel.app` at runtime. No web assets are bundled. The Vercel deploy is completely unchanged.
 
 ---
 

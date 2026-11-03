@@ -119,3 +119,69 @@ test('onboarding.js maps the friendly auth errors', () => {
   assert.ok(onboardingJs.includes("Email or password didn't match."));
   assert.ok(onboardingJs.includes('That email already has an account — log in instead.'));
 });
+
+// ─── Bite 8: safety-on must be PIN-locked (client face) ───────────────────
+//
+// The server enforces the same rule on the write itself; these pins
+// hold the client's face of it: onboarding cannot complete with
+// safety checked unless a valid PIN + matching confirmation were
+// given, the PIN is established BEFORE the profile save (a failed
+// PIN call leaves onboarding open with nothing saved), and the
+// Settings toggle cannot arm safety on a PIN-less account — it opens
+// the create-a-PIN flow instead.
+
+const BITE8_IDS = [
+  'accountSafetyCreateRow',
+  'accountSafetyNewPin',
+  'accountSafetyNewPinAgain',
+  'accountSafetyCreateConfirm',
+];
+
+test('bite 8: the Settings create-a-PIN row ids appear exactly once in index.html', () => {
+  for (const id of BITE8_IDS) {
+    const count = indexHtml.split(`id="${id}"`).length - 1;
+    assert.equal(count, 1, `id "${id}" should appear exactly once, found ${count}`);
+  }
+  assert.ok(indexHtml.includes('Create PIN &amp; turn safety on'));
+});
+
+test('bite 8: the onboarding Save handler contains the required-PIN branch for the safety-checked state', () => {
+  // The old optional shape — validate only when a PIN was typed —
+  // is gone from the Save handler.
+  assert.ok(!onboardingJs.includes('if (safetyEl.checked && (pin || pinAgain))'), 'optional-PIN validation branch is gone');
+  assert.ok(!onboardingJs.includes('if (safetyEl.checked && pin)'), 'save-then-maybe-PIN branch is gone');
+  // Safety checked REQUIRES format + confirmation before saving.
+  assert.match(onboardingJs, /if \(safetyEl\.checked\) \{\s*if \(!\/\^\\d\{4,6\}\$\/\.test\(pin\)\)/);
+  assert.ok(onboardingJs.includes('if (pin !== pinAgain)'));
+  // A failed PIN call leaves onboarding open: the refusal line is in
+  // the handler and the overlay is never hidden on that path.
+  assert.ok(onboardingJs.includes('Could not set the parent PIN — please try again.'));
+});
+
+test('bite 8: onboarding establishes the PIN before the profile save', () => {
+  const saveStart = onboardingJs.indexOf("getElementById('acctSave')");
+  assert.ok(saveStart >= 0);
+  const saveBlock = onboardingJs.slice(saveStart);
+  const pinCall = saveBlock.indexOf("api('/api/profile/pin', { method: 'POST'");
+  const profileCall = saveBlock.indexOf("api('/api/profile', {");
+  assert.ok(pinCall >= 0, 'the Save handler sets the PIN');
+  assert.ok(profileCall > pinCall, 'the PIN call precedes the profile save inside the Save handler');
+});
+
+test('bite 8: the Settings safety-on path is gated on pin_set and the create flow runs PIN-first', () => {
+  // The toggle's on-branch branches on the cached pin state; only
+  // the PIN-set arm reaches the safety-on write directly.
+  assert.match(onboardingJs, /if \(profileCache\?\.pin_set\) \{\s*await turnSafetyOn\(\);/);
+  // The create row is wired, and its confirm handler posts the PIN
+  // before running the safety-on write it unlocks.
+  assert.ok(onboardingJs.includes("getElementById('accountSafetyCreateRow')"));
+  assert.ok(onboardingJs.includes("getElementById('accountSafetyCreateConfirm')"));
+  const createStart = onboardingJs.indexOf("createConfirm?.addEventListener('click'");
+  assert.ok(createStart >= 0);
+  const createBlock = onboardingJs.slice(createStart, createStart + 2000);
+  const pinCall = createBlock.indexOf("api('/api/profile/pin', { method: 'POST'");
+  const onCall = createBlock.indexOf('await turnSafetyOn()');
+  assert.ok(pinCall >= 0, 'the create flow posts the PIN');
+  assert.ok(onCall > pinCall, 'the PIN post precedes the safety-on write in the create flow');
+  assert.ok(createBlock.includes('if (newPin !== newPinAgain)'), 'the create flow requires the confirmation to match');
+});

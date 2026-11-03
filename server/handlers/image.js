@@ -14,7 +14,7 @@ import { resolveHandlerTenant } from '../../lib/tenant.js';
 import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
 import { randomUUID } from 'node:crypto';
 import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
-import { getProfile, getProfileDb, profileSafety } from '../../lib/profile.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { saveMediaMemory } from '../../lib/mediaMemory.js';
 
 const MODEL = 'gpt-image-2';
@@ -42,6 +42,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
   }
 
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
 
   // Aspect: default = portrait phone fill (the widget displays full-screen on
   // mobile). User / agent can override via body.aspect = 'square' | 'portrait'
@@ -65,16 +72,18 @@ export default async function handler(req, res) {
   if (!blobToken) return res.status(500).json({ result: 'BLOB_READ_WRITE_TOKEN not configured' });
 
   // Kid-safe gate: moderate the prompt BEFORE spending a provider call.
-  // Hosted mode: the tenant profile decides fail-closed (lib/profile.js
-  // profileSafety) when a profile row exists; request inputs are the
-  // fallback, and compat mode never queries a profile.
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
   let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
   if (resolvedTenant.enforced && resolvedTenant.tenantId) {
-    try {
-      const profile = await getProfile(getProfileDb, resolvedTenant.tenantId);
-      if (profile) ({ failClosed } = profileSafety(profile));
-    } catch (e) {
-      console.error('[image] profile load failed — request safety inputs used:', e?.message || e);
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[image] profile safety unresolved (${resolved.source}) — safe default applied`);
     }
   }
   const mod = await isAllowed(prompt, apiKey, { failClosed });
@@ -91,7 +100,7 @@ export default async function handler(req, res) {
   // shouldMeter in lib/usage.js.
   const imgReqId = randomUUID();
   const imgEst = costFor('image');
-  const imgGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: imgEst });
+  const imgGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: imgEst, action: 'image' });
   if (!imgGate.allowed) return denyMetering(res, imgGate);
 
   try {
@@ -127,7 +136,7 @@ export default async function handler(req, res) {
     } else if (b64) {
       const buf = Buffer.from(b64, 'base64');
       const ts = Date.now();
-      const key = `${blobPrefix(userId)}${ts}.png`;
+      const key = `${blobPrefix(mediaUserId)}${ts}.png`;
       const blob = await put(key, buf, {
         access: 'public',
         contentType: 'image/png',
@@ -138,7 +147,7 @@ export default async function handler(req, res) {
       // Sidecar so /api/latest-image can return the original prompt as caption.
       try {
         await put(
-          `${blobPrefix(userId)}${ts}.meta.json`,
+          `${blobPrefix(mediaUserId)}${ts}.meta.json`,
           JSON.stringify({ prompt }),
           { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken }
         );
@@ -146,7 +155,7 @@ export default async function handler(req, res) {
         console.error('[image] sidecar write failed (non-fatal):', err?.message || err);
       }
       // Persist to Neon memory so this image is recallable by semantic search.
-      saveMediaMemory({ userId, type: 'image', blobUrl: publicUrl, prompt, createdAt: ts, tenantId: resolvedTenant.tenantId }).catch(
+      saveMediaMemory({ userId: mediaUserId, type: 'image', blobUrl: publicUrl, prompt, createdAt: ts, tenantId: resolvedTenant.tenantId }).catch(
         (e) => console.error('[image] saveMediaMemory failed (non-fatal):', e?.message || e)
       );
     } else {

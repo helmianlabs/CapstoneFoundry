@@ -704,16 +704,94 @@
           server runs in legacy single-user mode.
         </div>
         <div class="test-line" id="accountPlanLine">Plan: …</div>
+        <label>Profiles in this account</label>
+        <div class="storage-note">
+          Each profile has its own name, age band, and safety setting.
+          Your buddy runs under the profile marked “In use” — switching
+          profiles re-aims your buddy before the next call. Switching
+          away from a protected profile asks for the parent PIN, the
+          same as turning safety off.
+        </div>
+        <div id="accountProfilesList"></div>
+        <div id="accountSwitchPinRow" style="display:none;">
+          <label for="accountSwitchPin">Parent PIN — required to switch away from a protected profile</label>
+          <input type="password" id="accountSwitchPin" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="secondary" id="accountSwitchPinConfirm">Switch profile</button>
+          <button type="button" class="secondary" id="accountSwitchPinCancel">Cancel</button>
+        </div>
+        <div class="test-line" id="accountProfilesLine"></div>
+        <div id="accountProfileEdit" style="display:none;">
+          <label for="accountProfileEditName">Profile name</label>
+          <input type="text" id="accountProfileEditName" autocomplete="off" />
+          <label for="accountProfileEditBand">Who is this profile for?</label>
+          <select id="accountProfileEditBand">
+            <option value="child">Under 6</option>
+            <option value="6-8">6–8</option>
+            <option value="9-12">9–12</option>
+            <option value="13-17">13–17</option>
+            <option value="adult">Adult</option>
+          </select>
+          <label for="accountProfileEditAbout">About</label>
+          <textarea id="accountProfileEditAbout" rows="3"></textarea>
+          <label class="toggle-row" for="accountProfileEditSafety">
+            <input type="checkbox" id="accountProfileEditSafety" />
+            <span class="toggle-text">Safety mode
+              <small>Turning it on needs a parent PIN; turning it off needs that PIN too.</small>
+            </span>
+          </label>
+          <div id="accountProfileEditPinRow" style="display:none;">
+            <label for="accountProfileEditPin" id="accountProfileEditPinLabel">Parent PIN</label>
+            <input type="password" id="accountProfileEditPin" inputmode="numeric" autocomplete="off" />
+            <div id="accountProfileEditPinAgainWrap">
+              <label for="accountProfileEditPinAgain">Parent PIN again</label>
+              <input type="password" id="accountProfileEditPinAgain" inputmode="numeric" autocomplete="off" />
+            </div>
+          </div>
+          <button type="button" class="secondary" id="accountProfileEditSave">Save profile</button>
+          <button type="button" class="secondary" id="accountProfileEditCancel">Cancel</button>
+          <div class="test-line" id="accountProfileEditLine"></div>
+        </div>
+        <label>New profile</label>
+        <label for="accountProfileNewName">Name</label>
+        <input type="text" id="accountProfileNewName" autocomplete="off" />
+        <label for="accountProfileNewBand">Who is this profile for?</label>
+        <select id="accountProfileNewBand">
+          <option value="" selected>Choose…</option>
+          <option value="child">Under 6</option>
+          <option value="6-8">6–8</option>
+          <option value="9-12">9–12</option>
+          <option value="13-17">13–17</option>
+          <option value="adult">Adult</option>
+        </select>
+        <label class="toggle-row" for="accountProfileNewSafety">
+          <input type="checkbox" id="accountProfileNewSafety" />
+          <span class="toggle-text">Safety mode</span>
+        </label>
+        <div id="accountProfileNewPinRow" style="display:none;">
+          <label for="accountProfileNewPin">Parent PIN — safety mode needs one to lock it</label>
+          <input type="password" id="accountProfileNewPin" inputmode="numeric" autocomplete="off" placeholder="Parent PIN (4–6 digits)" />
+          <label for="accountProfileNewPinAgain">Parent PIN again</label>
+          <input type="password" id="accountProfileNewPinAgain" inputmode="numeric" autocomplete="off" />
+        </div>
+        <button type="button" class="secondary" id="accountProfileCreateBtn">Create profile</button>
+        <div class="test-line" id="accountProfileCreateLine"></div>
         <label class="toggle-row" for="accountSafetyToggle">
           <input type="checkbox" id="accountSafetyToggle" />
           <span class="toggle-text">Safety mode
-            <small>Extra content guardrails for younger users. Turning it off needs the parent PIN when one is set.</small>
+            <small>Extra content guardrails for younger users. Turning it on needs a parent PIN; turning it off needs that PIN too.</small>
           </span>
         </label>
         <div id="accountSafetyPinRow" style="display:none;">
           <label for="accountSafetyPin">Parent PIN — required to turn safety off</label>
           <input type="password" id="accountSafetyPin" inputmode="numeric" autocomplete="off" />
           <button type="button" class="secondary" id="accountSafetyPinConfirm">Turn safety off</button>
+        </div>
+        <div id="accountSafetyCreateRow" style="display:none;">
+          <label for="accountSafetyNewPin">Parent PIN — create one to turn safety on</label>
+          <input type="password" id="accountSafetyNewPin" inputmode="numeric" autocomplete="off" placeholder="Parent PIN (4–6 digits)" />
+          <label for="accountSafetyNewPinAgain">Parent PIN again</label>
+          <input type="password" id="accountSafetyNewPinAgain" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="secondary" id="accountSafetyCreateConfirm">Create PIN &amp; turn safety on</button>
         </div>
         <div class="test-line" id="accountStatusLine"></div>
         <label>Parent PIN</label>
@@ -728,6 +806,58 @@
         <input type="password" id="accountNewPinConfirm" inputmode="numeric" autocomplete="off" />
         <button type="button" class="secondary" id="accountPinSave">Save PIN</button>
         <div class="test-line" id="accountPinLine"></div>
+        <label>Ask for something we don't have</label>
+        <div class="storage-note">
+          Missing a tool or AI service — or a subject you'd like to
+          learn? Ask here. We read every one, and the list below shows
+          where yours stands.
+        </div>
+        <div class="row">
+          <button type="button" class="secondary" id="requestKindProvider">A tool or AI service</button>
+          <button type="button" class="secondary" id="requestKindCurriculum">A subject to learn</button>
+        </div>
+        <div id="requestProviderFields">
+          <label for="requestProviderName">Name of the tool or service</label>
+          <input type="text" id="requestProviderName" maxlength="120" autocomplete="off" />
+          <label for="requestCapability">What should it do?</label>
+          <select id="requestCapability">
+            <option value="chat">Chat</option>
+            <option value="image">Make images</option>
+            <option value="video">Make videos</option>
+            <option value="voice">Voice</option>
+            <option value="other">Something else</option>
+          </select>
+          <label for="requestUseCase">What would you use it for?</label>
+          <textarea id="requestUseCase" rows="3" maxlength="300"></textarea>
+        </div>
+        <div id="requestCurriculumFields" style="display:none;">
+          <label for="requestRole">I am a…</label>
+          <select id="requestRole">
+            <option value="parent">Parent</option>
+            <option value="teacher">Teacher</option>
+            <option value="educator">Educator</option>
+            <option value="student">Student</option>
+            <option value="other">Other</option>
+          </select>
+          <label for="requestSubject">Subject</label>
+          <input type="text" id="requestSubject" maxlength="80" autocomplete="off" />
+          <label for="requestLevel">Level</label>
+          <select id="requestLevel">
+            <option value="6-8">Ages 6–8</option>
+            <option value="9-12">Ages 9–12</option>
+            <option value="13-17">Ages 13–17</option>
+            <option value="college">College</option>
+            <option value="adult">Adult</option>
+          </select>
+          <label for="requestGoal">What success looks like</label>
+          <textarea id="requestGoal" rows="3" maxlength="300"></textarea>
+          <label for="requestSourceLinks">Materials you already trust (optional — one web address per line, up to 3)</label>
+          <textarea id="requestSourceLinks" rows="3"></textarea>
+        </div>
+        <button type="button" class="secondary" id="requestSubmit">Send request</button>
+        <div class="test-line" id="requestLine"></div>
+        <label>Your requests</label>
+        <div id="requestList"></div>
         <button type="button" class="secondary" id="accountLogout">Log out</button>
         <label>Delete my account</label>
         <div class="storage-note">
@@ -811,9 +941,15 @@
       if (imagePoller) return;
       imagePoller = setInterval(async () => {
         try {
-          // userId stays default ('anonymous') because the ElevenLabs agent
-          // tool schema doesn't pass one yet. Both sides agree on the default.
-          const res = await fetch(`/api/latest-image?since=${lastImageTimestamp}`);
+          // Present the account session when one exists: in hosted
+          // mode the server scopes this poller to the SESSION tenant's
+          // Blob prefix (the identity the generation handlers now
+          // store under), never to a caller-supplied id. Signed out /
+          // legacy: tbAuthHeaders() is empty and the request is the
+          // pre-accounts one, byte for byte.
+          const res = await fetch(`/api/latest-image?since=${lastImageTimestamp}`, {
+            headers: { ...tbAuthHeaders() },
+          });
           const data = await res.json();
           if (data.url && data.timestamp && data.timestamp > lastImageTimestamp) {
             lastImageTimestamp = data.timestamp;
@@ -836,7 +972,10 @@
       if (videoPoller) return;
       videoPoller = setInterval(async () => {
         try {
-          const res = await fetch(`/api/latest-video?since=${lastVideoTimestamp}`);
+          // Same session presentation as the image poller above.
+          const res = await fetch(`/api/latest-video?since=${lastVideoTimestamp}`, {
+            headers: { ...tbAuthHeaders() },
+          });
           const data = await res.json();
           if (data.url && data.timestamp && data.timestamp > lastVideoTimestamp) {
             lastVideoTimestamp = data.timestamp;
@@ -856,12 +995,14 @@
     // generated at onboarding). Both extract-memories and prime-agent now use
     // this real ID, so each user's memory is isolated in their own Blob prefix.
     //
-    // REMAINING LIMITATION: The ElevenLabs save_memory tool posts to
-    // /api/memory without a userId in its body, so that path still falls back
-    // to 'troy' (server-side default in memory.js:53). Fix requires adding
-    // userId to the save_memory tool's parameter schema in the ElevenLabs
-    // agent config — out of scope for this change.
-    // TODO: plumb userId through the ElevenLabs save_memory tool params.
+    // TOOL IDENTITY (safety wiring bite 4): every identity-bearing
+    // ElevenLabs tool — save_memory included — must carry a required
+    // userId body param bound to {{user_id}} (see
+    // scripts/update-agent-config.mjs, which patches and verifies the
+    // bindings, and docs/elevenlabs-template/tools.md). Whether the
+    // DEPLOYED agent's schemas match that contract is UNVERIFIED
+    // until the provisioning script is run and read back under a
+    // separate authorization.
     //
     // IMPORTANT: the ElevenLabs widget bundle (elevenlabs.io/convai-widget/index.js)
     // does NOT dispatch `elevenlabs-convai:call-ended` or `:call-started` events —
@@ -910,8 +1051,97 @@
     // Per-session system prompt for the CURRENT user, built server-side by
     // /api/prime-agent from their own memories. Applied as a per-session
     // override on the widget's elevenlabs-convai:call event so user A's facts
-    // never reach user B's session. Set in initApp(); null until primed.
+    // never reach user B's session. Set by primeSessionPrompt(); null until primed.
     let sessionPromptOverride = null;
+
+    // ─── Profile lifecycle (bite 5): the prime follows the profile ──
+    // prime-agent derives the prompt's safety layers from the tenant
+    // profile at prime time, so a prompt primed from an older profile
+    // state is a stale safety decision. public/onboarding.js publishes
+    // a 'tb-profile-changed' event after every SUCCESSFUL profile/PIN
+    // write; each publication bumps profileChangeGeneration and kicks
+    // a re-prime, and the :call handler applies the cached override
+    // only when its generation still matches — a stale override is
+    // never applied to a new call. A FAILED profile write publishes
+    // nothing, so the previous prime stays valid and untouched (no
+    // half-state). Before any profile completes, prime-agent's own
+    // safe default is what a prime returns, so an incomplete profile
+    // still primes fail-closed.
+    let profileChangeGeneration = 0;
+    let sessionPromptGeneration = -1; // generation sessionPromptOverride was primed from
+    let sessionPrimeContext = null;   // { buddyName, userName, userId, mode }, set by initApp
+    let sessionReprimeInFlight = null;
+
+    // The ACTIVE profile's id (bite 9b), read through the window
+    // global public/onboarding.js maintains — it owns profile state;
+    // this script shares no module scope with it, so the getter is
+    // the bridge (the same direction tb-profile-changed travels).
+    // Null when no profile is known (legacy mode, pre-sign-in): the
+    // prime request then carries exactly what it carried before
+    // profiles existed. The id NAMES the profile the session runs
+    // under, in the prime request and the widget's dynamic
+    // variables; it never SELECTS one — the server resolves safety
+    // from its own active pointer, so a stale or forged id here
+    // cannot move a session onto a sibling profile.
+    function sessionProfileId() {
+      try { return typeof window.tbActiveProfileId === 'function' ? window.tbActiveProfileId() : null; }
+      catch { return null; }
+    }
+
+    async function primeSessionPrompt() {
+      if (!sessionPrimeContext) return;
+      const gen = profileChangeGeneration;
+      sessionPromptOverride = null;
+      sessionPromptGeneration = -1;
+      try {
+        const primeProfileId = sessionProfileId();
+        const primeRes = await fetch('/api/prime-agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
+          body: JSON.stringify(primeProfileId ? { ...sessionPrimeContext, profileId: primeProfileId } : sessionPrimeContext),
+        });
+        const p = await primeRes.json();
+        if (p?.ok && typeof p.prompt === 'string') {
+          if (gen === profileChangeGeneration) {
+            sessionPromptOverride = p.prompt;
+            sessionPromptGeneration = gen;
+          } else {
+            // A newer profile change landed while this prime was in
+            // flight; its generation is the authority, so re-read
+            // rather than install a read of the in-between state.
+            return primeSessionPrompt();
+          }
+        }
+        console.log('[ThinkinBuddy] primed — memories:', p.memoryCount, 'buddy:', p.buddyName, 'user:', p.userId, 'promptLen:', sessionPromptOverride?.length || 0);
+      } catch (e) { console.warn('[ThinkinBuddy] prime failed', e); }
+    }
+
+    // The only prompt a new call may start from: the cached override
+    // when it was primed from the CURRENT profile generation, else
+    // null (never a stale prime). The :call handler applies exactly
+    // this function's result.
+    function currentSessionPrompt() {
+      return sessionPromptGeneration === profileChangeGeneration ? sessionPromptOverride : null;
+    }
+
+    // Awaitable re-prime (bite 5): concurrent callers share one
+    // in-flight prime instead of racing duplicate fetches.
+    function reprimeSessionPrompt() {
+      if (!sessionReprimeInFlight) {
+        sessionReprimeInFlight = primeSessionPrompt().finally(() => { sessionReprimeInFlight = null; });
+      }
+      return sessionReprimeInFlight;
+    }
+    window.reprimeSessionPrompt = reprimeSessionPrompt;
+
+    window.addEventListener('tb-profile-changed', () => {
+      profileChangeGeneration += 1;
+      // Refresh immediately, so by the time the user next taps call
+      // the override is normally already the new profile's prime.
+      // Until it lands, the generation gate withholds the stale
+      // override rather than starting a call from an old decision.
+      reprimeSessionPrompt();
+    });
 
     function fireExtractMemories(reason) {
       if (extractFired) { console.log('[MEM-HB] fire skipped — already fired:', reason); return; }
@@ -945,6 +1175,10 @@
       console.log('[MEM-HB] :call handler running — has detail?', !!e.detail, 'has config?', !!e.detail?.config);
       startImagePoller();
       startVideoPoller();
+      // Relay bite R1: a widget call is a live voice surface too —
+      // the second script block's relay poll runs while this is set,
+      // and cfg.onMessage below mirrors user turns into the relay.
+      widgetCallActive = true;
       extractFired = false;
       lastConversationId = null;
       liveSessionId = crypto.randomUUID();
@@ -962,11 +1196,18 @@
       // (overrides.agent.prompt: { prompt?: string }) + lib.iife.js:457-461
       // (config.overrides.agent.prompt -> conversation_config_override.agent.prompt).
       // REQUIRES "Overrides → System prompt" enabled in the agent's Security tab.
-      if (sessionPromptOverride) {
+      const promptForCall = currentSessionPrompt();
+      if (promptForCall) {
         cfg.overrides = cfg.overrides || {};
         cfg.overrides.agent = cfg.overrides.agent || {};
-        cfg.overrides.agent.prompt = { ...(cfg.overrides.agent.prompt || {}), prompt: sessionPromptOverride };
-        console.log('[MEM-HB] applied per-session prompt override — len:', sessionPromptOverride.length);
+        cfg.overrides.agent.prompt = { ...(cfg.overrides.agent.prompt || {}), prompt: promptForCall };
+        console.log('[MEM-HB] applied per-session prompt override — len:', promptForCall.length);
+      } else if (sessionPromptOverride) {
+        // Bite 5: the cached prompt was primed before the latest
+        // profile change — a stale safety decision. It is withheld,
+        // never applied; the re-prime the change kicked lands for
+        // the next call.
+        console.warn('[MEM-HB] withheld a stale session prompt override (profile changed since it was primed) — agent will use its default prompt for this call');
       } else {
         console.warn('[MEM-HB] no sessionPromptOverride set — agent will use its default (non-personalized) prompt');
       }
@@ -974,17 +1215,25 @@
       // Expose this user's id to the agent's tools as a dynamic variable.
       // SDK ships this as dynamic_variables on the session (verified:
       // @elevenlabs/client lib.iife.js:472 `overridesEvent.dynamic_variables`).
-      // DASHBOARD STEP REQUIRED: edit the agent's `save_memory` webhook tool
-      // (Agent → Tools → save_memory) to add a `userId` body param bound to
-      // {{user_id}} so in-call saves post to THIS user's prefix instead of
-      // /api/memory's now-removed 'troy' default. Until that schema edit ships,
-      // in-call save_memory calls will 400 (safe failure) rather than leak.
+      // TOOL SCHEMA REQUIREMENT: every identity-bearing tool (save_memory,
+      // recall_memory, the media tools, set_alarm) must declare a required
+      // `userId` body param bound to {{user_id}}, so in-call tools act on
+      // THIS tenant's identity. scripts/update-agent-config.mjs applies and
+      // verifies those bindings; the deployed agent's readback is still
+      // UNVERIFIED (see the TOOL IDENTITY note above). A tool missing the
+      // binding fails closed server-side in hosted mode rather than leaking
+      // into a default identity.
       // Agent tools declare {{user_id}}; ElevenLabs closes the call (1008
       // "Missing required dynamic variables") if it is absent, so always send one.
       {
         let uid = tbCallUserId();
         if (!uid) { uid = 'guest-' + crypto.randomUUID(); localStorage.setItem('thinkinbuddy_user_id', uid); }
-        cfg.dynamicVariables = { ...(cfg.dynamicVariables || {}), user_id: uid };
+        // The active profile rides beside user_id (bite 9b): the
+        // session names the profile it runs under. Like the prime
+        // request's profileId, it is a name, not a selector — the
+        // server resolves safety from its own active pointer.
+        const pid = sessionProfileId();
+        cfg.dynamicVariables = { ...(cfg.dynamicVariables || {}), user_id: uid, ...(pid ? { profile_id: pid } : {}) };
         console.log('[MEM-HB] set dynamicVariables.user_id for in-call tools');
       }
 
@@ -1034,12 +1283,24 @@
           document.dispatchEvent(new CustomEvent('thinkinbuddy:turn', {
             detail: { role: turnRole === 'user' ? 'user' : 'assistant', content: turnContent },
           }));
+          // RELAY (bite R1): what the user says to the buddy also
+          // reaches their paired computer — the same mirroring the
+          // browser-voice path has always done in sendToThinkinBuddy.
+          // Before this hook the widget path never touched the relay
+          // at all, so a spoken "spin up a landing page" reached
+          // ElevenLabs and died there. Agent turns are NOT mirrored —
+          // the desktop hears the user, not the buddy talking to
+          // itself. Fire and forget: relaySend never throws and
+          // surfaces its own failures, so a dead relay can never
+          // break turn capture.
+          if (turnRole === 'user') relaySend(turnContent);
         }
         if (idleTimer) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           console.log('[MEM-HB] idle timer expired — firing extract-memories');
           stopImagePoller();
           stopVideoPoller();
+          widgetCallActive = false;
           fireExtractMemories('idle-timeout');
         }, IDLE_MS);
         if (typeof userOnMessage === 'function') try { userOnMessage(msg); } catch {}
@@ -1049,6 +1310,7 @@
         console.log('[MEM-HB] onDisconnect fired — firing extract-memories');
         stopImagePoller();
         stopVideoPoller();
+        widgetCallActive = false;
         fireExtractMemories('disconnect');
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-ended'));
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
@@ -1076,6 +1338,7 @@
       console.log('[MEM-HB] pagehide (teardown) — firing extract-memories');
       stopImagePoller();
       stopVideoPoller();
+      widgetCallActive = false;
       fireExtractMemories('pagehide');
     });
 
@@ -1645,8 +1908,8 @@
         usedBy: 'brain (Grok)', brain: 'xai' },
       { id: 'ELEVENLABS_API_KEY', label: 'ElevenLabs',  hint: 'sk_…',
         usedBy: 'voice list, speak endpoint, transcript fetch' },
-      { id: 'GOOGLE_API_KEY',     label: 'Google Imagen', hint: 'AIza…',
-        usedBy: 'Imagen image generation (not the free Gemini brain)' },
+      { id: 'GOOGLE_API_KEY',     label: 'Google Gemini Image', hint: 'AIza…',
+        usedBy: 'Gemini image generation (not the free Gemini brain)' },
       { id: 'REPLICATE_API_TOKEN',label: 'Replicate',   hint: 'r8_…',
         usedBy: 'Flux image generation' },
       { id: 'RUNWAY_API_KEY',     label: 'Runway',      hint: 'key_…',
@@ -1779,9 +2042,12 @@
       'memory':            TEXT_BRAIN_KEYS,
       'image':             ['OPENAI_API_KEY'],
       'image-flux':        ['REPLICATE_API_TOKEN', 'OPENAI_API_KEY'],
+      'image-gemini':      ['GEMINI_API_KEY', 'OPENAI_API_KEY'],
       'video':             ['RUNWAY_API_KEY', 'OPENAI_API_KEY'],
       'video-runway':      ['RUNWAY_API_KEY', 'OPENAI_API_KEY'],
       'video-runway-veo':  ['RUNWAY_API_KEY'],
+      'video-omni':        ['GEMINI_API_KEY', 'OPENAI_API_KEY'],
+      'video-higgsfield':  ['HIGGSFIELD_API_KEY_ID', 'HIGGSFIELD_API_SECRET', 'OPENAI_API_KEY'],
       'video-heygen':      ['HEYGEN_API_KEY'],
       'latest-video':      ['OPENAI_API_KEY'],
     };
@@ -2088,24 +2354,13 @@
       window.thinkinBuddyMode = activeMode;
       console.log('[ThinkinBuddy] active mode:', activeMode);
 
-      sessionPromptOverride = null;
-      try {
-        const primeRes = await fetch('/api/prime-agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
-          body: JSON.stringify({
-            buddyName,
-            userName: user.name,
-            userId: user.userId,
-            mode: activeMode,
-          }),
-        });
-        const p = await primeRes.json();
-        if (p?.ok && typeof p.prompt === 'string') {
-          sessionPromptOverride = p.prompt;
-        }
-        console.log('[ThinkinBuddy] primed — memories:', p.memoryCount, 'buddy:', p.buddyName, 'user:', p.userId, 'promptLen:', sessionPromptOverride?.length || 0);
-      } catch (e) { console.warn('[ThinkinBuddy] prime failed', e); }
+      sessionPrimeContext = {
+        buddyName,
+        userName: user.name,
+        userId: user.userId,
+        mode: activeMode,
+      };
+      await primeSessionPrompt();
 
       // Create widget after agent is primed
       const mount = document.getElementById('widget-mount');
@@ -2418,36 +2673,122 @@
       // cannot claim to be the desktop.
       let relayCursor = null;
 
-      // Send one line to the desktop. Never throws — offline is normal in a car
-      // and the conversation has to carry on regardless.
+      // True while an ElevenLabs widget call is live (set and cleared
+      // by the first script block's :call wiring). The poll below runs
+      // while EITHER voice surface is live: the browser-voice orb sets
+      // sessionActive, a widget call sets this. Before relay bite R1
+      // only sessionActive gated the poll, and the widget path never
+      // sent at all — on the hosted buddy the relay was wired to the
+      // browser-voice fallback only, and in hosted mode not even to
+      // that (see relaySend).
+      let widgetCallActive = false;
+
+      // ── Relay health, surfaced honestly (relay bite R1) ─────────────
+      // The first cut swallowed every outcome: the send's response was
+      // never read and the catch was empty, so a refused door (401
+      // sign-in, 403 not-on-plan, 502 unreachable) was indistinguishable
+      // from a delivered line — the user talked, the computer never
+      // heard, and nobody said so. Now every send/poll outcome lands
+      // here. A state CHANGE is what reaches the user: the first
+      // failure speaks its reason once (this app is used by voice, and
+      // the transcript line is hidden in widget mode), repeats stay
+      // quiet, and recovery is noted on the transcript.
+      let relayDown = false;
+      function relayReasonFor(status, data) {
+        const err = typeof data?.error === 'string' ? data.error : '';
+        if (status === 403 || err === 'helmian_connect_required') {
+          return "Helmian Connect is not on this account's plan";
+        }
+        if (status === 401) return 'the relay could not verify your sign-in';
+        if (status === 503) return 'the relay is not set up on the server yet';
+        if (status === 502) return 'the relay door is unreachable';
+        if (status) return `the relay returned ${status}`;
+        return 'the relay door is unreachable';
+      }
+      function relayHealthNote(ok, reason) {
+        if (ok) {
+          if (relayDown) {
+            relayDown = false;
+            transcriptEl.textContent = 'Helmian relay: connected again.';
+            console.log('[RELAY] recovered');
+          }
+          return;
+        }
+        console.warn('[RELAY] not delivered:', reason);
+        if (relayDown) return; // already announced — do not nag on every line
+        relayDown = true;
+        transcriptEl.textContent = 'Helmian relay: ' + reason + '.';
+        speak(`I can't reach your computer right now: ${reason}.`);
+      }
+
+      // Send one line to the desktop. Never throws — offline is normal
+      // in a car and the conversation has to carry on regardless — but
+      // it RETURNS the outcome and reports it through relayHealthNote:
+      // fire-and-forget about waiting, never about the result.
+      //
+      // IDENTITY (relay bite R1): the call goes through apiFetch, the
+      // same seam the chat call uses, so the account session
+      // (Authorization: Bearer <tb_token>) rides along. The bare fetch
+      // this used before carried no session at all: in hosted mode
+      // relay-proxy's requireTenant refused it 401 before the
+      // entitlement gate even ran, and the refusal was swallowed
+      // (above), so the hosted relay silently delivered nothing. The
+      // body also NAMES the active profile (sessionProfileId — the
+      // prime request's contract since bite 9b): a name, never a
+      // selector. relay-proxy forwards only the text, by design, and
+      // relay-http resolves the profile it stamps from its own active
+      // pointer.
       async function relaySend(text) {
         const body = String(text || '').trim();
-        if (!body || body.length > 4000) return;
+        if (!body) return { ok: false, reason: 'nothing to send' };
+        if (body.length > 4000) return { ok: false, reason: 'too long' };
         try {
-          await fetch('/api/relay-proxy', {
+          const pid = typeof sessionProfileId === 'function' ? sessionProfileId() : null;
+          const res = await apiFetch('/api/relay-proxy', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ body }),   // the field is `body`, not `text`
+            body: JSON.stringify(pid ? { body, profileId: pid } : { body }),   // the field is `body`, not `text`
           });
-        } catch (e) {}
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const reason = relayReasonFor(res.status, data);
+            relayHealthNote(false, reason);
+            return { ok: false, reason };
+          }
+          relayHealthNote(true);
+          return { ok: true };
+        } catch (e) {
+          const reason = relayReasonFor(0, null);
+          relayHealthNote(false, reason);
+          return { ok: false, reason };
+        }
       }
 
       // Poll for anything the desktop said. since=0 means "just woke up" and
       // deliberately returns no history — it hands back a cursor to read from.
+      // Same identity seam as relaySend; a refused poll surfaces the
+      // same way instead of reading as "the desktop said nothing."
       async function relayPoll() {
         try {
-          const r = await fetch(`/api/relay-proxy?since=${relayCursor ?? 0}`);
-          if (!r.ok) return;
+          const r = await apiFetch(`/api/relay-proxy?since=${relayCursor ?? 0}`);
+          if (!r.ok) {
+            const data = await r.json().catch(() => ({}));
+            relayHealthNote(false, relayReasonFor(r.status, data));
+            return;
+          }
           const d = await r.json();
+          relayHealthNote(true);
           if (typeof d.cursor === 'number') relayCursor = d.cursor;
           for (const m of d.messages || []) {
             if (m.from !== 'desktop') continue;
             transcriptEl.textContent = 'Helmion: ' + m.body;
             speak(m.body);
           }
-        } catch (e) {}
+        } catch (e) {
+          relayHealthNote(false, relayReasonFor(0, null));
+        }
       }
-      setInterval(() => { if (sessionActive) relayPoll(); }, 4000);
+      setInterval(() => { if (sessionActive || widgetCallActive) relayPoll(); }, 4000);
 
       async function sendToThinkinBuddy(userText) {
         currentHistory.push({ role: 'user', content: userText });
@@ -2460,7 +2801,19 @@
         relaySend(userText);
 
         try {
-          const res = await fetch(CONFIG.apiEndpoint, {
+          // Text-chat contract (safety wiring bite 6): the chat call
+          // goes through apiFetch to the deployment's own /api/chat —
+          // apiFetch attaches the account session (Authorization:
+          // Bearer <tb_token>) and this surface's user brain keys when
+          // they exist, and nothing cross-origin. The body carries NO
+          // safety fields: the server resolves safety from the account
+          // profile named by the session (server/handlers/chat.js), so
+          // this path can never reach a less-safe configuration than
+          // the voice path allows for the same profile. (This call used
+          // to fetch through a config object defined nowhere in the
+          // shipped client, so no request from here could ever be
+          // traced to /api/chat.)
+          const res = await apiFetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2473,8 +2826,17 @@
               }
             })
           });
-          const data = await res.json();
-          const reply = data.reply || 'Sorry, I had trouble with that.';
+          const data = await res.json().catch(() => ({}));
+          // The server speaks two refusal shapes (server/handlers/
+          // chat.js): reply-shaped — moderation refusals and its own
+          // failure messages arrive as { reply } and ARE the buddy's
+          // turn, spoken and kept in history; error-shaped — { error }
+          // refusals (401 Unauthorized, 402 credits_exhausted, ...)
+          // are NOT buddy speech, so they fall through to the
+          // connection-error path and never enter the history as an
+          // assistant turn.
+          if (!data.reply) throw new Error(data.error || `chat ${res.status}`);
+          const reply = data.reply;
           currentHistory.push({ role: 'assistant', content: reply });
           saveHistory(currentHistory);
           handleActions(reply);

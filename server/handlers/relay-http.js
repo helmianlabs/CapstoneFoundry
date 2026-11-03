@@ -26,6 +26,7 @@ import {
   channelForTenant, requireConnectEntitlement, authenticateDeviceRecord,
   recordDeviceSeen, getRelayDb,
 } from '../../lib/relay.js';
+import { getProfile } from '../../lib/profile.js';
 
 export const config = { maxDuration: 15 };
 
@@ -105,11 +106,11 @@ function credentials(req, url) {
 // — in a hosted deployment that is the same database this file's own
 // pool reaches for the relay tables (sql/relay.sql + sql/store/*.sql
 // are run against one database; see docs/store/HELMIAN_CONNECT.md).
-async function resolveHostedCaller(credential) {
+async function resolveHostedCaller(credential, storeDb = getRelayDb) {
   if (!credential || typeof credential !== 'string') return null;
   const session = verifySession(credential, process.env.SESSION_SECRET);
   if (session) {
-    const entitled = await requireConnectEntitlement(getRelayDb, session.tenantId);
+    const entitled = await requireConnectEntitlement(storeDb, session.tenantId);
     return {
       tenantId: session.tenantId,
       channel: channelForTenant(session.tenantId),
@@ -117,9 +118,9 @@ async function resolveHostedCaller(credential) {
       entitled,
     };
   }
-  const device = await authenticateDeviceRecord(getRelayDb, credential);
+  const device = await authenticateDeviceRecord(storeDb, credential);
   if (device) {
-    const entitled = await requireConnectEntitlement(getRelayDb, device.tenantId);
+    const entitled = await requireConnectEntitlement(storeDb, device.tenantId);
     return {
       tenantId: device.tenantId,
       channel: channelForTenant(device.tenantId),
@@ -131,6 +132,18 @@ async function resolveHostedCaller(credential) {
 }
 
 export default async function handler(req, res) {
+  return handleRelayHttp(req, res);
+}
+
+// The handler body, with its two databases as injectable deps so
+// tests drive the REAL code against fakes (the handleRelayPair
+// pattern from relay-pair.js): `pool` is the relay message store
+// (default: this file's lazy pg pool) and `storeDb` is the store
+// database the hosted caller resolution and the profile stamp read
+// (default: lib/relay.js's getRelayDb factory). Production callers
+// pass neither.
+export async function handleRelayHttp(req, res, deps = {}) {
+  const storeDb = deps.storeDb || getRelayDb;
   res.setHeader('cache-control', 'no-store');
 
   let url;
@@ -158,7 +171,7 @@ export default async function handler(req, res) {
   if (tenantEnforced()) {
     let caller = null;
     try {
-      caller = await resolveHostedCaller(credentials(req, url));
+      caller = await resolveHostedCaller(credentials(req, url), storeDb);
     } catch (err) {
       res.status(503).json({ error: `relay store unavailable: ${err.message}` });
       return;
@@ -176,7 +189,7 @@ export default async function handler(req, res) {
     if (caller.deviceId) {
       // Presence for the parent's device list. Best-effort: a failed
       // stamp must never fail the relay call itself.
-      recordDeviceSeen(getRelayDb, caller.deviceId).catch(() => {});
+      recordDeviceSeen(storeDb, caller.deviceId).catch(() => {});
     }
   } else if (!secretMatches(credentials(req, url))) {
     res.status(401).json({ error: 'unauthorized' });
@@ -191,7 +204,7 @@ export default async function handler(req, res) {
 
   let pool;
   try {
-    pool = getPool();
+    pool = deps.pool || getPool();
   } catch (err) {
     res.status(503).json({ error: `relay store unavailable: ${err.message}` });
     return;
@@ -199,7 +212,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') { await pull(pool, res, { channel, role, url }); return; }
-    if (req.method === 'POST') { await push(pool, req, res, { channel, role, tenantId }); return; }
+    if (req.method === 'POST') { await push(pool, req, res, { channel, role, tenantId, storeDb }); return; }
     // Read and write are the only two verbs this relay has. Everything else is
     // refused by name rather than falling through to a default.
     res.status(405).json({ error: 'relay accepts GET (pull) and POST (send)' });
@@ -282,7 +295,7 @@ async function pull(pool, res, { channel, role, url }) {
   });
 }
 
-async function push(pool, req, res, { channel, role, tenantId = null }) {
+async function push(pool, req, res, { channel, role, tenantId = null, storeDb = null }) {
   const payload = await readJson(req);
   if (!payload.ok) { res.status(400).json({ error: payload.reason }); return; }
 
@@ -302,15 +315,48 @@ async function push(pool, req, res, { channel, role, tenantId = null }) {
   // Hosted mode also stamps the resolved tenant (sql/store/005's
   // tenant_id) so audits never reverse the derived channel name; compat
   // mode runs the original INSERT byte-for-byte.
-  const { rows } = tenantId
-    ? await pool.query(
-        'INSERT INTO helmion_relay (channel, sender, body, tenant_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at',
-        [channel, role, body, tenantId],
+  //
+  // PROFILE CONTEXT (relay bite R1, sql/store/008's profile_id): a
+  // hosted row also records the tenant's ACTIVE profile at send time —
+  // the profile the spoken session was running under. It is resolved
+  // HERE, from the authenticated tenant, through the same store the
+  // caller resolution used. The client never supplies it: relay-proxy
+  // forwards only the message text by design, and no payload field is
+  // read for it, so a request can no more forge its profile stamp than
+  // its sender. The stamp is annotation, not identity, so it is
+  // best-effort in both directions: a profile read that fails stamps
+  // nothing and never fails the send, and on a database where 008 has
+  // not run yet the stamped INSERT's missing-column error falls back
+  // to the tenant-stamped INSERT rather than losing the line.
+  let profileId = null;
+  if (tenantId && storeDb) {
+    try {
+      const profile = await getProfile(storeDb, tenantId);
+      profileId = typeof profile?.profile_id === 'string' ? profile.profile_id : null;
+    } catch { profileId = null; }
+  }
+  const insert = (withProfile) => (withProfile
+    ? pool.query(
+        'INSERT INTO helmion_relay (channel, sender, body, tenant_id, profile_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at',
+        [channel, role, body, tenantId, profileId],
       )
-    : await pool.query(
-        'INSERT INTO helmion_relay (channel, sender, body) VALUES ($1, $2, $3) RETURNING id, created_at',
-        [channel, role, body],
-      );
+    : tenantId
+      ? pool.query(
+          'INSERT INTO helmion_relay (channel, sender, body, tenant_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at',
+          [channel, role, body, tenantId],
+        )
+      : pool.query(
+          'INSERT INTO helmion_relay (channel, sender, body) VALUES ($1, $2, $3) RETURNING id, created_at',
+          [channel, role, body],
+        ));
+  let rows;
+  try {
+    ({ rows } = await insert(Boolean(profileId)));
+  } catch (err) {
+    if (!profileId || !/profile_id/i.test(err?.message || '')) throw err;
+    console.error('[relay-http] profile_id stamp unavailable (sql/store/008 not run?) — sending without it:', err.message);
+    ({ rows } = await insert(false));
+  }
   res.status(200).json({
     ok: true,
     id: Number(rows[0].id),

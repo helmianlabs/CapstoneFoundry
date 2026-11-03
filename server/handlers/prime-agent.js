@@ -29,7 +29,8 @@
 
 import { buildSystemPrompt } from '../../lib/personality.js';
 import { retrieveMemories } from './memory.js';
-import { requireTenant, activeTenantId } from '../../lib/tenant.js';
+import { requireTenant, activeTenantId, tenantEnforced } from '../../lib/tenant.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -88,6 +89,29 @@ export default async function handler(req, res) {
     facts = [];
   }
 
+  // Safety wiring (safety-wiring bite 2, safety-gap-map §7): the
+  // tenant profile decides whether the KID_SAFETY_CORE layer joins
+  // this session's prompt, resolved through the SAME shared resolver
+  // as the HTTP handlers (lib/profile.js resolveProfileSafety) — the
+  // session token above already names the tenant, so the client
+  // never sends (and can never spoof) safety fields. When the
+  // profile cannot decide (no row, onboarding unfinished, profile
+  // read failed) the resolver's safe default applies safety: a minor
+  // or safety-on profile's voice session now carries the kid core,
+  // an adult safety-off profile's does not. COMPAT mode never
+  // queries a profile: the prompt is built with the personality
+  // defaults, byte-for-byte as before this wiring.
+  let safetyMode = false;
+  let ageBand = null;
+  if (tenantEnforced() && tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, tenantId);
+    safetyMode = resolved.inputs.safetyMode;
+    ageBand = resolved.inputs.ageBand;
+    if (resolved.safeDefault) {
+      console.error(`[prime-agent] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+
   // ElevenLabs widget path: it has REAL tool calls registered on the agent,
   // so we don't need the action-tag fallback here. Tools block stays.
   const prompt = buildSystemPrompt({
@@ -97,6 +121,8 @@ export default async function handler(req, res) {
     includeToolsBlock: true,
     includeActionTags: false,
     mode,
+    safetyMode,
+    ageBand,
   });
 
   // Return the per-user prompt to the client. The client sets it on the

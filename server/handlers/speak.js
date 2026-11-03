@@ -2,7 +2,7 @@ import { resolveKey, getKey, missingKeyError } from '../../lib/userKeys.js';
 import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
 import { requireTenant, tenantEnforced } from '../../lib/tenant.js';
 import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
-import { getProfile, getProfileDb, profileSafety } from '../../lib/profile.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { randomUUID } from 'node:crypto';
 import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
 
@@ -38,16 +38,19 @@ export default async function handler(req, res) {
   // gap 3 — this endpoint used to speak anything verbatim). Blocked
   // text gets the repo's standard refusal shape; nothing is sent to
   // ElevenLabs. Fails closed when safety applies to this request.
-  // Hosted mode: the tenant profile decides safety (lib/profile.js
-  // profileSafety) when a profile row exists; the request inputs are
-  // the fallback, and compat mode never queries a profile.
+  // Hosted mode: the tenant profile decides safety through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the
+  // resolver's safe default applies safety — the request inputs are
+  // never the fallback in hosted mode. Compat mode never queries a
+  // profile.
   let safety = safetyDecision(safetyInputsFromRequest(req));
   if (tenantEnforced() && tenant?.tenantId) {
-    try {
-      const profile = await getProfile(getProfileDb, tenant.tenantId);
-      if (profile) safety = profileSafety(profile);
-    } catch (e) {
-      console.error('[speak] profile load failed — request safety inputs used:', e?.message || e);
+    const resolved = await resolveProfileSafety(getProfileDb, tenant.tenantId);
+    safety = resolved.decision;
+    if (resolved.safeDefault) {
+      console.error(`[speak] profile safety unresolved (${resolved.source}) — safe default applied`);
     }
   }
   const mod = await isAllowed(text, getKey(req, 'OPENAI_API_KEY'), { failClosed: safety.failClosed });

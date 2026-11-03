@@ -12,9 +12,9 @@ Code: `lib/relay.js` (channels, pairing, device tokens, entitlement
 gate), `server/handlers/relay-pair.js` (pairing API),
 `server/handlers/relay-http.js` + `relay-proxy.js` (the relay itself,
 now tenant-resolved in hosted mode), `public/connect.js` (the
-Account & Safety panel). Schema: `sql/store/005_relay.sql` — run order
-is `sql/relay.sql`, then `sql/store/001` → `005`, all against the one
-hosted database.
+Account & Safety panel). Schema: `sql/store/005_relay.sql` +
+`sql/store/008_relay_profile.sql` — run order is `sql/relay.sql`,
+then `sql/store/001` → `008`, all against the one hosted database.
 
 ## Modes — compat first
 
@@ -46,6 +46,27 @@ browser, and paired computer all land on the same one. In hosted mode
 `relay-http` and `relay-proxy` **ignore** any channel the caller asks
 for and substitute the derived one, and hosted writes stamp
 `helmion_relay.tenant_id` (005) so audits never reverse the name.
+Since relay bite R1 they also stamp `helmion_relay.profile_id`
+(008): the tenant's ACTIVE profile at send time, resolved by
+relay-http from the authenticated tenant — never read from the
+request — so a relay line is attributable to the profile the spoken
+session was running under. The stamp is best-effort annotation: a
+database without 008 yet still relays (relay-http falls back to the
+tenant-stamped write), and a tenant with no resolvable profile
+stamps NULL.
+
+## The voice surfaces (relay bite R1)
+
+Both voice surfaces mirror what the user says into the relay, the
+same way: the browser-voice fallback from `sendToThinkinBuddy`, and
+the ElevenLabs widget from its per-turn `onMessage` hook (user turns
+only — the buddy's own speech is never mirrored). The widget call
+also runs the relay poll for its duration, so the desktop's answers
+come back and are spoken. All client relay calls go through the
+app's `apiFetch` seam so the account session rides along (a bare
+fetch is refused 401 by relay-proxy in hosted mode), and a refused
+or unreachable door is surfaced to the user once per outage with its
+reason — never silently swallowed.
 
 ## The entitlement gate
 

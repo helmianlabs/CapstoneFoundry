@@ -6,6 +6,11 @@
 //   #7 media endpoints + memory-admin require + scope to the tenant
 //      session in enforced mode; compat behavior unchanged
 //   #8 dead providers (Sora / Imagen) are unrouted and deleted
+//   D1 dead provider references are gone from the docs/templates
+//   D2 dead-reference leftovers outside D1's files are fixed too
+//   B3 curriculum verification records exist and carry the four-AI-
+//      merge provenance (and the stamp the correction addendum
+//      superseded appears in none of them)
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -321,5 +326,180 @@ describe('dead providers removed (sweep #8)', () => {
     const src = readFileSync(join(ROOT, 'api', '[...path].js'), 'utf8');
     assert.ok(!src.includes('video-sora'), 'router must not load video-sora');
     assert.ok(!src.includes('image-imagen'), 'router must not load image-imagen');
+  });
+});
+
+// ─── D1: dead references killed in docs/templates ────────────────────────
+describe('dead provider references in docs/templates (D1)', () => {
+  it('the provisioning template names no dead tool or endpoint', () => {
+    // tools.md is the provisioning template: any row there is an
+    // instruction to create the tool. The dead tools must not appear
+    // at all — not even as a "retired" row someone could provision
+    // by mistake. (The living generate_image_gemini row's prose
+    // mention of "the retired Imagen route" names no tool or
+    // endpoint and does not trip this.)
+    const src = readFileSync(join(ROOT, 'docs', 'elevenlabs-template', 'tools.md'), 'utf8');
+    for (const dead of ['generate_video_sora', 'generate_image_imagen', '/api/video-sora', '/api/image-imagen']) {
+      assert.ok(!src.includes(dead), `tools.md still references ${dead}`);
+    }
+  });
+
+  it('SETUP.md carries no Imagen label for Google AI Studio', () => {
+    const src = readFileSync(join(ROOT, 'SETUP.md'), 'utf8');
+    assert.ok(!src.includes('Imagen'), 'SETUP.md still labels Google AI Studio as Imagen');
+    assert.ok(src.includes('generate_image_gemini'), 'SETUP.md names the living Gemini image route');
+  });
+
+  it('the migrate mapping keeps the dead tools only as retired-with-date history', () => {
+    // The mapping doc is a dated migration record: the rows stay as
+    // history, but every line naming a dead tool must carry its
+    // retirement marking on the same line, so no reader can mistake
+    // the record for a live provisioning list.
+    const src = readFileSync(join(ROOT, 'docs', 'ELEVENLABS_MIGRATE_MAPPING.md'), 'utf8');
+    const lines = src.split('\n');
+    const imagenLines = lines.filter((l) => l.includes('image-imagen') || l.includes('generate_image_imagen'));
+    const soraLines = lines.filter((l) => l.includes('video-sora') || l.includes('generate_video_sora'));
+    assert.ok(imagenLines.length >= 1, 'the historical imagen row is still recorded');
+    assert.ok(soraLines.length >= 1, 'the historical sora row is still recorded');
+    for (const line of [...imagenLines, ...soraLines]) {
+      assert.ok(/retired/i.test(line), `dead-tool line is not marked retired: ${line}`);
+    }
+    assert.ok(src.includes('2026-08-17'), 'imagen retirement date (2026-08-17) recorded');
+    assert.ok(src.includes('2026-09-24'), 'sora retirement date (2026-09-24) recorded');
+  });
+});
+
+// ─── D2: dead-reference leftovers outside D1's files ─────────────────────
+describe('dead-reference leftovers (D2)', () => {
+  it('no shipped client surface labels anything Imagen', () => {
+    // The GOOGLE_API_KEY row in the client's key list sold the deleted
+    // Imagen route long after the handler died. index.html is the
+    // source; the android/ios/dist copies are generated from it and
+    // carry the same label — none of the four may name Imagen again.
+    const clients = [
+      'index.html',
+      join('android', 'app', 'src', 'main', 'assets', 'public', 'index.html'),
+      join('ios', 'App', 'App', 'public', 'index.html'),
+      join('dist', 'index.html'),
+    ];
+    for (const rel of clients) {
+      const path = join(ROOT, rel);
+      assert.ok(existsSync(path), `${rel} exists`);
+      const src = readFileSync(path, 'utf8');
+      assert.ok(!/imagen/i.test(src), `${rel} still labels something Imagen`);
+    }
+    const src = readFileSync(join(ROOT, 'index.html'), 'utf8');
+    assert.ok(
+      src.includes("usedBy: 'Gemini image generation"),
+      'the GOOGLE_API_KEY row names the living Gemini image route',
+    );
+  });
+
+  it('the env checklist and tool-auth rollout keep dead tools only as retired-with-date', () => {
+    // Same rule as the migrate mapping (D1): these are dated records,
+    // so the dead tools stay as history — but every line naming one
+    // must carry its retirement marking on the same line, so neither
+    // doc can be read as a current tool list.
+    for (const rel of [join('docs', 'SANDY_ENV_CHECKLIST.md'), join('docs', 'TOOL_AUTH_ROLLOUT.md')]) {
+      const src = readFileSync(join(ROOT, rel), 'utf8');
+      const deadLines = src.split('\n').filter((l) => /imagen|sora/i.test(l));
+      assert.ok(deadLines.length >= 1, `${rel} still records the dead tools as history`);
+      for (const line of deadLines) {
+        assert.ok(/retired/i.test(line), `${rel}: dead-tool line is not marked retired: ${line}`);
+      }
+      assert.ok(src.includes('2026-08-17'), `${rel}: imagen retirement date (2026-08-17) recorded`);
+      assert.ok(src.includes('2026-09-24'), `${rel}: sora retirement date (2026-09-24) recorded`);
+    }
+  });
+
+  it('SETUP.md §5 webhook count matches the template as it now stands', () => {
+    // The count is derived from tools.md at test time — the template's
+    // table rows plus recall_memory, which the template documents in
+    // prose — so a future tool addition that forgets SETUP.md fails
+    // here instead of drifting silently again.
+    const template = readFileSync(join(ROOT, 'docs', 'elevenlabs-template', 'tools.md'), 'utf8');
+    const rows = template.split('\n')
+      .filter((l) => /^\| `[^`]+` \| `https:\/\/YOUR-DEPLOYMENT-URL/.test(l)).length;
+    const total = rows + (template.includes('`recall_memory`') ? 1 : 0);
+    const setup = readFileSync(join(ROOT, 'SETUP.md'), 'utf8');
+    assert.ok(
+      setup.includes(`the ${total} custom tool webhooks`),
+      `SETUP.md must name the true count (${total} = ${rows} template rows + recall_memory)`,
+    );
+  });
+});
+
+// ─── B3: curriculum verification records ───────────────────────────────
+describe('curriculum verification records (B3)', () => {
+  // The 8 standing curricula, by the exact titles the Knowledge Base
+  // export on disk carries (docs/knowledge-base/README.md, 2026-08-06).
+  const RECORDS = [
+    ['finance', 'Finance Curriculum (Ages 6–Adult)'],
+    ['critical-thinking-and-logic', 'Critical Thinking & Logic Curriculum (Ages 6–Adult)'],
+    ['coding-ai-and-web-design', 'Coding, AI & Web Design Curriculum (Ages 6–Adult)'],
+    ['leadership-business-and-organizational-psychology', 'Leadership, Business & Organizational Psychology Curriculum (Ages 6–Adult)'],
+    ['philosophy', 'Philosophy Curriculum (Ages 6–Adult)'],
+    ['psychology-and-social-psychology', 'Psychology & Social Psychology Curriculum (Ages 6–Adult)'],
+    ['college-prep-and-financial-aid', 'College Prep & Financial Aid Curriculum (Grade 7–Adult)'],
+    ['academic-writing-and-english', 'Academic Writing & English Curriculum (Grade 7–Adult)'],
+  ];
+  const kbDir = join(ROOT, 'docs', 'knowledge-base');
+  // Prose wraps across lines; collapse whitespace so phrase pins check
+  // the words, not the wrapping.
+  const flat = (src) => src.replace(/\s+/g, ' ');
+
+  it('VERIFICATION.md states the record-keeping method', () => {
+    const path = join(kbDir, 'VERIFICATION.md');
+    assert.ok(existsSync(path), 'docs/knowledge-base/VERIFICATION.md exists');
+    const src = flat(readFileSync(path, 'utf8'));
+    for (const name of ['Claude AI', 'ChatGPT', 'Grok', 'Gemini']) {
+      assert.ok(src.includes(name), `VERIFICATION.md names ${name} in the method of record`);
+    }
+    assert.ok(src.includes('independently'), 'VERIFICATION.md describes the independent drafts');
+    assert.ok(src.includes('merge'), 'VERIFICATION.md describes the merge pass');
+    assert.ok(src.includes('BASE_GUARDRAILS'), 'VERIFICATION.md names BASE_GUARDRAILS for the age-fit check');
+    assert.ok(src.includes('KID_SAFETY_CORE'), 'VERIFICATION.md names KID_SAFETY_CORE for the age-fit check');
+    assert.ok(src.includes('No framework — enrichment'), 'VERIFICATION.md carries the honest no-framework line');
+    assert.ok(src.includes('not an accredited school'), 'VERIFICATION.md carries the honesty line');
+    assert.ok(!/unverified/i.test(src), 'VERIFICATION.md never applies the superseded stamp');
+  });
+
+  it('all 8 records exist, titled as the KB export on disk titles them', () => {
+    const readme = readFileSync(join(kbDir, 'README.md'), 'utf8');
+    for (const [slug, title] of RECORDS) {
+      assert.ok(readme.includes(title), `the KB export carries "${title}"`);
+      const path = join(kbDir, 'verification', `${slug}.md`);
+      assert.ok(existsSync(path), `verification/${slug}.md exists`);
+      const src = flat(readFileSync(path, 'utf8'));
+      assert.ok(src.includes(title), `${slug}.md carries its exact KB title`);
+    }
+  });
+
+  it('every record carries the four-AI-merge provenance, builder Troy', () => {
+    for (const [slug] of RECORDS) {
+      const src = flat(readFileSync(join(kbDir, 'verification', `${slug}.md`), 'utf8'));
+      assert.ok(src.includes('**Builder:** Troy'), `${slug}.md names Troy as builder`);
+      for (const name of ['Claude AI', 'ChatGPT', 'Grok', 'Gemini']) {
+        assert.ok(src.includes(name), `${slug}.md names ${name} in the build method`);
+      }
+      assert.ok(src.includes('independently wrote the full curriculum'), `${slug}.md states the independent drafts`);
+      assert.ok(src.includes('merged them into the single master text'), `${slug}.md states the merge`);
+      assert.ok(src.includes('2026-08-06'), `${slug}.md dates its KB presence to the export on disk`);
+      assert.ok(src.includes('`shipped`'), `${slug}.md carries the B1 shipped status`);
+    }
+  });
+
+  it('the text-dependent fields are deferred to the text pull, never invented', () => {
+    for (const [slug] of RECORDS) {
+      const src = flat(readFileSync(join(kbDir, 'verification', `${slug}.md`), 'utf8'));
+      assert.ok(
+        src.includes('Deferred — recorded from the merged text when the text is pulled into the repo.'),
+        `${slug}.md defers its text-dependent fields in the standard words`,
+      );
+      assert.ok(src.includes('BASE_GUARDRAILS') && src.includes('KID_SAFETY_CORE'), `${slug}.md names the age-fit standards`);
+      assert.ok(src.includes('No framework — enrichment'), `${slug}.md carries the honest no-framework line for its mapping field`);
+      assert.ok(src.includes('not an accredited school'), `${slug}.md carries the honesty line`);
+      assert.ok(!/unverified/i.test(src), `${slug}.md never applies the superseded stamp`);
+    }
   });
 });

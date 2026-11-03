@@ -26,7 +26,22 @@
 //                             safety_mode, pin_set, plan, entitlement_status }
 // PUT  /api/profile      -> whitelisted fields; safety_mode:false with a
 //                           PIN set needs { pin } too, else
-//                           403 parent_pin_required / invalid_parent_pin
+//                           403 parent_pin_required / invalid_parent_pin;
+//                           safety_mode:true with NO PIN set needs { pin }
+//                           in the same request (hashed as part of the
+//                           write), else 403 parent_pin_required.
+//                           { profile_id } targets one of the tenant's
+//                           own profiles instead of the active one.
+// GET  /api/profile/profiles -> { tenantId, profiles: [...] } (bite 9)
+// POST /api/profile/profiles -> create a profile (household limit 4:
+//                           400 profile_limit_reached; a safety-on
+//                           create follows the same PIN rule as PUT)
+// POST /api/profile/active { profile_id, pin? } -> make a profile the
+//                           active one; switching AWAY from a protected
+//                           profile to an unprotected one with a PIN
+//                           set needs the PIN (403 as above); with no
+//                           PIN set it proceeds and the response
+//                           carries warning: 'no_parent_pin_set'
 // POST /api/profile/pin        { pin } -> set/replace the parent PIN
 // POST /api/profile/pin/verify { pin } -> { ok: boolean }
 // POST /api/auth/delete-account { password } -> 200 { deleted: true } |
@@ -136,6 +151,99 @@ async function wireAlarms() {
   } catch { /* alarms are optional at sign-in time; swallow everything */ }
 }
 
+// ─── Requests door hook (never allowed to break the pane) ──────────
+// Same guarded dynamic-import pattern as wireBilling/wireAlarms: the
+// door's logic lives in public/requests.js (validation, the calls,
+// the list rendering); this binds it to the pane's markup in
+// index.html. Every call rides tbFetch, so the account session
+// attaches exactly like the pane's other calls — the module itself
+// invents no identity and sends no tenant field. The door displays
+// request statuses; nothing here can move one (statuses are the
+// operator's side only, spec §1.2).
+
+async function wireRequestsDoor() {
+  const submitBtn = document.getElementById('requestSubmit');
+  if (!submitBtn) return;
+  let mod;
+  try { mod = await import('./requests.js'); } catch { return; }
+
+  let kind = 'provider';
+  let rows = [];
+  const providerBox = document.getElementById('requestProviderFields');
+  const curriculumBox = document.getElementById('requestCurriculumFields');
+  const listEl = document.getElementById('requestList');
+
+  const paintKind = () => {
+    if (providerBox) providerBox.style.display = kind === 'provider' ? '' : 'none';
+    if (curriculumBox) curriculumBox.style.display = kind === 'curriculum' ? '' : 'none';
+  };
+  document.getElementById('requestKindProvider')?.addEventListener('click', () => {
+    kind = 'provider'; setLine('requestLine', ''); paintKind();
+  });
+  document.getElementById('requestKindCurriculum')?.addEventListener('click', () => {
+    kind = 'curriculum'; setLine('requestLine', ''); paintKind();
+  });
+
+  const paintList = () => { if (listEl) listEl.innerHTML = mod.requestListHtml(rows); };
+  const loadList = async () => {
+    const res = await mod.fetchOwnRequests({ fetchFn: tbFetch });
+    if (res.ok) { rows = res.requests; paintList(); }
+  };
+  requestsListLoader = loadList;
+
+  const value = (id) => document.getElementById(id)?.value ?? '';
+  submitBtn.addEventListener('click', async () => {
+    setLine('requestLine', '');
+    const fields = kind === 'provider'
+      ? {
+          provider_name: value('requestProviderName'),
+          capability: value('requestCapability'),
+          use_case: value('requestUseCase'),
+        }
+      : {
+          role: value('requestRole'),
+          subject: value('requestSubject'),
+          level: value('requestLevel'),
+          goal: value('requestGoal'),
+          source_links_text: value('requestSourceLinks'),
+        };
+    submitBtn.disabled = true;
+    try {
+      const res = await mod.submitRequest(kind, fields, { fetchFn: tbFetch });
+      // A refusal (client-side or the server's) shows plainly and the
+      // form keeps its text — nothing is silently swallowed.
+      if (!res.ok) { setLine('requestLine', res.error); return; }
+      // The new request joins the visible list at the top, carrying
+      // the server's own 'Received' label — no page reload.
+      rows = [res.request, ...rows];
+      paintList();
+      for (const id of kind === 'provider'
+        ? ['requestProviderName', 'requestUseCase']
+        : ['requestSubject', 'requestGoal', 'requestSourceLinks']) {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      }
+      setLine('requestLine', mod.REQUEST_NOTED_TEXT);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+  paintKind();
+}
+
+// ─── Profile-changed signal (bite 5) ─────────────────────────────────
+// prime-agent derives the voice prompt's safety layers from the
+// profile AT PRIME TIME, so any prompt primed before a profile/PIN
+// write is a stale safety decision. After every SUCCESSFUL profile or
+// PIN write in this module, publish the change: index.html listens
+// for 'tb-profile-changed', withholds its cached session prompt, and
+// re-primes before the next call can start. A FAILED write publishes
+// nothing — the previous profile state (and the prime built from it)
+// is untouched, so there is no half-state to clean up.
+function publishProfileChanged() {
+  try { window.dispatchEvent(new CustomEvent('tb-profile-changed')); } catch { /* no listener — the next page load primes fresh anyway */ }
+}
+
 // ─── Overlay (auth + onboarding steps) ──────────────────────────────────
 
 const overlayEl = () => document.getElementById('accountOverlay');
@@ -218,7 +326,12 @@ function showAuth() {
         if (prof && isAccountsOff(prof)) { enterLegacyMode(); return; }
         profileCache = prof?.data || null;
         refreshAccountPane();
-        if (!prof?.data?.display_name) showOnboarding();
+        // Onboarding is complete only with BOTH a display name and an
+        // age band (bite 5): a band-less profile is exactly the
+        // incomplete state the server's safe default guards, so it
+        // finishes onboarding here rather than sailing through as an
+        // unnamed-band (read: adult) profile.
+        if (!prof?.data?.display_name || !prof?.data?.age_band) showOnboarding();
         else hideOverlay();
         return;
       }
@@ -232,8 +345,13 @@ function showAuth() {
 }
 
 function showOnboarding() {
-  const bandOptions = AGE_BAND_OPTIONS
-    .map(o => `<option value="${o.value}"${o.value === 'adult' ? ' selected' : ''}>${o.label}</option>`)
+  // No preselected band (bite 5): the age band drives the server's
+  // safety decision, so it must be an explicit choice — the first
+  // option is a value-less placeholder and step 2 refuses to advance
+  // until a real band is picked. There is no silent 'adult' default
+  // to fall through on.
+  const bandOptions = '<option value="" selected>Choose…</option>' + AGE_BAND_OPTIONS
+    .map(o => `<option value="${o.value}">${o.label}</option>`)
     .join('');
   showOverlay(`
     <h1>THINKINBUDDY</h1>
@@ -298,7 +416,10 @@ function showOnboarding() {
     if (!nameEl.value.trim()) { errOf(1).textContent = 'Your buddy needs a name to call you.'; return; }
     gotoStep(2);
   });
-  steps[1].querySelector('[data-next="2"]').addEventListener('click', () => gotoStep(3));
+  steps[1].querySelector('[data-next="2"]').addEventListener('click', () => {
+    if (!bandEl.value) { errOf(2).textContent = 'Pick who this buddy is for to continue.'; return; }
+    gotoStep(3);
+  });
   steps[2].querySelector('[data-next="3"]').addEventListener('click', () => gotoStep(4));
   document.getElementById('acctAboutSkip').addEventListener('click', () => {
     document.getElementById('acctAbout').value = '';
@@ -310,12 +431,31 @@ function showOnboarding() {
     err.textContent = '';
     const pin = document.getElementById('acctPin').value.trim();
     const pinAgain = document.getElementById('acctPinAgain').value.trim();
-    if (safetyEl.checked && (pin || pinAgain)) {
+    // Bite 8: safety checked means a valid PIN + matching confirmation
+    // are REQUIRED before Save can complete — safety mode is a lock,
+    // and there is no successful onboarding that arms it without one.
+    // (The server enforces the same rule on the profile write itself,
+    // so this is the friendly face of a rule no client can bypass.)
+    if (safetyEl.checked) {
       if (!/^\d{4,6}$/.test(pin)) { err.textContent = 'The parent PIN must be 4–6 digits.'; return; }
       if (pin !== pinAgain) { err.textContent = "The two PINs didn't match."; return; }
     }
     ev.target.disabled = true;
     try {
+      // The PIN is set BEFORE the profile save: a failed PIN call
+      // leaves onboarding open with the error line and nothing saved,
+      // so the saved profile can never sit there armed-but-unlocked
+      // (the old order saved first and warned afterwards).
+      if (safetyEl.checked) {
+        const pinRes = await api('/api/profile/pin', { method: 'POST', body: { pin } });
+        if (isAccountsOff(pinRes)) { enterLegacyMode(); return; }
+        if (pinRes.status !== 200) {
+          err.textContent = 'Could not set the parent PIN — please try again.';
+          return;
+        }
+        if (profileCache) profileCache.pin_set = true;
+        publishProfileChanged();
+      }
       const saved = await api('/api/profile', {
         method: 'PUT',
         body: {
@@ -328,15 +468,7 @@ function showOnboarding() {
       if (isAccountsOff(saved)) { enterLegacyMode(); return; }
       if (saved.status !== 200) { err.textContent = 'Could not save — please try again.'; return; }
       profileCache = saved.data;
-      if (safetyEl.checked && pin) {
-        const pinRes = await api('/api/profile/pin', { method: 'POST', body: { pin } });
-        if (pinRes.status !== 200) {
-          err.textContent = 'Profile saved, but the PIN did not stick — set it again in Settings → Account & Safety.';
-          refreshAccountPane();
-          return;
-        }
-        if (profileCache) profileCache.pin_set = true;
-      }
+      publishProfileChanged();
       refreshAccountPane();
       hideOverlay();
     } catch {
@@ -351,6 +483,96 @@ function showOnboarding() {
 
 let profileCache = null;
 let accountsMode = false; // true once the server proves it has accounts
+let requestsListLoader = null; // set by wireRequestsDoor() once the door is bound
+let profilesCache = null; // the household's profile list, server order (bite 9b)
+
+/**
+ * The ACTIVE profile's id as this module currently knows it: the
+ * list's is_active row once the list has loaded, else the profile
+ * GET /api/profile returned (which IS the active profile). Null
+ * before any profile state exists (legacy mode / signed out).
+ */
+function activeProfileId() {
+  const fromList = profilesCache?.find((p) => p.is_active === true);
+  if (fromList?.profile_id) return fromList.profile_id;
+  return profileCache?.profile_id ?? null;
+}
+
+// index.html's prime request and the widget's dynamic variables
+// read the active profile through this window global: onboarding.js
+// is an ES module and index.html's app script is not, so the two
+// share no scope — the getter is the bridge, the same direction
+// the tb-profile-changed event travels. The id NAMES the profile a
+// session runs under; it never selects one (the server resolves
+// safety from its own active pointer), so it cannot widen posture.
+window.tbActiveProfileId = () => activeProfileId();
+
+function bandLabel(value) {
+  const found = AGE_BAND_OPTIONS.find((o) => o.value === value);
+  return found ? found.label : 'No age band yet';
+}
+
+/**
+ * Render the household list into the pane: one row per profile with
+ * its name, band, and the "In use" / "First profile" / "Safety on"
+ * markers, plus the switch and edit buttons the pane wiring hears
+ * through one delegated listener. Built with DOM calls and
+ * textContent only — profile names are user text and never become
+ * markup.
+ */
+function renderProfilesList() {
+  const listEl = document.getElementById('accountProfilesList');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (!profilesCache) return;
+  if (profilesCache.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'test-line';
+    empty.textContent = 'No profiles yet.';
+    listEl.appendChild(empty);
+    return;
+  }
+  for (const p of profilesCache) {
+    const row = document.createElement('div');
+    row.className = 'test-line';
+    const bits = [p.display_name || 'Unnamed profile', bandLabel(p.age_band)];
+    if (p.is_active) bits.push('In use');
+    if (p.is_primary) bits.push('First profile');
+    if (p.safety_mode) bits.push('Safety on');
+    const label = document.createElement('span');
+    label.textContent = bits.join(' · ');
+    row.appendChild(label);
+    if (!p.is_active) {
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'secondary';
+      useBtn.textContent = 'Use this profile';
+      useBtn.dataset.action = 'switch';
+      useBtn.dataset.profileId = p.profile_id;
+      row.appendChild(document.createTextNode(' '));
+      row.appendChild(useBtn);
+    }
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'secondary';
+    editBtn.textContent = 'Edit';
+    editBtn.dataset.action = 'edit';
+    editBtn.dataset.profileId = p.profile_id;
+    row.appendChild(document.createTextNode(' '));
+    row.appendChild(editBtn);
+    listEl.appendChild(row);
+  }
+}
+
+/** Reload the household list from the server and re-render it. */
+async function loadProfiles() {
+  const res = await api('/api/profile/profiles').catch(() => null);
+  if (!res) return;
+  if (isAccountsOff(res)) { enterLegacyMode(); return; }
+  if (res.status !== 200 || !Array.isArray(res.data?.profiles)) return;
+  profilesCache = res.data.profiles;
+  renderProfilesList();
+}
 
 function hideAccountPane() {
   const pane = document.getElementById('accountPane');
@@ -395,6 +617,15 @@ async function refreshAccountPane(force = false) {
   }
   if (pinStatus) pinStatus.textContent = profileCache.pin_set ? 'A parent PIN is set.' : 'No parent PIN set.';
   if (currentPinRow) currentPinRow.style.display = profileCache.pin_set ? '' : 'none';
+  // The household profile list rides the same refresh (bite 9b), so
+  // the list, its "In use" marker, and the active id the prime
+  // carries (window.tbActiveProfileId) never drift from the server.
+  // Best-effort like everything else in this pane: it loads after
+  // the profile itself and can never break the pane's own render.
+  loadProfiles().catch(() => {});
+  // The requests door's list rides the pane's refresh (sign-in, tab
+  // open, PIN save) — best-effort, it can never break the pane.
+  if (requestsListLoader) requestsListLoader().catch(() => {});
 }
 
 function setLine(id, text) {
@@ -407,19 +638,43 @@ function wireAccountPane() {
   const pinRow = document.getElementById('accountSafetyPinRow');
   const pinInput = document.getElementById('accountSafetyPin');
   const pinConfirm = document.getElementById('accountSafetyPinConfirm');
+  const createRow = document.getElementById('accountSafetyCreateRow');
+  const createPinInput = document.getElementById('accountSafetyNewPin');
+  const createPinAgainInput = document.getElementById('accountSafetyNewPinAgain');
+  const createConfirm = document.getElementById('accountSafetyCreateConfirm');
   if (!safetyToggle) return;
+
+  // Bite 8: the safety-on write itself, shared by the toggle (PIN
+  // already set) and the create-a-PIN flow below (PIN just created).
+  async function turnSafetyOn() {
+    const res = await api('/api/profile', { method: 'PUT', body: { safety_mode: true } }).catch(() => null);
+    if (res && res.status === 200) {
+      profileCache = res.data;
+      publishProfileChanged();
+      safetyToggle.checked = true;
+      setLine('accountStatusLine', 'Safety mode is on.');
+      return true;
+    }
+    safetyToggle.checked = false;
+    setLine('accountStatusLine', 'Could not turn safety mode on — try again.');
+    return false;
+  }
 
   safetyToggle.addEventListener('change', async () => {
     setLine('accountStatusLine', '');
     if (safetyToggle.checked) {
-      // Turning safety ON never needs a PIN.
-      const res = await api('/api/profile', { method: 'PUT', body: { safety_mode: true } }).catch(() => null);
-      if (res && res.status === 200) {
-        profileCache = res.data;
-        setLine('accountStatusLine', 'Safety mode is on.');
+      // Bite 8: with a PIN set, safety turns straight on. With NO
+      // PIN set, arming safety now would leave it unlockable by
+      // anyone holding the phone — so the toggle does not take
+      // effect; it opens the create-a-PIN row instead, and safety
+      // turns on only once a PIN exists (see createConfirm below).
+      if (profileCache?.pin_set) {
+        await turnSafetyOn();
       } else {
         safetyToggle.checked = false;
-        setLine('accountStatusLine', 'Could not turn safety mode on — try again.');
+        if (createRow) createRow.style.display = '';
+        createPinInput?.focus();
+        setLine('accountStatusLine', 'Safety mode needs a parent PIN to lock it — create one and safety turns on.');
       }
       return;
     }
@@ -439,6 +694,31 @@ function wireAccountPane() {
     if (pinInput) pinInput.value = '';
   });
 
+  // Bite 8: the create-a-PIN flow the safety toggle opens when no
+  // PIN is set. PIN + confirmation first; only a successfully
+  // created PIN lets the safety-on write run. The PIN write alone
+  // changes nothing the prime resolves (the resolver reads
+  // safety_mode / age_band, never pin_set), so it publishes nothing
+  // itself — the safety-on write it unlocks publishes from its own
+  // success branch inside turnSafetyOn.
+  createConfirm?.addEventListener('click', async () => {
+    const newPin = createPinInput?.value.trim() || '';
+    const newPinAgain = createPinAgainInput?.value.trim() || '';
+    if (!/^\d{4,6}$/.test(newPin)) { setLine('accountStatusLine', 'The parent PIN must be 4–6 digits.'); return; }
+    if (newPin !== newPinAgain) { setLine('accountStatusLine', "The two PINs didn't match."); return; }
+    const pinRes = await api('/api/profile/pin', { method: 'POST', body: { pin: newPin } }).catch(() => null);
+    if (pinRes && isAccountsOff(pinRes)) { enterLegacyMode(); return; }
+    if (!pinRes || pinRes.status !== 200) {
+      setLine('accountStatusLine', 'Could not save the PIN — safety mode is still off.');
+      return;
+    }
+    if (profileCache) profileCache.pin_set = true;
+    if (createPinInput) createPinInput.value = '';
+    if (createPinAgainInput) createPinAgainInput.value = '';
+    if (createRow) createRow.style.display = 'none';
+    if (await turnSafetyOn()) refreshAccountPane();
+  });
+
   async function turnSafetyOff(pin) {
     const body = { safety_mode: false };
     if (pin) body.pin = pin;
@@ -446,6 +726,7 @@ function wireAccountPane() {
     if (res && isAccountsOff(res)) { enterLegacyMode(); return; }
     if (res && res.status === 200) {
       profileCache = res.data;
+      publishProfileChanged();
       safetyToggle.checked = false;
       if (pinRow) pinRow.style.display = 'none';
       setLine('accountStatusLine', res.data.warning === 'no_parent_pin_set'
@@ -482,6 +763,7 @@ function wireAccountPane() {
       if (isAccountsOff(res)) { enterLegacyMode(); return; }
       if (res.status !== 200) { setLine('accountPinLine', 'Could not save the PIN — try again.'); return; }
       if (profileCache) profileCache.pin_set = true;
+      publishProfileChanged();
       for (const id of ['accountCurrentPin', 'accountNewPin', 'accountNewPinConfirm']) {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -546,6 +828,271 @@ function wireAccountPane() {
     setLine('accountDeleteLine', 'Could not delete your account — try again. Nothing was deleted.');
   });
 
+  // ─── Profiles: switch, create, edit (bite 9b) ──────────────────
+  // The client half of bite 9's foundation: the pane lists the
+  // household (renderProfilesList, fed by loadProfiles on every
+  // pane refresh), switches the server's active pointer, creates
+  // profiles up to the household limit, and edits any profile's
+  // name / band / about / safety. Every successful write publishes
+  // tb-profile-changed (bite 5's contract) — a switch most of all,
+  // because the prime must re-resolve under the newly active
+  // profile before the next call.
+  const switchPinRow = document.getElementById('accountSwitchPinRow');
+  const switchPinInput = document.getElementById('accountSwitchPin');
+  let pendingSwitchId = null;
+
+  async function switchActiveProfile(profileId, pin) {
+    const body = { profile_id: profileId };
+    if (pin) body.pin = pin;
+    const res = await api('/api/profile/active', { method: 'POST', body }).catch(() => null);
+    if (res && isAccountsOff(res)) { enterLegacyMode(); return; }
+    if (res && res.status === 200) {
+      pendingSwitchId = null;
+      if (switchPinRow) switchPinRow.style.display = 'none';
+      if (switchPinInput) switchPinInput.value = '';
+      profileCache = null; // re-read: the active profile just changed
+      publishProfileChanged();
+      await refreshAccountPane(true);
+      setLine('accountProfilesLine', res.data?.warning === 'no_parent_pin_set'
+        ? 'Switched. Note: no parent PIN is set, so anyone with this phone can switch profiles or change safety settings.'
+        : 'Switched — your buddy now runs under this profile.');
+      return;
+    }
+    if (res && res.status === 403 && res.data?.error === 'parent_pin_required') {
+      // Protected -> unprotected under an armed account lock: the
+      // parent proves it inline, then Confirm retries with the PIN.
+      pendingSwitchId = profileId;
+      if (switchPinRow) switchPinRow.style.display = '';
+      switchPinInput?.focus();
+      setLine('accountProfilesLine', 'Enter the parent PIN to switch away from a protected profile.');
+      return;
+    }
+    if (res && res.status === 403 && res.data?.error === 'invalid_parent_pin') {
+      setLine('accountProfilesLine', "That PIN didn't match — no switch happened.");
+      return;
+    }
+    setLine('accountProfilesLine', 'Could not switch profiles — try again.');
+  }
+
+  document.getElementById('accountProfilesList')?.addEventListener('click', (ev) => {
+    const btn = ev.target?.closest?.('button[data-profile-id]');
+    if (!btn) return;
+    if (btn.dataset.action === 'switch') {
+      setLine('accountProfilesLine', '');
+      switchActiveProfile(btn.dataset.profileId, null);
+    } else if (btn.dataset.action === 'edit') {
+      openProfileEditor(btn.dataset.profileId);
+    }
+  });
+
+  document.getElementById('accountSwitchPinConfirm')?.addEventListener('click', async () => {
+    if (!pendingSwitchId) return;
+    const pin = switchPinInput?.value.trim() || '';
+    if (!pin) { setLine('accountProfilesLine', 'Enter the parent PIN to switch.'); return; }
+    await switchActiveProfile(pendingSwitchId, pin);
+    if (switchPinInput) switchPinInput.value = '';
+  });
+  document.getElementById('accountSwitchPinCancel')?.addEventListener('click', () => {
+    pendingSwitchId = null;
+    if (switchPinRow) switchPinRow.style.display = 'none';
+    if (switchPinInput) switchPinInput.value = '';
+    setLine('accountProfilesLine', '');
+  });
+
+  // Create: name + explicit band (no preselected band — bite 5's
+  // rule) + optional safety. Safety on with no account PIN yet
+  // carries the new PIN in the create request itself (bite 8).
+  const newSafetyEl = document.getElementById('accountProfileNewSafety');
+  const newPinRow = document.getElementById('accountProfileNewPinRow');
+  const syncNewPinRow = () => {
+    if (newPinRow) newPinRow.style.display = newSafetyEl?.checked && !profileCache?.pin_set ? '' : 'none';
+  };
+  newSafetyEl?.addEventListener('change', syncNewPinRow);
+
+  document.getElementById('accountProfileCreateBtn')?.addEventListener('click', async () => {
+    setLine('accountProfileCreateLine', '');
+    syncNewPinRow();
+    const name = document.getElementById('accountProfileNewName')?.value.trim() || '';
+    const band = document.getElementById('accountProfileNewBand')?.value || '';
+    const safety = newSafetyEl?.checked === true;
+    if (!name) { setLine('accountProfileCreateLine', 'A profile needs a name.'); return; }
+    if (!band) { setLine('accountProfileCreateLine', 'Pick who this profile is for.'); return; }
+    const body = { display_name: name, age_band: band, safety_mode: safety };
+    if (safety && !profileCache?.pin_set) {
+      const pin = document.getElementById('accountProfileNewPin')?.value.trim() || '';
+      const pinAgain = document.getElementById('accountProfileNewPinAgain')?.value.trim() || '';
+      if (!/^\d{4,6}$/.test(pin)) { setLine('accountProfileCreateLine', 'The parent PIN must be 4–6 digits.'); return; }
+      if (pin !== pinAgain) { setLine('accountProfileCreateLine', "The two PINs didn't match."); return; }
+      body.pin = pin;
+    }
+    const res = await api('/api/profile/profiles', { method: 'POST', body }).catch(() => null);
+    if (res && isAccountsOff(res)) { enterLegacyMode(); return; }
+    if (res && res.status === 200) {
+      // A profile write succeeded (and if it carried a PIN, the
+      // account lock was just armed): publish, clear the form, and
+      // let the pane re-read the household from the server.
+      profileCache = null;
+      publishProfileChanged();
+      for (const id of ['accountProfileNewName', 'accountProfileNewPin', 'accountProfileNewPinAgain']) {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      }
+      const bandEl = document.getElementById('accountProfileNewBand');
+      if (bandEl) bandEl.value = '';
+      if (newSafetyEl) newSafetyEl.checked = false;
+      syncNewPinRow();
+      await refreshAccountPane(true);
+      setLine('accountProfileCreateLine', 'Profile created.');
+      return;
+    }
+    if (res && res.status === 400 && res.data?.error === 'profile_limit_reached') {
+      setLine('accountProfileCreateLine', 'This account already has the most profiles it can hold (4).');
+      return;
+    }
+    if (res && res.status === 403 && res.data?.error === 'parent_pin_required') {
+      if (newPinRow) newPinRow.style.display = '';
+      setLine('accountProfileCreateLine', 'Safety mode needs a parent PIN to lock it — create one and the profile is created.');
+      return;
+    }
+    if (res && res.status === 400 && res.data?.error === 'invalid_age_band') {
+      setLine('accountProfileCreateLine', 'Pick who this profile is for.');
+      return;
+    }
+    setLine('accountProfileCreateLine', 'Could not create the profile — try again.');
+  });
+
+  // Edit: any profile in the household, targeted by profile_id.
+  // The safety halves are mirrored before the write — arming
+  // safety on a PIN-less account reveals the create-a-PIN fields,
+  // disarming it under an armed lock reveals the current-PIN
+  // field — and the server's refusals reveal the same row, so a
+  // stale cache can never strand the parent.
+  const editBox = document.getElementById('accountProfileEdit');
+  const editSafetyEl = document.getElementById('accountProfileEditSafety');
+  const editPinRow = document.getElementById('accountProfileEditPinRow');
+  const editPinAgainWrap = document.getElementById('accountProfileEditPinAgainWrap');
+  const editPinLabel = document.getElementById('accountProfileEditPinLabel');
+  let editProfileId = null;
+
+  function openProfileEditor(profileId) {
+    const target = profilesCache?.find((p) => p.profile_id === profileId);
+    if (!target) return;
+    editProfileId = profileId;
+    setLine('accountProfileEditLine', '');
+    const nameEl = document.getElementById('accountProfileEditName');
+    const bandEl = document.getElementById('accountProfileEditBand');
+    const aboutEl = document.getElementById('accountProfileEditAbout');
+    if (nameEl) nameEl.value = target.display_name || '';
+    if (bandEl) bandEl.value = target.age_band || '';
+    if (aboutEl) aboutEl.value = target.about_me || '';
+    if (editSafetyEl) editSafetyEl.checked = target.safety_mode === true;
+    const pinEl = document.getElementById('accountProfileEditPin');
+    const pinAgainEl = document.getElementById('accountProfileEditPinAgain');
+    if (pinEl) pinEl.value = '';
+    if (pinAgainEl) pinAgainEl.value = '';
+    if (editPinRow) editPinRow.style.display = 'none';
+    if (editBox) editBox.style.display = '';
+  }
+
+  // mode 'create': safety is being armed and the account has no
+  // PIN yet — the save must carry a NEW PIN + its confirmation.
+  // mode 'current': safety is being disarmed under an armed lock —
+  // the save must carry the CURRENT PIN.
+  function revealEditPinRow(mode) {
+    if (editPinLabel) editPinLabel.textContent = mode === 'create'
+      ? 'Parent PIN — create one to turn safety on'
+      : 'Parent PIN — required to turn safety off';
+    if (editPinAgainWrap) editPinAgainWrap.style.display = mode === 'create' ? '' : 'none';
+    if (editPinRow) editPinRow.style.display = '';
+    document.getElementById('accountProfileEditPin')?.focus();
+  }
+
+  document.getElementById('accountProfileEditSave')?.addEventListener('click', async () => {
+    const target = profilesCache?.find((p) => p.profile_id === editProfileId) || null;
+    if (!target) { setLine('accountProfileEditLine', 'Pick a profile to edit first.'); return; }
+    setLine('accountProfileEditLine', '');
+    const name = document.getElementById('accountProfileEditName')?.value.trim() || '';
+    const band = document.getElementById('accountProfileEditBand')?.value || '';
+    const about = document.getElementById('accountProfileEditAbout')?.value.trim() || '';
+    const safety = editSafetyEl?.checked === true;
+    if (!name) { setLine('accountProfileEditLine', 'A profile needs a name.'); return; }
+    if (!band) { setLine('accountProfileEditLine', 'Pick who this profile is for.'); return; }
+    const body = {
+      profile_id: editProfileId,
+      display_name: name,
+      age_band: band,
+      about_me: about || null,
+      safety_mode: safety,
+    };
+    const pinEl = document.getElementById('accountProfileEditPin');
+    const pin = pinEl?.value.trim() || '';
+    if (safety && !target.safety_mode && !profileCache?.pin_set) {
+      if (!pin) {
+        revealEditPinRow('create');
+        setLine('accountProfileEditLine', 'Safety mode needs a parent PIN to lock it — create one and the profile saves.');
+        return;
+      }
+      const pinAgain = document.getElementById('accountProfileEditPinAgain')?.value.trim() || '';
+      if (!/^\d{4,6}$/.test(pin)) { setLine('accountProfileEditLine', 'The parent PIN must be 4–6 digits.'); return; }
+      if (pin !== pinAgain) { setLine('accountProfileEditLine', "The two PINs didn't match."); return; }
+      body.pin = pin;
+    } else if (!safety && target.safety_mode && profileCache?.pin_set) {
+      if (!pin) {
+        revealEditPinRow('current');
+        setLine('accountProfileEditLine', 'Enter the parent PIN to turn safety mode off.');
+        return;
+      }
+      body.pin = pin;
+    }
+    const res = await api('/api/profile', { method: 'PUT', body }).catch(() => null);
+    if (res && isAccountsOff(res)) { enterLegacyMode(); return; }
+    if (res && res.status === 200) {
+      const wasActive = target.is_active === true;
+      if (pinEl) pinEl.value = '';
+      const pinAgainEl = document.getElementById('accountProfileEditPinAgain');
+      if (pinAgainEl) pinAgainEl.value = '';
+      if (editBox) editBox.style.display = 'none';
+      editProfileId = null;
+      if (wasActive) profileCache = null; // the pane re-reads the active profile
+      publishProfileChanged();
+      await refreshAccountPane(true);
+      setLine('accountProfilesLine', res.data?.warning === 'no_parent_pin_set'
+        ? 'Profile saved. Note: no parent PIN is set, so anyone with this phone can change safety settings.'
+        : 'Profile saved.');
+      return;
+    }
+    if (res && res.status === 403 && res.data?.error === 'parent_pin_required') {
+      revealEditPinRow(safety ? 'create' : 'current');
+      setLine('accountProfileEditLine', safety
+        ? 'Safety mode needs a parent PIN to lock it — create one and the profile saves.'
+        : 'A parent PIN is required to turn safety mode off.');
+      return;
+    }
+    if (res && res.status === 403 && res.data?.error === 'invalid_parent_pin') {
+      setLine('accountProfileEditLine', "That PIN didn't match — nothing was saved.");
+      return;
+    }
+    if (res && res.status === 404) {
+      if (editBox) editBox.style.display = 'none';
+      editProfileId = null;
+      await loadProfiles();
+      setLine('accountProfilesLine', 'That profile is no longer there — the list has been refreshed.');
+      return;
+    }
+    setLine('accountProfileEditLine', 'Could not save the profile — try again.');
+  });
+
+  document.getElementById('accountProfileEditCancel')?.addEventListener('click', () => {
+    editProfileId = null;
+    if (editBox) editBox.style.display = 'none';
+    setLine('accountProfileEditLine', '');
+  });
+
+  // The requests door (spec §1.3): bound by the guarded hook above;
+  // its list refreshes with the pane's own refresh (see
+  // refreshAccountPane), so it follows the pane's rhythm exactly.
+  wireRequestsDoor().catch(() => {});
+
   // Refresh the pane whenever the parent opens the Account tab.
   document.querySelector('.tabs button[data-tab="account"]')
     ?.addEventListener('click', () => { refreshAccountPane(true); });
@@ -576,7 +1123,9 @@ async function init() {
     await wireBilling(getTenantId() || prof.data?.tenantId);
     await wireAlarms();
     refreshAccountPane();
-    if (!prof.data?.display_name) showOnboarding();
+    // Same completeness rule as the sign-in path (bite 5): no age
+    // band means onboarding is not finished, whatever the name says.
+    if (!prof.data?.display_name || !prof.data?.age_band) showOnboarding();
     return;
   }
   // Anything else: degrade quietly to legacy behaviour.

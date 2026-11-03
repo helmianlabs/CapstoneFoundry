@@ -293,6 +293,59 @@ test('client helpers + apiFetch: Authorization rides only when a token exists', 
   assert.ok(!('Authorization' in (fetches[0].opts.headers || {})), 'no Authorization header without a token');
 });
 
+test('client media pollers: the session rides when a token exists, nothing when it does not (bite 4)', async () => {
+  // Static pin: both poller fetches present the session helper.
+  const imgPoller = sliceBetween('function startImagePoller', 'function stopImagePoller');
+  assert.ok(imgPoller.includes('tbAuthHeaders()'), 'image poller attaches the session headers');
+  const vidPoller = sliceBetween('function startVideoPoller', 'function stopVideoPoller');
+  assert.ok(vidPoller.includes('tbAuthHeaders()'), 'video poller attaches the session headers');
+
+  // Behavioral pin: run the poller bodies under vm with a fake
+  // interval + fetch and observe the actual request headers.
+  const pollerSrc = sliceBetween('function tbSessionToken', '// When call ends: fetch transcript');
+  const store = new Map();
+  const fetches = [];
+  const timers = [];
+  const sandbox = {
+    console,
+    currentUser: { userId: 'troy' },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    },
+    setInterval: (fn) => { timers.push(fn); return timers.length; },
+    clearInterval: () => {},
+    fetch: (url, opts) => { fetches.push({ url, opts }); return Promise.resolve({ json: async () => ({}) }); },
+    showMedia: () => {},
+    showVideo: () => {},
+  };
+  sandbox.window = sandbox;
+  vm.runInNewContext(pollerSrc, sandbox);
+
+  store.set('tb_token', 'tok-abc');
+  sandbox.startImagePoller();
+  sandbox.startVideoPoller();
+  assert.equal(timers.length, 2, 'both pollers registered');
+  await timers[0]();
+  await timers[1]();
+  assert.equal(fetches.length, 2);
+  assert.ok(fetches[0].url.startsWith('/api/latest-image'), 'image poller endpoint');
+  assert.ok(fetches[1].url.startsWith('/api/latest-video'), 'video poller endpoint');
+  assert.equal(fetches[0].opts.headers.Authorization, 'Bearer tok-abc', 'image poller sends the session');
+  assert.equal(fetches[1].opts.headers.Authorization, 'Bearer tok-abc', 'video poller sends the session');
+
+  // Signed out / legacy: the pollers still run, with no Authorization.
+  store.clear();
+  fetches.length = 0;
+  await timers[0]();
+  await timers[1]();
+  assert.equal(fetches.length, 2);
+  for (const f of fetches) {
+    assert.ok(!('Authorization' in (f.opts.headers || {})), 'no Authorization header without a token');
+  }
+});
+
 test('client call sites: prime, turn capture, extract, and the widget identity use the session', () => {
   // The helpers read the exact storage keys public/onboarding.js writes.
   assert.ok(indexHtml.includes("localStorage.getItem('tb_token')"));

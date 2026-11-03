@@ -28,6 +28,8 @@ export const ROUTE_FUNCTION_CONFIG = {
   'video': { maxDuration: 300 },
   'video-runway': { maxDuration: 300 },
   'video-runway-veo': { maxDuration: 300 },
+  'video-omni': { maxDuration: 300 },
+  'video-higgsfield': { maxDuration: 300 },
 };
 
 export const ROUTE_MAX_DURATIONS = Object.freeze(Object.fromEntries(
@@ -76,6 +78,7 @@ const routes = {
   'extract-memories': () => import('../server/handlers/extract-memories.js'),
   'image': () => import('../server/handlers/image.js'),
   'image-flux': () => import('../server/handlers/image-flux.js'),
+  'image-gemini': () => import('../server/handlers/image-gemini.js'),
   'latest-image': () => import('../server/handlers/latest-image.js'),
   'latest-video': () => import('../server/handlers/latest-video.js'),
   'mcp': () => import('../server/handlers/mcp.js'),
@@ -92,12 +95,15 @@ const routes = {
   'relay-http': () => import('../server/handlers/relay-http.js'),
   'relay-pair': () => import('../server/handlers/relay-pair.js'),
   'relay-proxy': () => import('../server/handlers/relay-proxy.js'),
+  'requests': () => import('../server/handlers/requests.js'),
   'research-log': () => import('../server/handlers/research-log.js'),
   'search': () => import('../server/handlers/search.js'),
   'speak': () => import('../server/handlers/speak.js'),
   'task': () => import('../server/handlers/task.js'),
   'video': () => import('../server/handlers/video.js'),
   'video-heygen': () => import('../server/handlers/video-heygen.js'),
+  'video-higgsfield': () => import('../server/handlers/video-higgsfield.js'),
+  'video-omni': () => import('../server/handlers/video-omni.js'),
   'video-runway': () => import('../server/handlers/video-runway.js'),
   'video-runway-veo': () => import('../server/handlers/video-runway-veo.js'),
   'voices': () => import('../server/handlers/voices.js'),

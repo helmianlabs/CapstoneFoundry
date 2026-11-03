@@ -12,7 +12,7 @@ isn't in the app today, it isn't in the description.
 | Field | Value |
 |---|---|
 | App name | ThinkinBuddy |
-| Bundle id / package name | `com.helmianlabs.thinkinbuddy` |
+| Bundle id / package name | `com.thinkinbuddy.app` |
 | Config | `capacitor.config.ts` (`appId`, `appName`, server URL `https://thinkbuddy-sandy.vercel.app`) |
 
 ⚠️ **The bundle id becomes PERMANENT the moment the App Store app
@@ -209,7 +209,7 @@ are route-agnostic; wherever they run, they run on macOS.
 1. **[Troy]** Decide the age-rating path above + the subscription
    prices (billing sheet) — these gate the listing, not the build.
 2. **[Troy]** Apple Developer Program enrollment + App Store Connect
-   app record under bundle id `com.helmianlabs.thinkinbuddy`
+   app record under bundle id `com.thinkinbuddy.app`
    (PERMANENT — see the warning at the top), Play Console app under
    the same package name.
 3. **[Build route]** `npm install` (already done once here; the lock

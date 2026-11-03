@@ -10,11 +10,27 @@
 // Kid-safe: refuses obviously-unsafe queries (Layer 3 token list) and runs the
 // query through OpenAI moderation (Layer 2) before searching. Instructs the
 // model to keep results safe-search/kid-appropriate.
+//
+// Safety posture (safety wiring bite 7): in hosted/enforced mode the
+// tenant PROFILE decides — through the shared resolver (lib/profile.js
+// resolveProfileSafety) — whether moderation fails closed, exactly as
+// on the generation handlers. The search_web tool carries the session
+// tenant as userId (bound to {{user_id}} by the provisioning
+// contract), so a minor's or safety-on profile makes an unavailable
+// moderation a refusal instead of a pass, and a request body claiming
+// safetyMode:false cannot weaken it. The produced summary is screened
+// as OUTPUT with the same posture before it is returned — the query
+// screen never saw the text the summary may quote from the web.
+// Compat mode never queries a profile and keeps the historical
+// request-derived decision.
 
 import { isSafeQuery, UNSAFE_QUERY_MSG } from '../../lib/safeBrowse.js';
 import { isAllowed } from '../../lib/moderation.js';
 import { requireToolAuth } from '../../lib/security.js';
 import { completeText, duckDuckGoSearch, hasTextLlm } from '../../lib/llm.js';
+import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
+import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -39,14 +55,40 @@ export default async function handler(req, res) {
   const query = req.body?.query || req.query?.query;
   if (!query) return res.status(400).json({ error: 'query required' });
 
+  // Identity (bite 7): the tool's userId is resolved with the same
+  // rule as every other tool handler — a session token, or the
+  // tenant id carried as userId. Enforced mode with neither is a
+  // rejection, never a default tenant.
+  const userId = req.body?.userId || req.query?.userId;
+  const resolvedTenant = resolveHandlerTenant(req, userId);
+  if (!resolvedTenant.ok) {
+    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  }
+
+  // Safety posture (bite 7): the request-derived decision seeds the
+  // value (and is all that compat mode ever uses); in enforced mode
+  // the profile resolver replaces it. When the profile cannot decide
+  // (no row, onboarding unfinished, profile read failed) the
+  // resolver's safe default applies safety — the request inputs are
+  // never the fallback in hosted mode.
+  let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  if (resolvedTenant.enforced && resolvedTenant.tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[search] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+
   // Layer 3 — fast obvious-unsafe token catch.
   const qSafe = isSafeQuery(query);
   if (!qSafe.safe) {
     console.warn('[search] blocked unsafe query (token):', qSafe.reason);
     return res.status(200).json({ result: UNSAFE_QUERY_MSG });
   }
-  // Layer 2 — semantic moderation of the query.
-  const qMod = await isAllowed(query, process.env.OPENAI_API_KEY);
+  // Layer 2 — semantic moderation of the query, failing closed when
+  // the profile decision requires screening.
+  const qMod = await isAllowed(query, process.env.OPENAI_API_KEY, { failClosed });
   if (!qMod.allowed) {
     console.warn('[search] blocked unsafe query (moderation):', qMod.reason);
     return res.status(200).json({ result: UNSAFE_QUERY_MSG });
@@ -68,14 +110,28 @@ export default async function handler(req, res) {
     const digest = hits.length
       ? hits.map((h, i) => `${i + 1}. ${h.title}\n${h.url}\n${h.snippet}`).join('\n\n')
       : '(no web hits — answer from general knowledge if safe, else say you could not find a kid-appropriate answer)';
-    const result = await completeText({
+    const summary = (await completeText({
       req,
       maxTokens: 512,
       system: 'You are a research assistant for a kids and family app (ages 11+). Treat every search as safe-search ON: never surface, link, describe, or summarize adult, sexual, violent, self-harm, or other content inappropriate for children. If the only relevant results are unsafe, say you could not find a kid-appropriate answer instead. Return a concise, conversational summary of the most relevant and current information. 2-4 sentences max. No bullet points — this will be read aloud.',
       user: `Search query: ${query}\n\nWeb results:\n${digest}`,
-    });
+    })).trim();
 
-    return res.status(200).json({ result: result.trim() || 'I searched but could not find a clear answer on that right now.' });
+    // Output screening (bite 7): the summary is new text the query
+    // moderation never saw — it can quote or paraphrase the web hits —
+    // so it is screened as output with the same fail-closed posture
+    // before it reaches the caller. A flagged summary is refused; so
+    // is an unscreenable one when the profile decision requires
+    // screening. The refusal is the standard query refusal.
+    if (summary) {
+      const outMod = await isAllowed(summary, process.env.OPENAI_API_KEY, { failClosed });
+      if (!outMod.allowed) {
+        console.warn('[search] summary blocked by output moderation:', outMod.reason);
+        return res.status(200).json({ result: UNSAFE_QUERY_MSG });
+      }
+    }
+
+    return res.status(200).json({ result: summary || 'I searched but could not find a clear answer on that right now.' });
   } catch (err) {
     console.error('[search] error:', err);
     return res.status(500).json({ result: 'Search failed — try again in a moment.' });

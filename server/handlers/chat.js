@@ -12,7 +12,7 @@ import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
 import { completeText, hasTextLlm, keyForProvider, preferredBrain } from '../../lib/llm.js';
 import { resolveTenant, activeTenantId, tenantEnforced } from '../../lib/tenant.js';
 import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
-import { getProfile, getProfileDb, profileSafety } from '../../lib/profile.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { randomUUID } from 'node:crypto';
 
 // Payload ceilings. A single request cannot be made expensive: input tokens are
@@ -76,31 +76,30 @@ export default async function handler(req, res) {
       ? lastUser.content.map((b) => (typeof b === 'string' ? b : b?.text || '')).join(' ')
       : '';
   // Safety posture for this request. Hosted mode (tenant enforcement
-  // on): the tenant PROFILE is the authority — when the tenant has a
-  // profile row, its safety_mode/age_band decide (lib/profile.js
-  // profileSafety, the same helper the wiring tests pin), and the
-  // request's own safety fields are ignored. With no profile row, and
-  // in compat mode, the request plumbing decides exactly as before this
-  // bite (lib/safety.js safetyInputsFromRequest) and NO profile query
-  // is made in compat mode at all. When safety applies, moderation
-  // fails CLOSED and the kid safety core joins the system prompt:
-  // unscreened never reaches the LLM.
+  // on): the tenant PROFILE is the authority, resolved through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1, the same helper the wiring tests pin). The
+  // request's own safety fields are IGNORED in hosted mode, and when
+  // the profile cannot decide (no row, onboarding unfinished, or the
+  // profile read failed) the resolver's safe default applies safety —
+  // a hosted request is never served under request-claimed safety,
+  // and an enforced request with no resolvable tenant is rejected
+  // outright below. In compat mode the request plumbing decides
+  // exactly as before this bite (lib/safety.js
+  // safetyInputsFromRequest) and NO profile query is made at all.
+  // When safety applies, moderation fails CLOSED and the kid safety
+  // core joins the system prompt: unscreened never reaches the LLM.
   const chatTenant = resolveTenant(req);
   const chatTenantId = activeTenantId(chatTenant);
   let safetyIn = safetyInputsFromRequest(req);
   let safety = safetyDecision(safetyIn);
-  if (tenantEnforced() && chatTenantId) {
-    try {
-      const profile = await getProfile(getProfileDb, chatTenantId);
-      if (profile) {
-        safetyIn = {
-          safetyMode: profile.safety_mode === true,
-          ageBand: profile.age_band ?? null,
-        };
-        safety = profileSafety(profile);
-      }
-    } catch (e) {
-      console.error('[chat] profile load failed — request safety inputs used:', e?.message || e);
+  if (tenantEnforced()) {
+    if (!chatTenantId) return res.status(401).json({ error: 'Unauthorized' });
+    const resolved = await resolveProfileSafety(getProfileDb, chatTenantId);
+    safetyIn = resolved.inputs;
+    safety = resolved.decision;
+    if (resolved.safeDefault) {
+      console.error(`[chat] profile safety unresolved (${resolved.source}) — safe default applied`);
     }
   }
   const mod = await isAllowed(lastUserText, getKey(req, 'OPENAI_API_KEY'), { failClosed: safety.failClosed });

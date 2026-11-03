@@ -46,6 +46,8 @@ import shimAuthLogin from '../api/auth/login.js';
 import shimAuthDeleteAccount from '../api/auth/delete-account.js';
 import shimProfilePin from '../api/profile/pin.js';
 import shimProfilePinVerify from '../api/profile/pin/verify.js';
+import shimProfileProfiles from '../api/profile/profiles.js';
+import shimProfileActive from '../api/profile/active.js';
 import shimRelayPairCreate from '../api/relay/pair/create.js';
 import shimRelayPairRedeem from '../api/relay/pair/redeem.js';
 import shimRelayPairRevoke from '../api/relay/pair/revoke.js';
@@ -82,6 +84,11 @@ const SURFACE = [
   { path: '/api/auth/delete-account', shim: shimAuthDeleteAccount, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
   { path: '/api/profile/pin', shim: shimProfilePin, handler: profileHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },
   { path: '/api/profile/pin/verify', shim: shimProfilePinVerify, handler: profileHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },
+  // Bite 9's household routes (shims landed with the foundation);
+  // bite 9b's client is the first web caller, which is what this
+  // table exists to catch — both probes stop at requireTenant.
+  { path: '/api/profile/profiles', shim: shimProfileProfiles, handler: profileHandler, probe: { method: 'GET', status: 401, error: 'Unauthorized' } },
+  { path: '/api/profile/active', shim: shimProfileActive, handler: profileHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },
   { path: '/api/relay/pair/create', shim: shimRelayPairCreate, handler: relayPairHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },
   { path: '/api/relay/pair/redeem', shim: shimRelayPairRedeem, handler: relayPairHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
   { path: '/api/relay/pair/revoke', shim: shimRelayPairRevoke, handler: relayPairHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },

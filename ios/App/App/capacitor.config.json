@@ -1,5 +1,5 @@
 {
-	"appId": "com.helmianlabs.thinkinbuddy",
+	"appId": "com.thinkinbuddy.app",
 	"appName": "ThinkinBuddy",
 	"server": {
 		"url": "https://thinkbuddy-sandy.vercel.app",

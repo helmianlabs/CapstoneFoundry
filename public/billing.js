@@ -29,6 +29,42 @@
 // The onboarding bite wires this module into index.html (sign-in ->
 // configureBilling -> paywall); until then nothing imports it, by
 // design — billing UI without accounts would sell to nobody.
+//
+// ─── Anti-steering guard (Play payments policy) ─────────────────────
+// The Android app is THIS website inside a Capacitor shell. Google
+// Play's payments policy forbids steering in-app users to a web
+// checkout for the same digital subscriptions, so a web purchase
+// surface reachable from inside the shell would be a policy violation
+// the day billing ships. The rule lives here, in the one billing
+// module, so every purchase surface has a single guard to consult:
+// inside the app shell, subscriptions are offered ONLY through the
+// Purchases plugin below (Google Play Billing / Apple IAP) and
+// webCheckoutAllowed() is false; on the plain web it is true and the
+// website's RevenueCat/Stripe checkout may be offered. Any future web
+// purchase UI MUST gate its rendering on webCheckoutAllowed().
+
+/**
+ * True when this page is running inside the native app shell
+ * (Capacitor bridge present and reporting a native platform; a bridge
+ * with plugins but no isNativePlatform counts as shell — the webview
+ * is the only place plugins exist). Same detection family the rest of
+ * the client uses (window.Capacitor presence, cf. onboarding.js).
+ */
+export function isAppShell() {
+  if (typeof window === 'undefined') return false;
+  const cap = window.Capacitor || null;
+  if (!cap) return false;
+  if (typeof cap.isNativePlatform === 'function') return !!cap.isNativePlatform();
+  return !!cap.Plugins;
+}
+
+/**
+ * True when a web (Stripe) checkout entry point may be shown: only
+ * outside the app shell. See the anti-steering note above.
+ */
+export function webCheckoutAllowed() {
+  return !isAppShell();
+}
 
 function purchasesPlugin() {
   if (typeof window === 'undefined') return null;

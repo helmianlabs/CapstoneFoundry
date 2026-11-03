@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 
 import {
   PRODUCT_PLANS,
+  PLAN_CATALOG,
   CREDIT_PACKS,
   planForProduct,
   creditsForPack,
@@ -19,7 +20,7 @@ import {
   planFromEvent,
   applyEvent,
 } from '../lib/billing.js';
-import { checkBucket } from '../lib/usage.js';
+import { checkBucket, PLAN_GRANTS } from '../lib/usage.js';
 import billingWebhook from '../server/handlers/billing-webhook.js';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
@@ -137,12 +138,35 @@ function fakeReqRes({ method = 'POST', headers = {}, body } = {}) {
 describe('product maps', () => {
   it('subscription products map to the PLAN_GRANTS plan names', () => {
     assert.deepEqual(PRODUCT_PLANS, {
+      tb_starter_monthly: 'starter', tb_starter_yearly: 'starter',
       tb_buddy_monthly: 'buddy', tb_buddy_yearly: 'buddy',
       tb_media_monthly: 'buddy_media', tb_media_yearly: 'buddy_media',
       tb_connect_monthly: 'helmian_connect', tb_connect_yearly: 'helmian_connect',
     });
+    assert.equal(planForProduct('tb_starter_monthly'), 'starter');
     assert.equal(planForProduct('tb_connect_yearly'), 'helmian_connect');
     assert.equal(planForProduct('tb_nope'), null);
+    // Every mapped plan is a real PLAN_GRANTS key — a product can
+    // never land a tenant on a plan the meter does not know.
+    for (const plan of Object.values(PRODUCT_PLANS)) {
+      assert.ok(Object.hasOwn(PLAN_GRANTS, plan), plan);
+    }
+  });
+
+  it('the settled catalog pins prices; enterprise is named but never purchasable', () => {
+    assert.deepEqual(PLAN_CATALOG.starter, { label: 'Buddy Starter', monthlyUsd: 2.99, yearlyUsd: 29.99 });
+    assert.deepEqual(PLAN_CATALOG.buddy, { label: 'Buddy', monthlyUsd: 9.99, yearlyUsd: 99.99 });
+    assert.deepEqual(PLAN_CATALOG.buddy_media, { label: 'Buddy Media', monthlyUsd: 19.99, yearlyUsd: 199.99 });
+    assert.deepEqual(PLAN_CATALOG.helmian_connect, { label: 'Helmian Connect', monthlyUsd: 29.99, yearlyUsd: 299.99 });
+    assert.equal(PLAN_CATALOG.free.monthlyUsd, 0);
+    const ent = PLAN_CATALOG.enterprise;
+    assert.deepEqual(ent.perStudentYearUsd, { classroom: 5, full: 10 });
+    assert.equal(ent.minStudents, 100);
+    assert.equal(ent.teachersFree, true);
+    assert.equal(ent.purchasable, false);
+    // A sales motion only: no store product grants it, no bucket prices it.
+    assert.ok(!Object.values(PRODUCT_PLANS).includes('enterprise'));
+    assert.ok(!Object.hasOwn(PLAN_GRANTS, 'enterprise'));
   });
 
   it('credit packs map to their credit counts', () => {
@@ -333,17 +357,17 @@ describe('credit packs + checkBucket', () => {
     const state = await checkBucket(db, TENANT_A);
     assert.equal(state.plan, 'buddy');
     assert.equal(state.grants, 5000);
-    assert.equal(state.granted, 10000 + 5000);
-    assert.equal(state.remaining, 15000);
+    assert.equal(state.granted, 7500 + 5000);
+    assert.equal(state.remaining, 12500);
   });
 
-  it('packs give a free-plan tenant spendable credits', async () => {
+  it('packs stack on top of the free plan taste (100 + pack)', async () => {
     const db = new FakeDb();
     await applyEvent(db, ev({ type: 'EXPIRATION' })); // free/expired row
     await applyEvent(db, ev({ product_id: 'tb_credits_1000' })); // INITIAL_PURCHASE pack
     const state = await checkBucket(db, TENANT_A);
     assert.equal(state.plan, 'free');
-    assert.equal(state.granted, 1000);
+    assert.equal(state.granted, 100 + 1000);
     assert.equal(state.exhausted, false);
   });
 
@@ -359,7 +383,29 @@ describe('credit packs + checkBucket', () => {
     });
     const state = await checkBucket(db, TENANT_A, { plan: 'free' });
     assert.equal(state.grants, 1000);
-    assert.equal(state.granted, 1000);
+    assert.equal(state.granted, 100 + 1000);
+  });
+
+  it('a stubbed webhook grants Starter, and the fitted 2,000 bucket applies', async () => {
+    const db = new FakeDb();
+    const r = await applyEvent(db, ev({ product_id: 'tb_starter_monthly' }));
+    assert.deepEqual(r, { applied: true, kind: 'subscription', tenantId: TENANT_A, plan: 'starter' });
+    const row = db.entitlements.get(TENANT_A);
+    assert.equal(row.plan, 'starter');
+    assert.equal(row.status, 'active');
+    const state = await checkBucket(db, TENANT_A);
+    assert.equal(state.plan, 'starter');
+    assert.equal(state.granted, 2000);
+    assert.equal(state.remaining, 2000);
+  });
+
+  it('a yearly product grants the SAME monthly bucket as its monthly twin', async () => {
+    const db = new FakeDb();
+    await applyEvent(db, ev({ product_id: 'tb_starter_yearly' }));
+    assert.equal((await checkBucket(db, TENANT_A)).granted, 2000);
+    const db2 = new FakeDb();
+    await applyEvent(db2, ev({ product_id: 'tb_buddy_yearly' }));
+    assert.equal((await checkBucket(db2, TENANT_A)).granted, 7500);
   });
 });
 

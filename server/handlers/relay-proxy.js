@@ -40,6 +40,18 @@ const CHANNEL = process.env.HELMION_RELAY_CHANNEL || 'pilot';
 const ROLE = 'phone';
 
 export default async function handler(req, res) {
+  return handleRelayProxy(req, res);
+}
+
+// The handler body, with its two outside seams injectable so tests
+// drive the REAL code (the handleRelayPair pattern from
+// relay-pair.js): `db` is the store database the Connect gate reads
+// (default: lib/relay.js's getRelayDb factory) and `fetchImpl` is the
+// upstream call to relay-http (default: the global fetch). Production
+// callers pass neither.
+export async function handleRelayProxy(req, res, deps = {}) {
+  const storeDb = deps.db || getRelayDb;
+  const fetchImpl = deps.fetchImpl || fetch;
   res.setHeader('cache-control', 'no-store');
 
   // Resolve the channel + the credential forwarded upstream, by mode.
@@ -53,7 +65,7 @@ export default async function handler(req, res) {
     if (!tenant) return; // requireTenant wrote the 401
     let entitled = false;
     try {
-      entitled = await requireConnectEntitlement(getRelayDb, tenant.tenantId);
+      entitled = await requireConnectEntitlement(storeDb, tenant.tenantId);
     } catch {
       entitled = false; // an unreadable gate is a closed gate
     }
@@ -91,7 +103,7 @@ export default async function handler(req, res) {
           res.status(413).json({ error: `message is ${outbound.length} chars, over the 4000 limit` });
           return;
         }
-        const sent = await fetch(url, {
+        const sent = await fetchImpl(url, {
           method: 'POST',
           headers: { authorization: upstreamAuth, 'content-type': 'application/json' },
           body: JSON.stringify({ body: outbound }),
@@ -104,7 +116,7 @@ export default async function handler(req, res) {
       const since = Number(req.query?.since);
       url.searchParams.set('since', Number.isSafeInteger(since) && since >= 0 ? String(since) : '0');
 
-      const r = await fetch(url, { headers: { authorization: upstreamAuth } });
+      const r = await fetchImpl(url, { headers: { authorization: upstreamAuth } });
       const text = await r.text();
       res.status(r.status).setHeader('content-type', 'application/json').send(text);
       return;
@@ -123,7 +135,7 @@ export default async function handler(req, res) {
         return;
       }
 
-      const r = await fetch(url, {
+      const r = await fetchImpl(url, {
         method: 'POST',
         headers: { authorization: upstreamAuth, 'content-type': 'application/json' },
         body: JSON.stringify({ body }),

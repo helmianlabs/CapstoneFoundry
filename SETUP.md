@@ -17,7 +17,8 @@ npm install
 - **Neon** (Postgres, free tier) — create a project, note the connection
   string (Dashboard → Connection Details).
 - **OpenAI** — for image gen, moderation, and memory embeddings.
-- Optional: **Runway**, **Replicate**, **Google AI Studio** (Imagen),
+- Optional: **Runway**, **Replicate**, **Google AI Studio** (Gemini
+  image generation — the `generate_image_gemini` route),
   **HeyGen** — only needed if you want the image/video tools beyond OpenAI's.
 - Optional: **Vercel Blob** store — needed for generated images/videos to
   have a public URL (Vercel Dashboard → Storage → Blob → create store).
@@ -68,7 +69,7 @@ psql "$DATABASE_URL" -f docs/migration-media-memory-2026-06-06.sql
 ## 5. Recreate the ElevenLabs agent
 
 Follow `docs/elevenlabs-template/agent-config.md` (system prompt + settings)
-and `docs/elevenlabs-template/tools.md` (the 10 custom tool webhooks, pointed
+and `docs/elevenlabs-template/tools.md` (the 15 custom tool webhooks, pointed
 at your own deployment URL once you have one). Optionally add your own
 Knowledge Base documents per `docs/knowledge-base/README.md`'s structure —
 the 8-curriculum shape is documented there; the text itself is yours to
