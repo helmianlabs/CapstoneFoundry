@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>ThinkinBuddy</string>
+        <string>Capstone Foundry</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -46,6 +46,6 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ThinkinBuddy listens so you can talk to your buddy hands-free.</string>
+	<string>Capstone Foundry listens so you can talk to your buddy hands-free.</string>
 </dict>
 </plist>

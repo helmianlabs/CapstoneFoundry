@@ -1,6 +1,6 @@
 {
-	"appId": "com.thinkinbuddy.app",
-	"appName": "ThinkinBuddy",
+	"appId": "com.capstonefoundry.app",
+	"appName": "Capstone Foundry",
 	"server": {
 		"url": "https://thinkbuddy-sandy.vercel.app",
 		"cleartext": false,

@@ -3,7 +3,7 @@
 // was run. What these tests prove: the Capacitor config the CLI itself
 // parsed (ios/App/App/capacitor.config.json is written BY
 // `npx cap add ios` from capacitor.config.ts) carries the store
-// identity — appId com.thinkinbuddy.app, appName ThinkinBuddy,
+// identity — appId com.capstonefoundry.app, appName Capstone Foundry,
 // live server hostname thinkbuddy-sandy.vercel.app — the iOS platform
 // dependency is on the same major line as Android, and the generated
 // Info.plist carries the microphone usage string for the one capture
@@ -19,8 +19,8 @@ const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8'
 
 test('capacitor.config.ts carries the store identity and the live hostname', () => {
   const src = read('capacitor.config.ts');
-  assert.ok(src.includes("appId: 'com.thinkinbuddy.app'"));
-  assert.ok(src.includes("appName: 'ThinkinBuddy'"));
+  assert.ok(src.includes("appId: 'com.capstonefoundry.app'"));
+  assert.ok(src.includes("appName: 'Capstone Foundry'"));
   assert.ok(src.includes("url: 'https://thinkbuddy-sandy.vercel.app'"));
   // The dead hostname the audit flagged must not be the server URL.
   assert.ok(!src.includes('thinkinbuddy.vercel.app'));
@@ -30,14 +30,14 @@ test('the CLI-parsed iOS config (capacitor.config.json) parses and matches', () 
   const path = new URL('../ios/App/App/capacitor.config.json', import.meta.url);
   assert.ok(existsSync(path), 'ios platform scaffold exists (npx cap add ios)');
   const cfg = JSON.parse(readFileSync(path, 'utf8'));
-  assert.equal(cfg.appId, 'com.thinkinbuddy.app');
-  assert.equal(cfg.appName, 'ThinkinBuddy');
+  assert.equal(cfg.appId, 'com.capstonefoundry.app');
+  assert.equal(cfg.appName, 'Capstone Foundry');
   assert.equal(cfg.server.url, 'https://thinkbuddy-sandy.vercel.app');
 });
 
 test('the Xcode project carries the same bundle id', () => {
   const pbx = read('ios/App/App.xcodeproj/project.pbxproj');
-  assert.ok(pbx.includes('PRODUCT_BUNDLE_IDENTIFIER = com.thinkinbuddy.app;'));
+  assert.ok(pbx.includes('PRODUCT_BUNDLE_IDENTIFIER = com.capstonefoundry.app;'));
 });
 
 test('@capacitor/ios is a dependency on the same major line as @capacitor/android', () => {
@@ -56,7 +56,7 @@ test('@capacitor/ios is a dependency on the same major line as @capacitor/androi
 test('Info.plist has the microphone usage string, character for character', () => {
   const plist = read('ios/App/App/Info.plist');
   assert.ok(plist.includes('<key>NSMicrophoneUsageDescription</key>'));
-  assert.ok(plist.includes('<string>ThinkinBuddy listens so you can talk to your buddy hands-free.</string>'));
+  assert.ok(plist.includes('<string>Capstone Foundry listens so you can talk to your buddy hands-free.</string>'));
 });
 
 test('Info.plist claims NO camera or photo-library access (the code never uses them)', () => {

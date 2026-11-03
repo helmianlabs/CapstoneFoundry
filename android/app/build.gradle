@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.thinkinbuddy.app"
+    namespace = "com.capstonefoundry.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId = "com.thinkinbuddy.app"
+        applicationId = "com.capstonefoundry.app"
         minSdkVersion = rootProject.ext.minSdkVersion
         targetSdkVersion = rootProject.ext.targetSdkVersion
         versionCode = 1

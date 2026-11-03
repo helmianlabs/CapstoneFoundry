@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * ThinkinBuddy (Mark) — Capacitor Android wrapper
+ * Capstone Foundry (Mark) — Capacitor Android wrapper
  *
  * STRATEGY: thin-shell / remote-URL mode.
  * The app loads https://thinkbuddy-sandy.vercel.app inside a native WebView.
@@ -20,8 +20,8 @@ const config: CapacitorConfig = {
   // appId is the store bundle/package id. PERMANENT once the App Store /
   // Play app record exists under it — changing it later means a brand
   // new store listing (bite 6, docs/store/STORE_LISTING.md).
-  appId: 'com.thinkinbuddy.app',
-  appName: 'ThinkinBuddy',
+  appId: 'com.capstonefoundry.app',
+  appName: 'Capstone Foundry',
 
   // Remote-URL shell — loads live Vercel site
   server: {
