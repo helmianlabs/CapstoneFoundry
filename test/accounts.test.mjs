@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import {
   hashPassword, verifyPassword, validateEmail, isValidPassword,
   createAccount, findTenantByEmail, authenticate, PASSWORD_MIN_LENGTH,
+  setAccountStatus, ACCOUNT_STATUSES,
 } from '../lib/accounts.js';
 import { verifySession } from '../lib/tenant.js';
 import { handleAuth } from '../server/handlers/auth.js';
@@ -121,6 +122,31 @@ test('authenticate: success returns the tenant; unknown email and wrong password
   assert.equal(wrong, null);
   assert.equal(unknown, null);
   assert.deepEqual(wrong, unknown); // no enumeration signal in the return shape
+});
+
+// ─── setAccountStatus (block abusive users, Apple 1.2) ───────────────────
+
+test('setAccountStatus: suspending blocks sign-in; reactivating restores it', async () => {
+  const db = new FakeDb();
+  const { tenantId } = await createAccount(db, { email: 'rowdy@example.com', password: 'a long passphrase' });
+  assert.deepEqual(await authenticate(db, { email: 'rowdy@example.com', password: 'a long passphrase' }), { tenantId });
+  const res = await setAccountStatus(db, tenantId, 'suspended');
+  assert.equal(res.status, 'suspended');
+  assert.equal(res.updated, 1);
+  // Suspended sign-in is the same null as a wrong password (no signal).
+  assert.equal(await authenticate(db, { email: 'rowdy@example.com', password: 'a long passphrase' }), null);
+  await setAccountStatus(db, tenantId, 'active');
+  assert.deepEqual(await authenticate(db, { email: 'rowdy@example.com', password: 'a long passphrase' }), { tenantId });
+});
+
+test('setAccountStatus: rejects unknown statuses and a missing tenant id', async () => {
+  const db = new FakeDb();
+  const { tenantId } = await createAccount(db, { email: 'calm@example.com', password: 'a long passphrase' });
+  assert.deepEqual(ACCOUNT_STATUSES, ['active', 'suspended']);
+  await assert.rejects(setAccountStatus(db, tenantId, 'banned'), (e) => e.code === 'invalid_status');
+  await assert.rejects(setAccountStatus(db, null, 'suspended'), (e) => e.code === 'tenant_required');
+  // The rejected writes changed nothing.
+  assert.deepEqual(await authenticate(db, { email: 'calm@example.com', password: 'a long passphrase' }), { tenantId });
 });
 
 // ─── /api/auth handler ────────────────────────────────────────────────────

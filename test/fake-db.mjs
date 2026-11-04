@@ -8,6 +8,7 @@
 // WHERE tenant_id = $1 for every tenant-scoped table (rows for the
 // generic tables live in this.rows, a name -> [{tenant_id, ...}] map
 // tests seed directly), and DELETE FROM tenants WHERE id = $1.
+// The block-abusive-users bite adds: UPDATE tenants SET status.
 //
 // Safety bite 9: profiles are PLURAL per tenant. The real store is
 // this.profileRows (an array of row objects, each carrying
@@ -84,6 +85,12 @@ export class FakeDb {
       const before = this.tenants.length;
       this.tenants = this.tenants.filter((t) => t.id !== params[0]);
       return { rows: [], rowCount: before - this.tenants.length };
+    }
+    if (/^UPDATE tenants SET status/i.test(s)) {
+      const row = this.tenants.find((t) => t.id === params[0]);
+      if (!row) return { rows: [], rowCount: 0 };
+      row.status = params[1];
+      return { rows: [], rowCount: 1 };
     }
     const del = s.match(/^DELETE FROM (\w+) WHERE tenant_id = \$1/i);
     if (del) {
