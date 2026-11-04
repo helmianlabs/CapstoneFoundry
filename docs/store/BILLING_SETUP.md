@@ -56,7 +56,7 @@ Credit packs stack on top and do not expire.
 1. Sign up at revenuecat.com (free tier exists; RevenueCat charges a
    percentage of tracked revenue past its free threshold — check the
    current pricing page before launch, it changes).
-2. Create a project: **ThinkinBuddy**.
+2. Create a project: **Capstone Foundry**.
 3. Note the project's public SDK keys later (step 6) — one per platform
    (`appl_...` for iOS, `goog_...` for Android). Public keys are safe to
    ship in the app; the SECRET in step 5 is a different thing.

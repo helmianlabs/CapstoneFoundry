@@ -1,11 +1,11 @@
 # Helmian Connect — tenant relay pairing (spoke contract)
 
-Helmian Connect is the top ThinkinBuddy tier (locked in by Troy,
+Helmian Connect is the top Capstone Foundry tier (locked in by Troy,
 2026-10-23): everything in the base app **plus** the phone↔desktop
 relay with hands into the customer's own computer — the relay that
 predates Herald and was Troy's first remote control into the Helmian
 desktop app. This document is the contract for the **desktop spoke**
-(the Helmian-repo side): what the ThinkinBuddy side now does, what the
+(the Helmian-repo side): what the Capstone Foundry side now does, what the
 spoke must do, and what has NOT been proven yet.
 
 Code: `lib/relay.js` (channels, pairing, device tokens, entitlement

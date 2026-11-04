@@ -1,6 +1,6 @@
-# ThinkinBuddy — technical overview
+# Capstone Foundry — technical overview
 
-**ThinkinBuddy** is a standalone, voice-first AI companion and tutor — a
+**Capstone Foundry** is a standalone, voice-first AI assistant — a
 Capacitor app (Android today; an iOS project is scaffolded in this repo)
 and browser PWA that runs over WiFi or cellular with no desktop
 dependency.

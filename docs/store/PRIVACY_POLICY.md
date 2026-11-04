@@ -1,4 +1,4 @@
-# ThinkinBuddy Privacy Policy — DRAFT
+# Capstone Foundry Privacy Policy — DRAFT
 
 > **DRAFT — NOT LEGAL ADVICE, NOT YET IN EFFECT.**
 > This is a plain-language working draft written from the app's actual
@@ -9,7 +9,7 @@
 
 **Effective date:** [EFFECTIVE DATE]
 
-**Who we are:** ThinkinBuddy is operated by [LEGAL ENTITY NAME],
+**Who we are:** Capstone Foundry is operated by [LEGAL ENTITY NAME],
 [ENTITY ADDRESS] ("we", "us"). Questions about this policy or your
 data: [PRIVACY CONTACT EMAIL]. [DPO NAME/ROLE, IF APPLICABLE]
 
@@ -17,7 +17,7 @@ data: [PRIVACY CONTACT EMAIL]. [DPO NAME/ROLE, IF APPLICABLE]
 
 ## 1. What this policy covers
 
-ThinkinBuddy is an AI companion app: you talk or type to a "buddy"
+Capstone Foundry is an AI assistant app: you talk or type to a "buddy"
 that remembers what you tell it, can create images and short videos,
 and can set reminders. This policy explains what information the app
 collects, why, who processes it for us, and the choices you have —

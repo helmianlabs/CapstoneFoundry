@@ -1,4 +1,4 @@
-# Store listing — ThinkinBuddy (DRAFT for Troy's approval)
+# Store listing — Capstone Foundry (DRAFT for Troy's approval)
 
 Everything below is a draft. Nothing here has been submitted anywhere,
 and no listing text goes live until Troy approves it. Feature claims
@@ -7,12 +7,12 @@ isn't in the app today, it isn't in the description.
 
 ---
 
-## Identity (set in code this bite)
+## Identity
 
 | Field | Value |
 |---|---|
-| App name | ThinkinBuddy |
-| Bundle id / package name | `com.thinkinbuddy.app` |
+| App name | Capstone Foundry |
+| Bundle id / package name | `com.capstonefoundry.app` |
 | Config | `capacitor.config.ts` (`appId`, `appName`, server URL `https://thinkbuddy-sandy.vercel.app`) |
 
 ⚠️ **The bundle id becomes PERMANENT the moment the App Store app
@@ -26,31 +26,45 @@ wants a different id, decide BEFORE step 1 of the build checklist.
 
 ## Listing copy (draft)
 
-**Name:** ThinkinBuddy
+**Name:** Capstone Foundry
 
-**Subtitle (App Store, ≤30 chars):** `Your buddy that remembers you`
+**Subtitle (App Store, ≤30 chars):** `Your AI assistant, with hands`
 
-**Short description (Play, ≤80 chars):**
-`Talk or type to your AI buddy — it remembers, creates, and helps, with a parent safety mode.`
+**Short description (Play, ≤80 chars) — TWO CANDIDATES, awaiting
+Troy's pick (open decision; neither is final until he chooses):**
+
+- **Candidate A:** `AI assistant with hands — talks, remembers, teaches, creates, for all ages.`
+- **Candidate B:** `Talk to an AI assistant that remembers, teaches, makes videos, and lends a hand.`
 
 **Description (draft):**
 
-> ThinkinBuddy is a friendly AI companion you can talk to out loud or
-> type to — and unlike a fresh chatbot every time, your buddy
-> remembers. Tell it once what matters to you and it keeps that memory
-> for the next conversation.
+> Meet Capstone Foundry — a full AI assistant you can talk to out
+> loud or type to. It doesn't just chat: it remembers, it teaches,
+> it creates, and it lends a hand. One assistant for the whole
+> family, from a child's first questions to a grandparent's projects
+> — built for ages two to seventy.
 >
-> **Talk hands-free.** Hold a real voice conversation with your buddy,
-> or type when that's easier.
+> **Talk hands-free.** Hold a real voice conversation with your
+> assistant, or type when that's easier. Start talking Spanish and
+> the conversation continues in Spanish — practice, translation
+> help, or just chatting. No settings to change, no switch to flip.
 >
-> **A buddy that remembers.** ThinkinBuddy keeps the things you tell it
-> — your projects, your people, what you're learning — and recalls
-> them in later chats, so you never have to start from zero.
+> **An assistant that remembers.** Capstone Foundry keeps the things
+> you tell it — your projects, your people, what you're learning —
+> and recalls them in later chats, so you never have to start from
+> zero.
 >
-> **Create together.** Ask your buddy to make images and short videos
-> from your ideas, right inside the chat.
+> **Learn anything, step by step.** Guided tutoring that teaches
+> instead of just handing over answers: homework help, new skills,
+> explain-it-simply mode, and Spanish tutoring — scaled from a young
+> child's questions to an adult's deep dive.
 >
-> **Reminders that stick.** Your buddy can set reminders and alarms so
+> **Create together.** Ask your assistant to make images and short
+> videos from your ideas, right inside the chat, and keep them in
+> your gallery.
+>
+> **Hands that help.** Your assistant can look things up on the web
+> in the middle of a conversation, and set reminders and alarms so
 > the things you talk about actually happen.
 >
 > **Made for families, with a real safety lock.** A parent can turn on
@@ -71,16 +85,19 @@ wants a different id, decide BEFORE step 1 of the build checklist.
 > approval.
 
 Claims check (for Troy, not listing copy): voice conversations
-(ElevenLabs), persistent memory + recall (our database), image/video
-creation (the generation handlers), reminders (local notifications),
-Safety Mode + parent PIN (bites 2/5a/5b), hosted subscription with
-metered credits + packs (bites 3/4), optional own-keys (Advanced tab),
-Helmian Connect relay pairing (bite 7). Nothing here promises offline
-mode, a kids-curriculum library, or human tutoring — the app doesn't
-do those today.
+(ElevenLabs), persistent memory + recall (our database), tutoring
+and explainer modes (Spanish tutor + explain-it-simply/Feynman in
+the personality code), web lookup mid-conversation (search + browse
+tools), image/video creation (the generation handlers), reminders
+(local notifications), Safety Mode + parent PIN (bites 2/5a/5b),
+hosted subscription with metered credits + packs (bites 3/4),
+optional own-keys (Advanced tab), Helmian Connect relay pairing
+(bite 7). The learning copy describes the built-in tutor modes; it
+does not promise a hosted curriculum library or human tutoring, and
+nothing here promises offline mode — the app doesn't do those today.
 
 **Keywords (App Store, ≤100 chars, draft):**
-`ai companion,voice buddy,ai friend,memory,study buddy,reminders,kids safe,family,chat,creator`
+`ai assistant,voice assistant,ai tutor,spanish,homework,video creator,reminders,memory,family,chat`
 
 **Support URL:** `[PLACEHOLDER — Troy: a public support page/email URL]`
 **Privacy policy URL:** `[PLACEHOLDER — host docs/store/PRIVACY_POLICY.md content at a public URL]`
@@ -209,7 +226,7 @@ are route-agnostic; wherever they run, they run on macOS.
 1. **[Troy]** Decide the age-rating path above + the subscription
    prices (billing sheet) — these gate the listing, not the build.
 2. **[Troy]** Apple Developer Program enrollment + App Store Connect
-   app record under bundle id `com.thinkinbuddy.app`
+   app record under bundle id `com.capstonefoundry.app`
    (PERMANENT — see the warning at the top), Play Console app under
    the same package name.
 3. **[Build route]** `npm install` (already done once here; the lock
@@ -224,7 +241,7 @@ are route-agnostic; wherever they run, they run on macOS.
    - The 4 stock Capacitor template images (app icon + splash PNGs)
      are not in git either — the connector push path carries text
      only. Restore the stock ones from the Capacitor template or,
-     better, generate real ThinkinBuddy assets with
+     better, generate real Capstone Foundry assets with
      `@capacitor/assets` before the first archive. **An archive with
      the placeholder icon should not be submitted.**
 4. **[Troy]** RevenueCat + store products per

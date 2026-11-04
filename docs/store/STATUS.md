@@ -1,4 +1,4 @@
-# ThinkinBuddy store build — STATUS
+# Capstone Foundry store build — STATUS
 
 The single status page for turning this repo into a hosted, billed
 App Store / Play Store product. Branch: `store/bite1-tenants`.
@@ -7,6 +7,12 @@ Plan: goal file `thinkinbuddy-store-plan.md`. Audit: goal file
 `docs/store/`.
 
 Last updated: 2026-10-23 (final sweep, bite 8).
+
+**Rename note (2026-11-03):** the product was renamed ThinkinBuddy →
+**Capstone Foundry** (bundle/package id `com.capstonefoundry.app`).
+The dated entries below keep the old name and the old ids where they
+record what was true at the time — they are the historical record,
+not current facts.
 
 ## Bites 0–8
 
@@ -181,8 +187,8 @@ permission — see item 11).
 8. **Purge the old research-log blobs** written before sweep item 6
    (public Blob store, `research/` prefix) — the code no longer writes
    raw transcripts, but the historical objects remain until deleted.
-9. **Helmian-repo spoke pairing**: bite 7 productized the ThinkinBuddy
-   side; the Helmian repo's spoke still needs its pairing changes
+9. **Helmian-repo spoke pairing**: bite 7 productized the Capstone
+   Foundry side; the Helmian repo's spoke still needs its pairing changes
    (contract in `docs/store/HELMIAN_CONNECT.md`) before a live pair
    test can run.
 
@@ -198,5 +204,5 @@ permission — see item 11).
   pushed (GitHub App lacks the Workflows permission; sweep item 11
   has the two routes to land it, after which its first run is the
   proof).
-- **Relay pairing** is coded + unit-tested on the ThinkinBuddy side
-  only; no live device pair has happened.
+- **Relay pairing** is coded + unit-tested on the Capstone Foundry
+  side only; no live device pair has happened.

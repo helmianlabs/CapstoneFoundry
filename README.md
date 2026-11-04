@@ -1,8 +1,9 @@
-# ThinkinBuddy
+# Capstone Foundry
 
-Your thinking buddy — a voice companion and tutor you talk to out loud.
+Discover what's next — a full AI assistant with hands that you talk
+to out loud: it remembers, teaches, creates, and helps.
 
-ThinkinBuddy is a **hosted app by subscription**. Download it, sign up,
+Capstone Foundry is a **hosted app by subscription**. Download it, sign up,
 give your buddy a name and a couple of basics about you, and start
 talking. There is nothing to configure: the backend, the API keys, and
 the database are run for you by the service. No keys to collect, no
@@ -46,11 +47,11 @@ Pricing lives in the store listings.
 
 ## For developers
 
-This repo holds the ThinkinBuddy source: a Vite web app wrapped with
-Capacitor, with the native `ios/` and `android/` projects in-repo,
-plus the backend (serverless API routes and a hosted Postgres
-database) that the service operates. App id in code:
-`com.helmianlabs.thinkinbuddy`.
+This repo holds the Capstone Foundry source: a Vite web app wrapped
+with Capacitor, with the native `ios/` and `android/` projects
+in-repo, plus the backend (serverless API routes and a hosted
+Postgres database) that the service operates. App id in code:
+`com.capstonefoundry.app`.
 
 The service's infrastructure, keys, and database are run by the
 service and are not distributed with this repo. There are no

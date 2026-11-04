@@ -1,4 +1,4 @@
-# ThinkinBuddy (Mark) — Android APK via Capacitor
+# Capstone Foundry (Mark) — Android APK via Capacitor
 
 **Strategy:** thin-shell remote-URL. The Capacitor WebView loads `https://thinkbuddy-sandy.vercel.app` at runtime. No web assets are bundled. The Vercel deploy is completely unchanged.
 
@@ -85,15 +85,15 @@ cd android
 
 ```powershell
 # Generate a keystore once (keep the file + passwords somewhere safe)
-keytool -genkey -v -keystore thinkinbuddy-release.jks `
-  -alias thinkinbuddy -keyalg RSA -keysize 2048 -validity 10000
+keytool -genkey -v -keystore capstonefoundry-release.jks `
+  -alias capstonefoundry -keyalg RSA -keysize 2048 -validity 10000
 
 # In android/app/build.gradle add:
 # signingConfigs {
 #   release {
-#     storeFile file('../../thinkinbuddy-release.jks')
+#     storeFile file('../../capstonefoundry-release.jks')
 #     storePassword "YOUR_STORE_PASS"
-#     keyAlias "thinkinbuddy"
+#     keyAlias "capstonefoundry"
 #     keyPassword "YOUR_KEY_PASS"
 #   }
 # }
@@ -107,7 +107,7 @@ Then `.\gradlew bundleRelease` produces a signed AAB ready for Google Play.
 ## Push Notifications (Firebase)
 
 1. Create a project at [console.firebase.google.com](https://console.firebase.google.com).
-2. Add an Android app with package name `com.thinkinbuddy.app`.
+2. Add an Android app with package name `com.capstonefoundry.app`.
 3. Download `google-services.json` → place in `android/app/`.
 4. In JS call `PushNotifications.register()` — the plugin handles the FCM token.
 
@@ -123,7 +123,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 // Schedule a local reminder
 await LocalNotifications.schedule({
   notifications: [{
-    title: 'ThinkinBuddy reminder',
+    title: 'Capstone Foundry reminder',
     body: 'Time to reflect',
     id: 1,
     schedule: { at: new Date(Date.now() + 1000 * 60 * 60) }, // 1 hr from now

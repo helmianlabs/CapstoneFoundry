@@ -7,7 +7,7 @@ data. Nothing here connects back to the original author's accounts.
 
 ```
 git clone <this-repo-url>
-cd thinkinbuddy
+cd capstonefoundry
 npm install
 ```
 
@@ -54,7 +54,7 @@ path both work. This creates:
 - `actionable_*` (5 tables) — the brain-dump/task-extraction module.
 
 Optional — only if you want to demo the desktop-relay feature against your
-own second app instance (NOT required for ThinkinBuddy to work standalone):
+own second app instance (NOT required for Capstone Foundry to work standalone):
 
 ```
 psql "$DATABASE_URL" -f sql/relay.sql
@@ -85,6 +85,6 @@ For the Android build, see `README_CAPACITOR.md`.
 
 ## Result
 
-At this point you have a byte-for-byte identical ThinkinBuddy — same schema,
+At this point you have a byte-for-byte identical Capstone Foundry — same schema,
 same agent shape, same tool set — running entirely on your own accounts with
 zero data and zero credentials from the original deployment.
