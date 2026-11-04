@@ -73,6 +73,8 @@ const PIN_COPY = 'This PIN keeps safety settings locked. Only a parent should kn
 const FIELD_STYLE = 'background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.3);color:#e0f0ff;padding:14px 18px;font-family:\'Courier New\',monospace;font-size:1rem;width:280px;max-width:90vw;border-radius:4px;outline:none;text-align:center;letter-spacing:0.05em;';
 const ERR_STYLE = 'color:#ff8a8a;font-size:0.8rem;min-height:1.2em;margin:12px 0 0;max-width:380px;line-height:1.5;';
 const LINK_BTN_STYLE = 'background:transparent;border:none;color:#7dd3fc;text-decoration:underline;letter-spacing:0.05em;text-transform:none;font-size:0.8rem;margin-top:14px;cursor:pointer;';
+const LEGAL_STYLE = 'color:#9fb6c9;font-size:0.75rem;margin:16px 0 0;max-width:380px;line-height:1.5;';
+const LEGAL_LINK_STYLE = 'color:#7dd3fc;';
 
 // ─── Session storage + fetch ────────────────────────────────────────────
 
@@ -282,6 +284,7 @@ function showAuth() {
     <p id="acctAuthError" style="${ERR_STYLE}"></p>
     <button id="acctAuthSubmit">Log in</button>
     <button type="button" id="acctAuthToggle" style="${LINK_BTN_STYLE}">New here? Create an account</button>
+    <p style="${LEGAL_STYLE}">By continuing, you agree to the <a href="https://capstonefoundry.helmian.cloud/terms" target="_blank" rel="noopener" style="${LEGAL_LINK_STYLE}">Terms of Use</a> and the <a href="https://capstonefoundry.helmian.cloud/privacy" target="_blank" rel="noopener" style="${LEGAL_LINK_STYLE}">Privacy Policy</a>.</p>
   `);
   const emailEl = document.getElementById('acctEmail');
   const passwordEl = document.getElementById('acctPassword');
