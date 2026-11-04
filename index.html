@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#050508" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="ThinkinBuddy" />
+  <meta name="apple-mobile-web-app-title" content="Capstone Foundry" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon.svg" />
-  <title>ThinkinBuddy</title>
+  <title>Capstone Foundry</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -541,12 +541,12 @@
 <body>
   <!-- Onboarding overlay (shown on first visit) -->
   <div class="onboarding hidden" id="onboarding">
-    <h1>THINKINBUDDY</h1>
-    <p>Your personal thinking partner. Brain dump, problem-solve, or just talk it out.</p>
+    <h1>CAPSTONE FOUNDRY</h1>
+    <p>Your AI assistant with hands — learn anything, create videos, and get things done.</p>
     <p style="margin-bottom:12px;">What should I call you?</p>
     <input type="text" id="onboardName" placeholder="Your first name" autocomplete="off" />
     <p style="margin-top:18px; margin-bottom:12px;">What do you want to call your buddy?</p>
-    <input type="text" id="onboardBuddyName" placeholder="ThinkinBuddy" autocomplete="off" />
+    <input type="text" id="onboardBuddyName" placeholder="Capstone Foundry" autocomplete="off" />
     <div class="onboarding-consent">
       <input type="checkbox" id="onboardConsent" />
       <label for="onboardConsent">I'm okay with anonymized conversations being saved to help improve this app. I can opt out anytime.</label>
@@ -562,8 +562,8 @@
   <div class="corner bl"></div>
   <div class="corner br"></div>
 
-  <div class="title">THINKINBUDDY</div>
-  <div class="subtitle" id="subtitle">YOUR THINKING PARTNER</div>
+  <div class="title">CAPSTONE FOUNDRY</div>
+  <div class="subtitle" id="subtitle">DISCOVER WHAT'S NEXT</div>
 
   <!-- Media output area — images and videos appear here -->
   <div id="mediaArea" style="display:none; z-index:2; max-width:340px; width:90%; margin-top:20px; position:relative;">
@@ -699,7 +699,7 @@
       <!-- ── ACCOUNT & SAFETY ─────────────────────────────────────── -->
       <div class="tab-pane" data-pane="account" id="accountPane">
         <div class="storage-note">
-          Your ThinkinBuddy account, your plan, and the safety lock for
+          Your Capstone Foundry account, your plan, and the safety lock for
           younger users. Wired by /onboarding.js; hides itself when the
           server runs in legacy single-user mode.
         </div>
@@ -1112,8 +1112,8 @@
             return primeSessionPrompt();
           }
         }
-        console.log('[ThinkinBuddy] primed — memories:', p.memoryCount, 'buddy:', p.buddyName, 'user:', p.userId, 'promptLen:', sessionPromptOverride?.length || 0);
-      } catch (e) { console.warn('[ThinkinBuddy] prime failed', e); }
+        console.log('[CapstoneFoundry] primed — memories:', p.memoryCount, 'buddy:', p.buddyName, 'user:', p.userId, 'promptLen:', sessionPromptOverride?.length || 0);
+      } catch (e) { console.warn('[CapstoneFoundry] prime failed', e); }
     }
 
     // The only prompt a new call may start from: the cached override
@@ -1415,7 +1415,7 @@
     function completeOnboarding() {
       const name = onboardNameEl.value.trim();
       if (!name) { onboardNameEl.focus(); return; }
-      const buddyName = onboardBuddyNameEl.value.trim() || 'ThinkinBuddy';
+      const buddyName = onboardBuddyNameEl.value.trim() || 'Capstone Foundry';
       const consent = onboardConsentEl.checked;
       const user = {
         userId: genUserId(),
@@ -1442,14 +1442,14 @@
 
     function refreshChrome() {
       if (!currentUser) return;
-      const buddyName = currentUser.buddyName || 'ThinkinBuddy';
+      const buddyName = currentUser.buddyName || 'Capstone Foundry';
       // Update title to show the buddy's name
       document.querySelector('.title').textContent = buddyName.toUpperCase();
       const mode = window.thinkinBuddyMode || 'default';
       const modeLabel =
         mode === 'spanish_tutor' ? ' · 🇪🇸 ESPAÑOL TUTOR' :
         mode === 'feynman_module1' ? ' · 🧠 FEYNMAN MODULE 1' : '';
-      subtitleEl.textContent = `YOUR THINKING PARTNER — ${currentUser.name.toUpperCase()}${modeLabel}`;
+      subtitleEl.textContent = `DISCOVER WHAT'S NEXT — ${currentUser.name.toUpperCase()}${modeLabel}`;
       const tutorToggleHtml =
         mode === 'spanish_tutor'
           ? `<a id="tutorOffLink">Switch back to regular buddy</a> · `
@@ -1535,7 +1535,7 @@
     function buildExportText() {
       const date   = new Date().toISOString().slice(0, 10);
       const userName = currentUser?.name || 'Session';
-      const buddyName = currentUser?.buddyName || 'ThinkinBuddy';
+      const buddyName = currentUser?.buddyName || 'Capstone Foundry';
       let txt = `${buddyName.toUpperCase()} SESSION — ${userName} — ${date}\n`;
       txt += `${exportProvenance()}\n\n`;
       for (const msg of currentHistory) {
@@ -1596,7 +1596,7 @@
         try {
           // Try sharing as a .txt file (works on Android Chrome ≥ 89, iOS ≥ 15.1)
           if (navigator.canShare) {
-            const file = new File([txt], `thinkinbuddy-${userName.toLowerCase()}-${date}.txt`, { type: 'text/plain' });
+            const file = new File([txt], `capstonefoundry-${userName.toLowerCase()}-${date}.txt`, { type: 'text/plain' });
             if (navigator.canShare({ files: [file] })) {
               await navigator.share({ title: shareTitle, files: [file] });
               return;
@@ -1611,7 +1611,7 @@
         }
       }
       // Fallback: download .txt
-      triggerDownload(txt, `thinkinbuddy-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
+      triggerDownload(txt, `capstonefoundry-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
       alert('Share not supported in this browser — downloaded as .txt instead.');
     });
 
@@ -1646,14 +1646,14 @@
     document.getElementById('exportMdBtn').addEventListener('click', () => {
       exportMenuEl.classList.add('hidden');
       const { md, userName, date } = buildMarkdown();
-      triggerDownload(md, `thinkinbuddy-${userName.toLowerCase()}-${date}.md`, 'text/markdown');
+      triggerDownload(md, `capstonefoundry-${userName.toLowerCase()}-${date}.md`, 'text/markdown');
     });
 
     // ─── 4. Plain text download ───────────────────────────────────────
     document.getElementById('exportTxtBtn').addEventListener('click', () => {
       exportMenuEl.classList.add('hidden');
       const { txt, userName, date } = buildExportText();
-      triggerDownload(txt, `thinkinbuddy-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
+      triggerDownload(txt, `capstonefoundry-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
     });
 
     // ─── 5. Copy to clipboard ─────────────────────────────────────────
@@ -1809,11 +1809,11 @@
 
       publishMetadata() {
         if (!('mediaSession' in navigator)) return;
-        const buddy = currentUser?.buddyName || 'ThinkinBuddy';
+        const buddy = currentUser?.buddyName || 'Capstone Foundry';
         navigator.mediaSession.metadata = new MediaMetadata({
           title: `${buddy} — listening`,
           artist: currentUser?.name ? `Talking with ${currentUser.name}` : 'Voice session',
-          album: 'ThinkinBuddy',
+          album: 'Capstone Foundry',
           artwork: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }],
         });
         navigator.mediaSession.playbackState = 'playing';
@@ -2224,7 +2224,7 @@
         }
         return;
       }
-      const sample = "Hi, I'm ThinkinBuddy. This is what I sound like.";
+      const sample = "Hi, I'm Capstone Foundry. This is what I sound like.";
       const elVoiceId = elVoiceSelectEl?.value || '';
 
       if (elVoiceId) {
@@ -2328,9 +2328,9 @@
 
       localStorage.setItem('thinkinbuddy_user_id', user.userId);
       localStorage.setItem('thinkinbuddy_user_name', user.name);
-      localStorage.setItem('thinkinbuddy_buddy_name', user.buddyName || 'ThinkinBuddy');
+      localStorage.setItem('thinkinbuddy_buddy_name', user.buddyName || 'Capstone Foundry');
 
-      const buddyName = user.buddyName || 'ThinkinBuddy';
+      const buddyName = user.buddyName || 'Capstone Foundry';
 
       // Prime the agent: fetch THIS user's per-session system prompt (built
       // server-side from their own Blob prefix) and stash it so the widget's
@@ -2352,7 +2352,7 @@
       else if (urlMode === 'feynman_module1' || urlParams.get('feynman') === '1') activeMode = 'feynman_module1';
       else if (storedMode === 'feynman_module1') activeMode = 'feynman_module1';
       window.thinkinBuddyMode = activeMode;
-      console.log('[ThinkinBuddy] active mode:', activeMode);
+      console.log('[CapstoneFoundry] active mode:', activeMode);
 
       sessionPrimeContext = {
         buddyName,
@@ -2434,7 +2434,7 @@
       if (!url) return null;
       try {
         if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-          const p = navigator.share({ title: 'ThinkinBuddy media', url });
+          const p = navigator.share({ title: 'Capstone Foundry media', url });
           if (p && typeof p.catch === 'function') p.catch(() => {});
           return 'share-sheet';
         }
@@ -2617,7 +2617,7 @@
         if (pick) utter.voice = pick;
 
         isSpeaking = true;
-        setStatus('THINKINBUDDY SPEAKING', 'speaking');
+        setStatus('CAPSTONE FOUNDRY SPEAKING', 'speaking');
         utter.onend = () => {
           isSpeaking = false;
           try { recognition.stop(); } catch(e) {}
@@ -2927,8 +2927,8 @@
           if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
               title: 'Talking with ' + (currentUser?.buddyName || 'Mark'),
-              artist: 'ThinkinBuddy',
-              album: 'ThinkinBuddy',
+              artist: 'Capstone Foundry',
+              album: 'Capstone Foundry',
             });
             navigator.mediaSession.playbackState = 'playing';
             // Wired to the real conversation. A lock-screen button that does

@@ -52,7 +52,7 @@ export default async function handler(req, res) {
   if (!tenant) return;
   const tenantId = activeTenantId(tenant);
 
-  const buddyName = req.body?.buddyName || 'ThinkinBuddy';
+  const buddyName = req.body?.buddyName || 'Capstone Foundry';
   const userName = req.body?.userName || null;
   const userId = tenantId || req.body?.userId;
   // Optional conversational mode. Validated against VALID_MODES; unknown values

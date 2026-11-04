@@ -275,7 +275,7 @@ function authErrorText(data) {
 function showAuth() {
   let mode = 'login'; // | 'signup'
   showOverlay(`
-    <h1>THINKINBUDDY</h1>
+    <h1>CAPSTONE FOUNDRY</h1>
     <p id="acctAuthIntro">Welcome back. Log in to your buddy account.</p>
     <input type="email" id="acctEmail" placeholder="Email" autocomplete="email" />
     <input type="password" id="acctPassword" placeholder="Password" autocomplete="current-password" style="margin-top:12px;" />
@@ -354,7 +354,7 @@ function showOnboarding() {
     .map(o => `<option value="${o.value}">${o.label}</option>`)
     .join('');
   showOverlay(`
-    <h1>THINKINBUDDY</h1>
+    <h1>CAPSTONE FOUNDRY</h1>
     <p>Let's set up your buddy — four quick steps.</p>
     <div class="acct-step" data-step="1">
       <p>What should your buddy call you?</p>

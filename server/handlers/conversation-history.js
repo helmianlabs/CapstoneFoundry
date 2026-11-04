@@ -110,7 +110,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'sessionId must be a UUID' });
   }
   const includeRaw = req.query?.includeRaw === '1';
-  const buddyName = req.query?.buddyName || 'ThinkinBuddy';
+  const buddyName = req.query?.buddyName || 'Capstone Foundry';
 
   const rawLimit = Number.parseInt(req.query?.limit ?? '20', 10);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), MAX_LIMIT) : 20;

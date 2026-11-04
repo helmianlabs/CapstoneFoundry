@@ -60,7 +60,7 @@
 // A reminder may be called "set" only when it was actually scheduled on
 // this device. confirmationText() is the wording contract: scheduled ->
 // "set"; anything else (plain web, no permission, not yet picked up) ->
-// "saved … it'll ring on the phone where the ThinkinBuddy app is
+// "saved … it'll ring on the phone where the Capstone Foundry app is
 // installed and signed in". On plain web there is no plugin and this
 // module no-ops with { available: false } — it never claims a ring.
 
@@ -189,7 +189,7 @@ export function confirmationText({ scheduled, entry }) {
   });
   return scheduled
     ? `Reminder set for ${when}: "${entry.title}".`
-    : `Reminder saved for ${when}: "${entry.title}" — it'll ring on the phone where the ThinkinBuddy app is installed and signed in.`;
+    : `Reminder saved for ${when}: "${entry.title}" — it'll ring on the phone where the Capstone Foundry app is installed and signed in.`;
 }
 
 // ─── Local record (what THIS device has scheduled) ─────────────────────
