@@ -30,11 +30,12 @@ wants a different id, decide BEFORE step 1 of the build checklist.
 
 **Subtitle (App Store, ≤30 chars):** `Your AI assistant, with hands`
 
-**Short description (Play, ≤80 chars) — TWO CANDIDATES, awaiting
-Troy's pick (open decision; neither is final until he chooses):**
+**Short description (Play, ≤80 chars) — OPEN. Two drafted candidates
+were REJECTED by Troy on 2026-11-03 (he did not like either one — do not
+re-present them). This line stays blank until Troy gives words he likes:**
 
-- **Candidate A:** `AI assistant with hands — talks, remembers, teaches, creates, for all ages.`
-- **Candidate B:** `Talk to an AI assistant that remembers, teaches, makes videos, and lends a hand.`
+- ~~Candidate A: `AI assistant with hands — talks, remembers, teaches, creates, for all ages.`~~ REJECTED
+- ~~Candidate B: `Talk to an AI assistant that remembers, teaches, makes videos, and lends a hand.`~~ REJECTED
 
 **Description (draft):**
 
