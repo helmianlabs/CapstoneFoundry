@@ -181,8 +181,10 @@ permission — see item 11).
 7. **Repo description fix (manual)**: the GitHub connector has no
    repo-edit tool, so this one is a 30-second manual step — repo page →
    the gear icon next to "About" → set Description to:
-   "Voice-first AI companion and tutor — Capacitor app + PWA (ElevenLabs
-   voice, Neon/pgvector memory, multi-provider image/video generation)"
+   "Capstone Foundry — a full AI assistant with hands: voice-first, with
+   curriculum and video generation, for ages two to seventy — Capacitor
+   app + PWA (ElevenLabs voice, Neon/pgvector memory, multi-provider
+   image/video generation)"
    (the current text falsely says "React Native").
 8. **Purge the old research-log blobs** written before sweep item 6
    (public Blob store, `research/` prefix) — the code no longer writes
