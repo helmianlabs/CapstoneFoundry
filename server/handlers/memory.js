@@ -24,6 +24,7 @@
 
 import { Pool } from 'pg';
 import OpenAI from 'openai';
+import { resolveHandlerTenant } from '../../lib/tenant.js';
 
 const DB_URL = process.env.DATABASE_URL_MEMORY || process.env.DATABASE_URL;
 
@@ -106,6 +107,22 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
   const scopes = Array.isArray(opts.scopes) && opts.scopes.length > 0
     ? opts.scopes
     : ['semantic'];
+  // Tenant scoping (store wiring bite): callers pass opts.tenantId ONLY
+  // in enforced mode (SESSION_SECRET set — see lib/tenant.js). Null here
+  // means the original user_id-only queries run byte-for-byte, which is
+  // what compat mode (today's live deployment) requires.
+  const tenantId = typeof opts.tenantId === 'string' && opts.tenantId ? opts.tenantId : null;
+
+  // TENANT-ERA IDENTITY (buddy-repair fix): in enforced mode memory
+  // belongs to the TENANT — tenant_id is the isolation boundary and the
+  // ONLY identity filter. A tenant's rows may carry any legacy user_id
+  // sub-identity (rows claimed from the single-user era are stamped
+  // user_id 'troy' under the owner's tenant); ALSO filtering on
+  // user_id = <tenantId> starved exactly those rows and the buddy woke
+  // up with amnesia. In compat mode (tenantId null) the identity is
+  // user_id, and the queries below are the originals unchanged.
+  const identityCol = tenantId ? 'tenant_id' : 'user_id';
+  const identityId = tenantId || userId;
 
   const pool = getPool();
 
@@ -116,22 +133,25 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
     catch (e) { console.error('[memory] retrieve embed failed (falling back to boot rank):', e?.message || e); }
 
     if (vec) {
+      const params = [identityId, scopes];
+      params.push(vecLiteral(vec)); const vecParam = params.length;
+      params.push(limit); const limitParam = params.length;
       const { rows } = await pool.query(
         `SELECT subject AS key,
                 content AS value,
                 importance,
                 updated_at
            FROM memory_items
-          WHERE user_id = $1
+          WHERE ${identityCol} = $1
             AND scope = ANY($2::text[])
             AND (valid_until IS NULL OR valid_until > now())
             -- liveness gated by valid_until; supersedes is an audit back-pointer, not a hide flag
-          ORDER BY embedding <=> $3::vector,
+          ORDER BY embedding <=> $${vecParam}::vector,
                    importance DESC NULLS LAST,
                    confidence DESC NULLS LAST,
                    created_at DESC
-          LIMIT $4`,
-        [userId, scopes, vecLiteral(vec), limit]
+          LIMIT $${limitParam}`,
+        params
       );
       return rows.map(r => ({
         key: r.key,
@@ -144,20 +164,22 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
   }
 
   // BOOT path (no query, or embed failed): importance/confidence/recency.
+  const bootParams = [identityId, scopes];
+  bootParams.push(limit); const bootLimitParam = bootParams.length;
   const { rows } = await pool.query(
     `SELECT subject AS key,
             content AS value,
             importance,
             updated_at
        FROM memory_items
-      WHERE user_id = $1
+      WHERE ${identityCol} = $1
         AND scope = ANY($2::text[])
         AND (valid_until IS NULL OR valid_until > now())
       ORDER BY importance DESC NULLS LAST,
                confidence DESC NULLS LAST,
                updated_at DESC
-      LIMIT $3`,
-    [userId, scopes, limit]
+      LIMIT $${bootLimitParam}`,
+    bootParams
   );
   return rows.map(r => ({
     key: r.key,
@@ -176,8 +198,9 @@ export async function upsertExtractedFact({
   value,
   importance = 0.5,
   sourceSession = null,
+  tenantId = null,
 }) {
-  return upsertFactInternal(userId, key, value, { importance, sourceSession });
+  return upsertFactInternal(userId, key, value, { importance, sourceSession, tenantId });
 }
 
 async function upsertFactInternal(userId, key, value, opts = {}) {
@@ -186,13 +209,19 @@ async function upsertFactInternal(userId, key, value, opts = {}) {
   const content = String(value).slice(0, 500);
   const importance = typeof opts.importance === 'number' ? opts.importance : 0.5;
   const sourceSession = opts.sourceSession || null;
+  const tenantId = opts.tenantId || null;
 
+  // Dedup identity follows retrieval's rule (see retrieveMemories):
+  // enforced mode keys the existing-row lookup on tenant_id alone, so a
+  // fact re-saved under the tenant identity updates the legacy-stamped
+  // row instead of duplicating it; compat keys on user_id as before.
+  const existingParams = [tenantId || userId, subject];
   const existing = await pool.query(
     `SELECT id FROM memory_items
-      WHERE user_id = $1 AND scope = 'semantic' AND kind = 'fact'
+      WHERE ${tenantId ? 'tenant_id' : 'user_id'} = $1 AND scope = 'semantic' AND kind = 'fact'
         AND subject = $2 AND supersedes IS NULL
       LIMIT 1`,
-    [userId, subject]
+    existingParams
   );
 
   let vec = null;
@@ -205,25 +234,33 @@ async function upsertFactInternal(userId, key, value, opts = {}) {
       await pool.query(
         `UPDATE memory_items
             SET content = $1, embedding = $2::vector, importance = $3
-          WHERE id = $4`,
-        [content, vecLiteral(vec), importance, id]
+          WHERE id = $4${tenantId ? ' AND tenant_id = $5' : ''}`,
+        tenantId ? [content, vecLiteral(vec), importance, id, tenantId]
+                 : [content, vecLiteral(vec), importance, id]
       );
     } else {
       await pool.query(
-        `UPDATE memory_items SET content = $1, importance = $2 WHERE id = $3`,
-        [content, importance, id]
+        `UPDATE memory_items SET content = $1, importance = $2 WHERE id = $3${tenantId ? ' AND tenant_id = $4' : ''}`,
+        tenantId ? [content, importance, id, tenantId] : [content, importance, id]
       );
     }
     return { id, subject, content, action: 'updated' };
   }
 
+  const insCols = ['user_id', 'scope', 'kind', 'subject', 'content', 'embedding', 'confidence', 'importance', 'source_session'];
+  const insParams = [userId, subject, content];
+  const insVals = ['$1', `'semantic'`, `'fact'`, '$2', '$3'];
+  if (vec) { insParams.push(vecLiteral(vec)); insVals.push(`$${insParams.length}::vector`); }
+  else insVals.push('NULL');
+  insVals.push('0.7');
+  insParams.push(importance); insVals.push(`$${insParams.length}`);
+  insParams.push(sourceSession); insVals.push(`$${insParams.length}`);
+  if (tenantId) { insCols.push('tenant_id'); insParams.push(tenantId); insVals.push(`$${insParams.length}`); }
   const insert = await pool.query(
-    `INSERT INTO memory_items
-       (user_id, scope, kind, subject, content, embedding, confidence, importance, source_session)
-     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, ${vec ? '$5' : '$4'}, ${vec ? '$6' : '$5'})
+    `INSERT INTO memory_items (${insCols.join(', ')})
+     VALUES (${insVals.join(', ')})
      RETURNING id`,
-    vec ? [userId, subject, content, vecLiteral(vec), importance, sourceSession]
-        : [userId, subject, content, importance, sourceSession]
+    insParams
   );
   return { id: insert.rows[0].id, subject, content, action: 'inserted' };
 }
@@ -357,7 +394,7 @@ async function classifyContradiction(llm, existing, incoming) {
  *        defaults to claude-haiku-4-5 via ANTHROPIC_API_KEY.
  * @returns {Promise<{inserted:number, updated:number, superseded:number, skipped:number}>}
  */
-export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
+export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenantId = null) {
   if (!pool) pool = getPool();
   let inserted = 0, updated = 0, superseded = 0, skipped = 0;
   if (!user_id || !Array.isArray(candidates) || candidates.length === 0) {
@@ -377,17 +414,18 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
     catch (e) { console.error('[memory] candidate embed failed (inserting without vector):', e?.message || e); }
 
     if (!vec) {
+      const nvParams = [user_id, c.scope, c.kind, c.subject, c.content,
+        c.confidence, c.importance, c.valid_until, c.source_session];
+      let nvTenantCol = '', nvTenantVal = '';
+      if (tenantId) { nvParams.push(tenantId); nvTenantCol = ', tenant_id'; nvTenantVal = `, $${nvParams.length}`; }
+      let nvSpanVal = 'NULL';
+      if (c.source_span) { nvParams.push(c.source_span.start, c.source_span.end); nvSpanVal = `int4range($${nvParams.length - 1},$${nvParams.length})`; }
       await pool.query(
         `INSERT INTO memory_items
            (user_id, scope, kind, subject, content,
-            confidence, importance, valid_until, source_session, source_span)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,${c.source_span ? 'int4range($10,$11)' : 'NULL'})`,
-        c.source_span
-          ? [user_id, c.scope, c.kind, c.subject, c.content,
-             c.confidence, c.importance, c.valid_until, c.source_session,
-             c.source_span.start, c.source_span.end]
-          : [user_id, c.scope, c.kind, c.subject, c.content,
-             c.confidence, c.importance, c.valid_until, c.source_session]
+            confidence, importance, valid_until, source_session, source_span${nvTenantCol})
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,${nvSpanVal}${nvTenantVal})`,
+        nvParams
       );
       inserted++;
       continue;
@@ -395,18 +433,23 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
 
     const vlit = vecLiteral(vec);
 
-    // Nearest neighbors within the SAME scope (spec :371-382).
+    // Nearest neighbors within the SAME scope (spec :371-382). The
+    // identity predicate follows retrieval's rule: tenant_id alone in
+    // enforced mode (legacy-stamped rows stay dedup-visible), user_id
+    // in compat mode.
+    const nbParams = [vlit, tenantId || user_id, c.scope];
+    nbParams.push(NEIGHBOR_K); const nbLimitParam = nbParams.length;
     const neighbors = await pool.query(
       `SELECT id, kind, subject, content, confidence, importance,
               (embedding <=> $1::vector) AS distance
          FROM memory_items
-        WHERE user_id = $2
+        WHERE ${tenantId ? 'tenant_id' : 'user_id'} = $2
           AND scope = $3
           AND embedding IS NOT NULL
           AND (valid_until IS NULL OR valid_until > now())
         ORDER BY embedding <=> $1::vector
-        LIMIT $4`,
-      [vlit, user_id, c.scope, NEIGHBOR_K]
+        LIMIT $${nbLimitParam}`,
+      nbParams
     );
 
     // pgvector cosine distance = 1 - cosine_similarity → similarity = 1 - distance.
@@ -417,6 +460,11 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
     // importance to the max of old vs new, refresh embedding + source provenance.
     // (updated_at is bumped automatically by trg_memory_touch — setup-memory-db.mjs:86-89.)
     if (top && topSim >= SIM_UPDATE) {
+      const mgParams = [c.content, vlit, c.confidence, c.importance, c.source_session, top.id];
+      let mgTenantClause = '';
+      if (tenantId) { mgParams.push(tenantId); mgTenantClause = ` AND tenant_id = $${mgParams.length}`; }
+      let mgSpanSet = '';
+      if (c.source_span) { mgParams.push(c.source_span.start, c.source_span.end); mgSpanSet = `, source_span = int4range($${mgParams.length - 1},$${mgParams.length})`; }
       await pool.query(
         `UPDATE memory_items
             SET content        = $1,
@@ -424,12 +472,9 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
                 confidence     = GREATEST(confidence, $3),
                 importance     = GREATEST(importance, $4),
                 source_session = COALESCE($5, source_session)
-                ${c.source_span ? ', source_span = int4range($7,$8)' : ''}
-          WHERE id = $6`,
-        c.source_span
-          ? [c.content, vlit, c.confidence, c.importance, c.source_session, top.id,
-             c.source_span.start, c.source_span.end]
-          : [c.content, vlit, c.confidence, c.importance, c.source_session, top.id]
+                ${mgSpanSet}
+          WHERE id = $6${mgTenantClause}`,
+        mgParams
       );
       updated++;
       continue;
@@ -446,21 +491,22 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
         try {
           await client.query('BEGIN');
           await client.query(
-            `UPDATE memory_items SET valid_until = now() WHERE id = $1`,
-            [top.id]
+            `UPDATE memory_items SET valid_until = now() WHERE id = $1${tenantId ? ' AND tenant_id = $2' : ''}`,
+            tenantId ? [top.id, tenantId] : [top.id]
           );
+          const ssParams = [user_id, c.scope, c.kind, c.subject, c.content, vlit,
+            c.confidence, c.importance, c.valid_until, top.id, c.source_session];
+          let ssTenantCol = '', ssTenantVal = '';
+          if (tenantId) { ssParams.push(tenantId); ssTenantCol = ', tenant_id'; ssTenantVal = `, $${ssParams.length}`; }
+          let ssSpanVal = 'NULL';
+          if (c.source_span) { ssParams.push(c.source_span.start, c.source_span.end); ssSpanVal = `int4range($${ssParams.length - 1},$${ssParams.length})`; }
           await client.query(
             `INSERT INTO memory_items
                (user_id, scope, kind, subject, content, embedding,
                 confidence, importance, valid_until, supersedes,
-                source_session, source_span)
-             VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,${c.source_span ? 'int4range($12,$13)' : 'NULL'})`,
-            c.source_span
-              ? [user_id, c.scope, c.kind, c.subject, c.content, vlit,
-                 c.confidence, c.importance, c.valid_until, top.id, c.source_session,
-                 c.source_span.start, c.source_span.end]
-              : [user_id, c.scope, c.kind, c.subject, c.content, vlit,
-                 c.confidence, c.importance, c.valid_until, top.id, c.source_session]
+                source_session, source_span${ssTenantCol})
+             VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,${ssSpanVal}${ssTenantVal})`,
+            ssParams
           );
           await client.query('COMMIT');
           superseded++;
@@ -476,17 +522,18 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
     }
 
     // FRESH INSERT (spec :440-451).
+    const fiParams = [user_id, c.scope, c.kind, c.subject, c.content, vlit,
+      c.confidence, c.importance, c.valid_until, c.source_session];
+    let fiTenantCol = '', fiTenantVal = '';
+    if (tenantId) { fiParams.push(tenantId); fiTenantCol = ', tenant_id'; fiTenantVal = `, $${fiParams.length}`; }
+    let fiSpanVal = 'NULL';
+    if (c.source_span) { fiParams.push(c.source_span.start, c.source_span.end); fiSpanVal = `int4range($${fiParams.length - 1},$${fiParams.length})`; }
     await pool.query(
       `INSERT INTO memory_items
          (user_id, scope, kind, subject, content, embedding,
-          confidence, importance, valid_until, source_session, source_span)
-       VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,${c.source_span ? 'int4range($11,$12)' : 'NULL'})`,
-      c.source_span
-        ? [user_id, c.scope, c.kind, c.subject, c.content, vlit,
-           c.confidence, c.importance, c.valid_until, c.source_session,
-           c.source_span.start, c.source_span.end]
-        : [user_id, c.scope, c.kind, c.subject, c.content, vlit,
-           c.confidence, c.importance, c.valid_until, c.source_session]
+          confidence, importance, valid_until, source_session, source_span${fiTenantCol})
+       VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,${fiSpanVal}${fiTenantVal})`,
+      fiParams
     );
     inserted++;
   }
@@ -494,17 +541,20 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm) {
   return { inserted, updated, superseded, skipped };
 }
 
-async function readFacts(userId) {
+async function readFacts(userId, tenantId = null) {
   const pool = getPool();
+  // Same tenant-era identity rule as retrieveMemories: tenant_id alone
+  // in enforced mode, user_id in compat mode.
+  const rfParams = [tenantId || userId];
   const sql = `
     SELECT id, subject AS key, content AS value, updated_at, created_at, importance, confidence
       FROM memory_items
-     WHERE user_id = $1
+     WHERE ${tenantId ? 'tenant_id' : 'user_id'} = $1
        AND scope = 'semantic'
        AND (valid_until IS NULL OR valid_until > now())
      ORDER BY importance DESC, confidence DESC, updated_at DESC
   `;
-  const { rows } = await pool.query(sql, [userId]);
+  const { rows } = await pool.query(sql, rfParams);
   return rows.map(r => ({
     key: r.key,
     value: r.value,
@@ -512,19 +562,24 @@ async function readFacts(userId) {
   }));
 }
 
-async function upsertFact(userId, key, value) {
+async function upsertFact(userId, key, value, tenantId = null) {
   const pool = getPool();
   const subject = String(key).slice(0, 120);
   const content = String(value).slice(0, 500);
 
   // Try UPDATE-by-subject first (idempotent on legacy {key,value} writes).
   // Embedding refresh is fire-and-forget on UPDATE to keep the path fast.
+  // Dedup identity follows retrieval's rule (see retrieveMemories):
+  // enforced mode keys the existing-row lookup on tenant_id alone, so a
+  // fact re-saved under the tenant identity updates the legacy-stamped
+  // row instead of duplicating it; compat keys on user_id as before.
+  const existingParams = [tenantId || userId, subject];
   const existing = await pool.query(
     `SELECT id FROM memory_items
-      WHERE user_id = $1 AND scope = 'semantic' AND kind = 'fact'
+      WHERE ${tenantId ? 'tenant_id' : 'user_id'} = $1 AND scope = 'semantic' AND kind = 'fact'
         AND subject = $2 AND supersedes IS NULL
       LIMIT 1`,
-    [userId, subject]
+    existingParams
   );
 
   let vec = null;
@@ -537,13 +592,14 @@ async function upsertFact(userId, key, value) {
       await pool.query(
         `UPDATE memory_items
             SET content = $1, embedding = $2::vector
-          WHERE id = $3`,
-        [content, vecLiteral(vec), id]
+          WHERE id = $3${tenantId ? ' AND tenant_id = $4' : ''}`,
+        tenantId ? [content, vecLiteral(vec), id, tenantId]
+                 : [content, vecLiteral(vec), id]
       );
     } else {
       await pool.query(
-        `UPDATE memory_items SET content = $1 WHERE id = $2`,
-        [content, id]
+        `UPDATE memory_items SET content = $1 WHERE id = $2${tenantId ? ' AND tenant_id = $3' : ''}`,
+        tenantId ? [content, id, tenantId] : [content, id]
       );
     }
     return { id, subject, content, action: 'updated' };
@@ -551,22 +607,22 @@ async function upsertFact(userId, key, value) {
 
   const insert = await pool.query(
     `INSERT INTO memory_items
-       (user_id, scope, kind, subject, content, embedding, confidence, importance)
-     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, 0.5)
+       (user_id, scope, kind, subject, content, embedding, confidence, importance${tenantId ? ', tenant_id' : ''})
+     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, 0.5${tenantId ? `, $${vec ? 5 : 4}` : ''})
      RETURNING id`,
-    vec ? [userId, subject, content, vecLiteral(vec)]
-        : [userId, subject, content]
+    vec ? [userId, subject, content, vecLiteral(vec), ...(tenantId ? [tenantId] : [])]
+        : [userId, subject, content, ...(tenantId ? [tenantId] : [])]
   );
   return { id: insert.rows[0].id, subject, content, action: 'inserted' };
 }
 
-async function deleteFact(userId, key) {
+async function deleteFact(userId, key, tenantId = null) {
   const pool = getPool();
   const subject = String(key).slice(0, 120);
   const r = await pool.query(
     `DELETE FROM memory_items
-      WHERE user_id = $1 AND scope = 'semantic' AND subject = $2`,
-    [userId, subject]
+      WHERE ${tenantId ? 'tenant_id' : 'user_id'} = $1 AND scope = 'semantic' AND subject = $2`,
+    [tenantId || userId, subject]
   );
   return { deleted: r.rowCount };
 }
@@ -574,18 +630,37 @@ async function deleteFact(userId, key) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (!DB_URL) {
     return res.status(500).json({ error: 'memory store not configured (DATABASE_URL_MEMORY missing)' });
   }
 
+  // Tenant wiring (store build — lib/tenant.js): resolve the scoping
+  // tenant for this request. COMPAT mode (no SESSION_SECRET, today's
+  // live deployment): resolveHandlerTenant reports ok with tenantId
+  // null and every query below runs exactly as before this wiring.
+  // ENFORCED mode: identity comes from a Bearer session token (browser)
+  // or from the userId value itself — the ElevenLabs save_memory tool
+  // sends the session's `user_id` dynamic variable, which in hosted
+  // mode carries the tenant id (set at session start, see
+  // prime-agent.js). Neither resolving is a hard 400: never default to
+  // another tenant's rows.
+  const reqUserId = (req.method === 'POST')
+    ? (req.body?.userId || req.query?.userId)
+    : req.query?.userId;
+  const resolvedTenant = resolveHandlerTenant(req, reqUserId);
+  if (!resolvedTenant.ok) {
+    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  }
+  const tenantId = resolvedTenant.tenantId;
+
   try {
     if (req.method === 'GET') {
       const userId = req.query.userId;
       if (!userId) return res.status(400).json({ error: 'userId required' });
-      const facts = await readFacts(userId);
+      const facts = await readFacts(userId, tenantId);
       return res.status(200).json({ userId, facts });
     }
 
@@ -594,7 +669,10 @@ export default async function handler(req, res) {
       const userId = req.body?.userId || req.query?.userId;
       if (!userId) return res.status(400).json({ error: 'userId required' });
       if (!key || !value) return res.status(400).json({ error: 'key and value required' });
-      const out = await upsertFact(userId, key, value);
+      // Enforced mode stamps new rows with the tenant identity — the
+      // identity retrieval looks for (see retrieveMemories). Compat
+      // mode stamps the caller's userId, exactly as before.
+      const out = await upsertFact(tenantId || userId, key, value, tenantId);
       return res.status(200).json({
         ok: true,
         fact: { key: out.subject, value: out.content, savedAt: new Date().toISOString() },
@@ -606,7 +684,7 @@ export default async function handler(req, res) {
       const { userId, key } = req.query;
       if (!userId) return res.status(400).json({ error: 'userId required' });
       if (!key) return res.status(400).json({ error: 'key required' });
-      await deleteFact(userId, key);
+      await deleteFact(tenantId || userId, key, tenantId);
       return res.status(200).json({ ok: true });
     }
 

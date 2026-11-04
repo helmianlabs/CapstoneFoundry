@@ -21,8 +21,8 @@
 | `browse_url` | `tool_7601m50skegkfmtrfh1hhfsee48b` | `https://thinkbuddy-sandy.vercel.app/api/browse` |
 | `generate_image` | `tool_2101m50skemjewnbvbr2mfqqwq5d` | `https://thinkbuddy-sandy.vercel.app/api/image` |
 | `generate_image_flux` | `tool_9901m50skerve9rbpwqtqya923f3` | `https://thinkbuddy-sandy.vercel.app/api/image-flux` |
-| `generate_image_imagen` | `tool_5601m50skewwfzvvbghe3aw5s3fa` | `https://thinkbuddy-sandy.vercel.app/api/image-imagen` |
-| `generate_video_sora` | `tool_0501m50skf18fdc876kez922fwf0` | `https://thinkbuddy-sandy.vercel.app/api/video-sora` |
+| `generate_image_imagen` | `tool_5601m50skewwfzvvbghe3aw5s3fa` | `https://thinkbuddy-sandy.vercel.app/api/image-imagen` — **RETIRED 2026-08-17** (Google shut the Gemini-API Imagen path; handler deleted — do not provision) |
+| `generate_video_sora` | `tool_0501m50skf18fdc876kez922fwf0` | `https://thinkbuddy-sandy.vercel.app/api/video-sora` — **RETIRED 2026-09-24** (OpenAI retired the Videos/Sora API; handler deleted — do not provision) |
 | `generate_video_runway` | `tool_8401m50skf5mfbja2z19gzmq34qv` | `https://thinkbuddy-sandy.vercel.app/api/video-runway` |
 | `save_task_for_clyde` | `tool_9801m50skf9rejwvfgg0462qk8g5` | `https://thinkbuddy-sandy.vercel.app/api/task` |
 | `set_alarm` | `tool_6801m50skfdnet4rgmz96k02t2dy` | `https://thinkbuddy-sandy.vercel.app/api/alarm` |

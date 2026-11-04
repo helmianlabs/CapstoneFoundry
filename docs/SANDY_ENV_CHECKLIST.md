@@ -12,9 +12,9 @@ Required for Mark to work end to end (Production + Preview):
 | `WEBHOOK_SECRET` | all tools (X-Webhook-Secret) | 503 on image/video tools |
 | `DATABASE_URL` / `DATABASE_URL_MEMORY` | memory, recall, alarm, task, history (Neon project `thinkinbuddy`, crimson-cell-24149007) | 500 / "memory store not configured" |
 | `ANTHROPIC_API_KEY` | search, chat, extract-memories | "ANTHROPIC_API_KEY not set" |
-| `OPENAI_API_KEY` | image, video-sora, extract | 5xx |
+| `OPENAI_API_KEY` | image, video-sora (**RETIRED 2026-09-24** — OpenAI retired the Videos/Sora API; handler deleted), extract | 5xx |
 | `BLOB_READ_WRITE_TOKEN` | image/video storage | 5xx |
 | `CRON_SECRET` | cron-expire-memories | cron 401 |
-| optional: `REPLICATE_API_TOKEN`, `GOOGLE_API_KEY`, `RUNWAY_API_KEY`, `HEYGEN_API_KEY`, `ALLOWED_ORIGINS` | flux/imagen/runway/heygen | that tool only |
+| optional: `REPLICATE_API_TOKEN`, `GOOGLE_API_KEY`, `RUNWAY_API_KEY`, `HEYGEN_API_KEY`, `ALLOWED_ORIGINS` | flux/runway/heygen (imagen **RETIRED 2026-08-17** — Google shut the Gemini-API Imagen path; handler deleted) | that tool only |
 
 After setting: Redeploy, then each tool in ElevenLabs needs header `X-Webhook-Secret` = same `WEBHOOK_SECRET`.

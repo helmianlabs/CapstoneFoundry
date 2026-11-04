@@ -29,17 +29,32 @@
 
 import { buildSystemPrompt } from '../../lib/personality.js';
 import { retrieveMemories } from './memory.js';
+import { requireTenant, activeTenantId, tenantEnforced } from '../../lib/tenant.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const buddyName = req.body?.buddyName || 'ThinkinBuddy';
+  // Tenant wiring (store build — lib/tenant.js): this is the browser-
+  // called identity anchor for a session. ENFORCED mode (SESSION_SECRET
+  // set): the session token names the tenant, the prompt is built ONLY
+  // from that tenant's memory_items (retrieveMemories tenantId filter),
+  // and any body userId is ignored — a caller cannot prime another
+  // tenant's prompt by naming them. COMPAT mode (no SESSION_SECRET,
+  // today's live deployment): requireTenant returns the legacy tenant,
+  // activeTenantId reports no scoping, and the body userId drives the
+  // lookup exactly as before.
+  const tenant = requireTenant(req, res);
+  if (!tenant) return;
+  const tenantId = activeTenantId(tenant);
+
+  const buddyName = req.body?.buddyName || 'Capstone Foundry';
   const userName = req.body?.userName || null;
-  const userId = req.body?.userId;
+  const userId = tenantId || req.body?.userId;
   // Optional conversational mode. Validated against VALID_MODES; unknown values
   // fall back to 'default'. Client passes the active mode via the request body.
   const VALID_MODES = ['default', 'spanish_tutor', 'feynman_module1'];
@@ -68,10 +83,33 @@ export default async function handler(req, res) {
 
   let facts = [];
   try {
-    facts = await retrieveMemories(userId, { limit: 30, query, scopes });
+    facts = await retrieveMemories(userId, { limit: 30, query, scopes, tenantId });
   } catch (err) {
     console.error('[prime-agent] retrieveMemories failed:', err?.message || err);
     facts = [];
+  }
+
+  // Safety wiring (safety-wiring bite 2, safety-gap-map §7): the
+  // tenant profile decides whether the KID_SAFETY_CORE layer joins
+  // this session's prompt, resolved through the SAME shared resolver
+  // as the HTTP handlers (lib/profile.js resolveProfileSafety) — the
+  // session token above already names the tenant, so the client
+  // never sends (and can never spoof) safety fields. When the
+  // profile cannot decide (no row, onboarding unfinished, profile
+  // read failed) the resolver's safe default applies safety: a minor
+  // or safety-on profile's voice session now carries the kid core,
+  // an adult safety-off profile's does not. COMPAT mode never
+  // queries a profile: the prompt is built with the personality
+  // defaults, byte-for-byte as before this wiring.
+  let safetyMode = false;
+  let ageBand = null;
+  if (tenantEnforced() && tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, tenantId);
+    safetyMode = resolved.inputs.safetyMode;
+    ageBand = resolved.inputs.ageBand;
+    if (resolved.safeDefault) {
+      console.error(`[prime-agent] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
   }
 
   // ElevenLabs widget path: it has REAL tool calls registered on the agent,
@@ -83,11 +121,23 @@ export default async function handler(req, res) {
     includeToolsBlock: true,
     includeActionTags: false,
     mode,
+    safetyMode,
+    ageBand,
   });
 
   // Return the per-user prompt to the client. The client sets it on the
   // widget's per-session override (overrides.agent.prompt.prompt) so user A's
   // facts never touch the shared agent and never reach user B's session.
   // We do NOT PATCH the global agent anymore.
-  return res.status(200).json({ ok: true, prompt, memoryCount: facts.length, buddyName, userId });
+  //
+  // TENANT MAPPING for the rest of the session (hosted mode): the client
+  // must set the ElevenLabs widget's `user_id` dynamic variable to the
+  // tenantId returned here. That value is what the agent's tool calls
+  // (save_memory, recall_memory), the per-turn capture, and the post-call
+  // webhook's session metadata carry back to this server, and in enforced
+  // mode each of those handlers resolves the tenant from it (see
+  // lib/tenant.js resolveHandlerTenant and api/conversation-webhook.js).
+  // In compat mode tenantId is null and the widget keeps sending its
+  // legacy userId, unchanged.
+  return res.status(200).json({ ok: true, prompt, memoryCount: facts.length, buddyName, userId, tenantId });
 }

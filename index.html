@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#050508" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="ThinkinBuddy" />
+  <meta name="apple-mobile-web-app-title" content="Capstone Foundry" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon.svg" />
-  <title>ThinkinBuddy</title>
+  <title>Capstone Foundry</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -98,6 +98,18 @@
       min-height: 3em;
       padding: 0 20px;
     }
+    .report-answer-btn {
+      margin-top: 6px;
+      background: none;
+      border: none;
+      color: #4b5563;
+      font-size: 0.72rem;
+      text-decoration: underline;
+      cursor: pointer;
+      z-index: 2;
+      padding: 4px 8px;
+    }
+    .report-answer-btn:disabled { text-decoration: none; cursor: default; }
 
     /* ─── Onboarding overlay ─────────────────────────────────────── */
     .onboarding {
@@ -524,17 +536,47 @@
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
     }
+    .gallery-lightbox-cast {
+      position: absolute; top: 18px; right: 66px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(0,212,255,0.4);
+      color: #00d4ff;
+      height: 36px; padding: 0 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      cursor: pointer;
+      align-items: center; justify-content: center;
+    }
+    .gallery-lightbox-report {
+      position: absolute; bottom: 18px; left: 20px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(0,212,255,0.4);
+      color: #00d4ff;
+      height: 36px; padding: 0 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gallery-lightbox-report:disabled { opacity: 0.6; cursor: default; }
   </style>
 </head>
 <body>
   <!-- Onboarding overlay (shown on first visit) -->
   <div class="onboarding hidden" id="onboarding">
-    <h1>THINKINBUDDY</h1>
-    <p>Your personal thinking partner. Brain dump, problem-solve, or just talk it out.</p>
+    <h1>CAPSTONE FOUNDRY</h1>
+    <p>Your AI assistant with hands — learn anything, create videos, and get things done.</p>
     <p style="margin-bottom:12px;">What should I call you?</p>
     <input type="text" id="onboardName" placeholder="Your first name" autocomplete="off" />
     <p style="margin-top:18px; margin-bottom:12px;">What do you want to call your buddy?</p>
-    <input type="text" id="onboardBuddyName" placeholder="ThinkinBuddy" autocomplete="off" />
+    <input type="text" id="onboardBuddyName" placeholder="Capstone Foundry" autocomplete="off" />
+    <div class="onboarding-consent">
+      <input type="checkbox" id="onboardAiConsent" />
+      <label for="onboardAiConsent">To answer you, Capstone Foundry sends your messages and voice to AI providers (OpenAI, Anthropic, Google, and ElevenLabs). I understand and agree.</label>
+    </div>
+    <p id="onboardAiConsentHint" style="display:none;margin-top:6px;font-size:0.8rem;color:#f87171;">Please check the box above so your buddy can answer you.</p>
     <div class="onboarding-consent">
       <input type="checkbox" id="onboardConsent" />
       <label for="onboardConsent">I'm okay with anonymized conversations being saved to help improve this app. I can opt out anytime.</label>
@@ -550,12 +592,13 @@
   <div class="corner bl"></div>
   <div class="corner br"></div>
 
-  <div class="title">THINKINBUDDY</div>
-  <div class="subtitle" id="subtitle">YOUR THINKING PARTNER</div>
+  <div class="title">CAPSTONE FOUNDRY</div>
+  <div class="subtitle" id="subtitle">DISCOVER WHAT'S NEXT</div>
 
   <!-- Media output area — images and videos appear here -->
   <div id="mediaArea" style="display:none; z-index:2; max-width:340px; width:90%; margin-top:20px; position:relative;">
     <button id="mediaCloseBtn" type="button" aria-label="Dismiss media" style="position:absolute; top:-10px; right:-10px; width:32px; height:32px; border-radius:50%; border:1px solid rgba(0,212,255,0.5); background:rgba(0,0,0,0.85); color:#00d4ff; font-size:1rem; font-family:monospace; cursor:pointer; z-index:3; display:flex; align-items:center; justify-content:center; padding:0;">✕</button>
+    <button id="mediaCastBtn" type="button" aria-label="Watch on TV" style="display:none; position:absolute; top:16px; right:72px; height:44px; padding:0 14px; border-radius:999px; border:1px solid rgba(0,212,255,0.6); background:rgba(0,0,0,0.85); color:#00d4ff; font-size:0.85rem; font-family:monospace; cursor:pointer; z-index:51; align-items:center; justify-content:center;">📺 TV</button>
     <img id="mediaImg" src="" alt="" style="width:100%; border-radius:12px; border:1px solid rgba(0,212,255,0.3); display:none;" />
     <video id="mediaVideo" playsinline controls autoplay muted loop style="width:100%; border-radius:12px; border:1px solid rgba(0,212,255,0.3); display:none;"></video>
     <div id="mediaCaption" style="color:#6b7280; font-size:0.7rem; text-align:center; margin-top:8px; font-family:monospace;"></div>
@@ -601,6 +644,8 @@
   <!-- ─── Lightbox ─────────────────────────────────────────────────── -->
   <div class="gallery-lightbox hidden" id="galleryLightbox">
     <button class="gallery-lightbox-close" id="galleryLightboxClose">✕</button>
+    <button class="gallery-lightbox-cast" id="galleryLightboxCast" type="button" aria-label="Watch on TV" style="display:none;">📺 TV</button>
+    <button class="gallery-lightbox-report" id="galleryLightboxReport" type="button">Report this</button>
     <img id="galleryLightboxImg" src="" alt="" style="display:none;" />
     <video id="galleryLightboxVideo" playsinline controls style="display:none;"></video>
     <div class="gallery-lightbox-caption" id="galleryLightboxCaption"></div>
@@ -619,9 +664,10 @@
     <h2>Settings</h2>
 
     <div class="tabs">
-      <button data-tab="keys"  class="active">Your AI</button>
+      <button data-tab="keys"  class="active">Advanced — your own API keys (optional)</button>
       <button data-tab="voice">Voice</button>
       <button data-tab="audio">Audio</button>
+      <button data-tab="account">Account &amp; Safety</button>
     </div>
 
     <div class="tab-body">
@@ -680,6 +726,190 @@
         </label>
         <div class="test-line" id="bgAudioStatus">Status: not started.</div>
       </div>
+
+      <!-- ── ACCOUNT & SAFETY ─────────────────────────────────────── -->
+      <div class="tab-pane" data-pane="account" id="accountPane">
+        <div class="storage-note">
+          Your Capstone Foundry account, your plan, and the safety lock for
+          younger users. Wired by /onboarding.js; hides itself when the
+          server runs in legacy single-user mode.
+        </div>
+        <div class="test-line" id="accountPlanLine">Plan: …</div>
+        <label>Profiles in this account</label>
+        <div class="storage-note">
+          Each profile has its own name, age band, and safety setting.
+          Your buddy runs under the profile marked “In use” — switching
+          profiles re-aims your buddy before the next call. Switching
+          away from a protected profile asks for the parent PIN, the
+          same as turning safety off.
+        </div>
+        <div id="accountProfilesList"></div>
+        <div id="accountSwitchPinRow" style="display:none;">
+          <label for="accountSwitchPin">Parent PIN — required to switch away from a protected profile</label>
+          <input type="password" id="accountSwitchPin" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="secondary" id="accountSwitchPinConfirm">Switch profile</button>
+          <button type="button" class="secondary" id="accountSwitchPinCancel">Cancel</button>
+        </div>
+        <div class="test-line" id="accountProfilesLine"></div>
+        <div id="accountProfileEdit" style="display:none;">
+          <label for="accountProfileEditName">Profile name</label>
+          <input type="text" id="accountProfileEditName" autocomplete="off" />
+          <label for="accountProfileEditBand">Who is this profile for?</label>
+          <select id="accountProfileEditBand">
+            <option value="child">Under 6</option>
+            <option value="6-8">6–8</option>
+            <option value="9-12">9–12</option>
+            <option value="13-17">13–17</option>
+            <option value="adult">Adult</option>
+          </select>
+          <label for="accountProfileEditAbout">About</label>
+          <textarea id="accountProfileEditAbout" rows="3"></textarea>
+          <label class="toggle-row" for="accountProfileEditSafety">
+            <input type="checkbox" id="accountProfileEditSafety" />
+            <span class="toggle-text">Safety mode
+              <small>Turning it on needs a parent PIN; turning it off needs that PIN too.</small>
+            </span>
+          </label>
+          <div id="accountProfileEditPinRow" style="display:none;">
+            <label for="accountProfileEditPin" id="accountProfileEditPinLabel">Parent PIN</label>
+            <input type="password" id="accountProfileEditPin" inputmode="numeric" autocomplete="off" />
+            <div id="accountProfileEditPinAgainWrap">
+              <label for="accountProfileEditPinAgain">Parent PIN again</label>
+              <input type="password" id="accountProfileEditPinAgain" inputmode="numeric" autocomplete="off" />
+            </div>
+          </div>
+          <button type="button" class="secondary" id="accountProfileEditSave">Save profile</button>
+          <button type="button" class="secondary" id="accountProfileEditCancel">Cancel</button>
+          <div class="test-line" id="accountProfileEditLine"></div>
+        </div>
+        <label>New profile</label>
+        <label for="accountProfileNewName">Name</label>
+        <input type="text" id="accountProfileNewName" autocomplete="off" />
+        <label for="accountProfileNewBand">Who is this profile for?</label>
+        <select id="accountProfileNewBand">
+          <option value="" selected>Choose…</option>
+          <option value="child">Under 6</option>
+          <option value="6-8">6–8</option>
+          <option value="9-12">9–12</option>
+          <option value="13-17">13–17</option>
+          <option value="adult">Adult</option>
+        </select>
+        <label class="toggle-row" for="accountProfileNewSafety">
+          <input type="checkbox" id="accountProfileNewSafety" />
+          <span class="toggle-text">Safety mode</span>
+        </label>
+        <div id="accountProfileNewPinRow" style="display:none;">
+          <label for="accountProfileNewPin">Parent PIN — safety mode needs one to lock it</label>
+          <input type="password" id="accountProfileNewPin" inputmode="numeric" autocomplete="off" placeholder="Parent PIN (4–6 digits)" />
+          <label for="accountProfileNewPinAgain">Parent PIN again</label>
+          <input type="password" id="accountProfileNewPinAgain" inputmode="numeric" autocomplete="off" />
+        </div>
+        <button type="button" class="secondary" id="accountProfileCreateBtn">Create profile</button>
+        <div class="test-line" id="accountProfileCreateLine"></div>
+        <label class="toggle-row" for="accountSafetyToggle">
+          <input type="checkbox" id="accountSafetyToggle" />
+          <span class="toggle-text">Safety mode
+            <small>Extra content guardrails for younger users. Turning it on needs a parent PIN; turning it off needs that PIN too.</small>
+          </span>
+        </label>
+        <div id="accountSafetyPinRow" style="display:none;">
+          <label for="accountSafetyPin">Parent PIN — required to turn safety off</label>
+          <input type="password" id="accountSafetyPin" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="secondary" id="accountSafetyPinConfirm">Turn safety off</button>
+        </div>
+        <div id="accountSafetyCreateRow" style="display:none;">
+          <label for="accountSafetyNewPin">Parent PIN — create one to turn safety on</label>
+          <input type="password" id="accountSafetyNewPin" inputmode="numeric" autocomplete="off" placeholder="Parent PIN (4–6 digits)" />
+          <label for="accountSafetyNewPinAgain">Parent PIN again</label>
+          <input type="password" id="accountSafetyNewPinAgain" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="secondary" id="accountSafetyCreateConfirm">Create PIN &amp; turn safety on</button>
+        </div>
+        <div class="test-line" id="accountStatusLine"></div>
+        <label>Parent PIN</label>
+        <div class="test-line" id="accountPinStatus">No parent PIN set.</div>
+        <div id="accountCurrentPinRow" style="display:none;">
+          <label for="accountCurrentPin">Current PIN</label>
+          <input type="password" id="accountCurrentPin" inputmode="numeric" autocomplete="off" />
+        </div>
+        <label for="accountNewPin">New PIN (4–6 digits)</label>
+        <input type="password" id="accountNewPin" inputmode="numeric" autocomplete="off" />
+        <label for="accountNewPinConfirm">New PIN again</label>
+        <input type="password" id="accountNewPinConfirm" inputmode="numeric" autocomplete="off" />
+        <button type="button" class="secondary" id="accountPinSave">Save PIN</button>
+        <div class="test-line" id="accountPinLine"></div>
+        <label>Ask for something we don't have</label>
+        <div class="storage-note">
+          Missing a tool or AI service — or a subject you'd like to
+          learn? Ask here. We read every one, and the list below shows
+          where yours stands.
+        </div>
+        <div class="row">
+          <button type="button" class="secondary" id="requestKindProvider">A tool or AI service</button>
+          <button type="button" class="secondary" id="requestKindCurriculum">A subject to learn</button>
+        </div>
+        <div id="requestProviderFields">
+          <label for="requestProviderName">Name of the tool or service</label>
+          <input type="text" id="requestProviderName" maxlength="120" autocomplete="off" />
+          <label for="requestCapability">What should it do?</label>
+          <select id="requestCapability">
+            <option value="chat">Chat</option>
+            <option value="image">Make images</option>
+            <option value="video">Make videos</option>
+            <option value="voice">Voice</option>
+            <option value="other">Something else</option>
+          </select>
+          <label for="requestUseCase">What would you use it for?</label>
+          <textarea id="requestUseCase" rows="3" maxlength="300"></textarea>
+        </div>
+        <div id="requestCurriculumFields" style="display:none;">
+          <label for="requestRole">I am a…</label>
+          <select id="requestRole">
+            <option value="parent">Parent</option>
+            <option value="teacher">Teacher</option>
+            <option value="educator">Educator</option>
+            <option value="student">Student</option>
+            <option value="other">Other</option>
+          </select>
+          <label for="requestSubject">Subject</label>
+          <input type="text" id="requestSubject" maxlength="80" autocomplete="off" />
+          <label for="requestLevel">Level</label>
+          <select id="requestLevel">
+            <option value="6-8">Ages 6–8</option>
+            <option value="9-12">Ages 9–12</option>
+            <option value="13-17">Ages 13–17</option>
+            <option value="college">College</option>
+            <option value="adult">Adult</option>
+          </select>
+          <label for="requestGoal">What success looks like</label>
+          <textarea id="requestGoal" rows="3" maxlength="300"></textarea>
+          <label for="requestSourceLinks">Materials you already trust (optional — one web address per line, up to 3)</label>
+          <textarea id="requestSourceLinks" rows="3"></textarea>
+        </div>
+        <button type="button" class="secondary" id="requestSubmit">Send request</button>
+        <div class="test-line" id="requestLine"></div>
+        <label>Your requests</label>
+        <div id="requestList"></div>
+        <button type="button" class="secondary" id="accountLogout">Log out</button>
+        <label>Delete my account</label>
+        <div class="storage-note">
+          Deleting your account permanently erases your profile, your
+          buddy's memories and conversations, saved keys, connected
+          computers, and credit grants. This cannot be undone.
+          Deleting your account does NOT cancel a subscription — cancel
+          it in the App Store, Play Store, or Stripe first, or billing
+          continues.
+        </div>
+        <button type="button" class="secondary" id="accountDeleteOpen">Delete my account</button>
+        <div id="accountDeleteConfirm" style="display:none;">
+          <label for="accountDeletePassword">Your password</label>
+          <input type="password" id="accountDeletePassword" autocomplete="current-password" />
+          <label for="accountDeleteType">Type DELETE to confirm</label>
+          <input type="text" id="accountDeleteType" autocomplete="off" />
+          <button type="button" class="secondary" id="accountDeleteConfirmBtn">Permanently delete my account</button>
+          <button type="button" class="secondary" id="accountDeleteCancel">Keep my account</button>
+        </div>
+        <div class="test-line" id="accountDeleteLine"></div>
+      </div>
     </div>
 
     <div class="row">
@@ -695,6 +925,7 @@
   </div>
   <div class="status" id="status">TAP TO START</div>
   <div class="transcript" id="transcript"></div>
+  <button class="report-answer-btn" id="reportAnswerBtn" type="button">Report this answer</button>
 
   <!-- Footer disclosure -->
   <div class="footer-note" id="footerNote"></div>
@@ -704,6 +935,54 @@
   <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
 
   <script>
+    // ── Store session identity (hosted mode) ─────────────────────────
+    // public/onboarding.js stores the account session in localStorage
+    // under tb_token / tb_tenant at signup/login. The legacy surfaces in
+    // this file (the prime call, apiFetch, the in-call capture below)
+    // predate accounts and sent NO Authorization header — in hosted
+    // mode (SESSION_SECRET set server-side) prime-agent's requireTenant
+    // 401'd, so the widget silently ran the agent's DEFAULT prompt and
+    // none of the user's memories ever loaded. These helpers attach the
+    // session wherever one exists. Signed out / legacy deployment: no
+    // token in storage, every helper degrades to the pre-accounts
+    // behavior, byte for byte.
+    function tbSessionToken() {
+      try { return localStorage.getItem('tb_token') || null; } catch { return null; }
+    }
+    function tbSessionTenantId() {
+      try { return localStorage.getItem('tb_tenant') || null; } catch { return null; }
+    }
+    function tbAuthHeaders() {
+      const t = tbSessionToken();
+      return t ? { Authorization: `Bearer ${t}` } : {};
+    }
+    // ── Content reporting (store-readiness gap 2) ──────────────────
+    // POST one report of AI-generated content to /api/safety-report
+    // (server/handlers/safety-report.js). The server is no oracle: a
+    // signed-in POST always answers { ok: true }, so the callers show
+    // the same thanks either way. Resolves true when the server
+    // answered ok, false on any failure — never throws.
+    const REPORT_THANKS_TEXT = "Thanks — reported. We'll review it.";
+    async function postSafetyReport(body) {
+      try {
+        const res = await fetch('/api/safety-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => null);
+        return res.status === 200 && data?.ok === true;
+      } catch { return false; }
+    }
+    // The identity the in-call surfaces carry (the widget's user_id
+    // dynamic variable, conversation-turn, extract-memories): the
+    // tenant id when logged in — prime-agent's contract is that hosted
+    // tool/capture calls resolve the tenant from it — else the legacy
+    // localStorage user id, unchanged.
+    function tbCallUserId() {
+      return tbSessionTenantId() || currentUser?.userId || localStorage.getItem('thinkinbuddy_user_id') || null;
+    }
+
     // Poll for newly generated images every 3 seconds while widget is active
     let lastImageTimestamp = 0;
     let imagePoller = null;
@@ -712,9 +991,15 @@
       if (imagePoller) return;
       imagePoller = setInterval(async () => {
         try {
-          // userId stays default ('anonymous') because the ElevenLabs agent
-          // tool schema doesn't pass one yet. Both sides agree on the default.
-          const res = await fetch(`/api/latest-image?since=${lastImageTimestamp}`);
+          // Present the account session when one exists: in hosted
+          // mode the server scopes this poller to the SESSION tenant's
+          // Blob prefix (the identity the generation handlers now
+          // store under), never to a caller-supplied id. Signed out /
+          // legacy: tbAuthHeaders() is empty and the request is the
+          // pre-accounts one, byte for byte.
+          const res = await fetch(`/api/latest-image?since=${lastImageTimestamp}`, {
+            headers: { ...tbAuthHeaders() },
+          });
           const data = await res.json();
           if (data.url && data.timestamp && data.timestamp > lastImageTimestamp) {
             lastImageTimestamp = data.timestamp;
@@ -737,7 +1022,10 @@
       if (videoPoller) return;
       videoPoller = setInterval(async () => {
         try {
-          const res = await fetch(`/api/latest-video?since=${lastVideoTimestamp}`);
+          // Same session presentation as the image poller above.
+          const res = await fetch(`/api/latest-video?since=${lastVideoTimestamp}`, {
+            headers: { ...tbAuthHeaders() },
+          });
           const data = await res.json();
           if (data.url && data.timestamp && data.timestamp > lastVideoTimestamp) {
             lastVideoTimestamp = data.timestamp;
@@ -757,12 +1045,14 @@
     // generated at onboarding). Both extract-memories and prime-agent now use
     // this real ID, so each user's memory is isolated in their own Blob prefix.
     //
-    // REMAINING LIMITATION: The ElevenLabs save_memory tool posts to
-    // /api/memory without a userId in its body, so that path still falls back
-    // to 'troy' (server-side default in memory.js:53). Fix requires adding
-    // userId to the save_memory tool's parameter schema in the ElevenLabs
-    // agent config — out of scope for this change.
-    // TODO: plumb userId through the ElevenLabs save_memory tool params.
+    // TOOL IDENTITY (safety wiring bite 4): every identity-bearing
+    // ElevenLabs tool — save_memory included — must carry a required
+    // userId body param bound to {{user_id}} (see
+    // scripts/update-agent-config.mjs, which patches and verifies the
+    // bindings, and docs/elevenlabs-template/tools.md). Whether the
+    // DEPLOYED agent's schemas match that contract is UNVERIFIED
+    // until the provisioning script is run and read back under a
+    // separate authorization.
     //
     // IMPORTANT: the ElevenLabs widget bundle (elevenlabs.io/convai-widget/index.js)
     // does NOT dispatch `elevenlabs-convai:call-ended` or `:call-started` events —
@@ -795,10 +1085,10 @@
       try {
         fetch('/api/conversation-turn', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
           body: JSON.stringify({
             sessionId: liveSessionId,
-            userId: currentUser.userId,
+            userId: tbCallUserId() || currentUser.userId,
             conversationId: lastConversationId,
             turnIndex: liveTurnIndex++,
             role, content, raw,
@@ -811,8 +1101,97 @@
     // Per-session system prompt for the CURRENT user, built server-side by
     // /api/prime-agent from their own memories. Applied as a per-session
     // override on the widget's elevenlabs-convai:call event so user A's facts
-    // never reach user B's session. Set in initApp(); null until primed.
+    // never reach user B's session. Set by primeSessionPrompt(); null until primed.
     let sessionPromptOverride = null;
+
+    // ─── Profile lifecycle (bite 5): the prime follows the profile ──
+    // prime-agent derives the prompt's safety layers from the tenant
+    // profile at prime time, so a prompt primed from an older profile
+    // state is a stale safety decision. public/onboarding.js publishes
+    // a 'tb-profile-changed' event after every SUCCESSFUL profile/PIN
+    // write; each publication bumps profileChangeGeneration and kicks
+    // a re-prime, and the :call handler applies the cached override
+    // only when its generation still matches — a stale override is
+    // never applied to a new call. A FAILED profile write publishes
+    // nothing, so the previous prime stays valid and untouched (no
+    // half-state). Before any profile completes, prime-agent's own
+    // safe default is what a prime returns, so an incomplete profile
+    // still primes fail-closed.
+    let profileChangeGeneration = 0;
+    let sessionPromptGeneration = -1; // generation sessionPromptOverride was primed from
+    let sessionPrimeContext = null;   // { buddyName, userName, userId, mode }, set by initApp
+    let sessionReprimeInFlight = null;
+
+    // The ACTIVE profile's id (bite 9b), read through the window
+    // global public/onboarding.js maintains — it owns profile state;
+    // this script shares no module scope with it, so the getter is
+    // the bridge (the same direction tb-profile-changed travels).
+    // Null when no profile is known (legacy mode, pre-sign-in): the
+    // prime request then carries exactly what it carried before
+    // profiles existed. The id NAMES the profile the session runs
+    // under, in the prime request and the widget's dynamic
+    // variables; it never SELECTS one — the server resolves safety
+    // from its own active pointer, so a stale or forged id here
+    // cannot move a session onto a sibling profile.
+    function sessionProfileId() {
+      try { return typeof window.tbActiveProfileId === 'function' ? window.tbActiveProfileId() : null; }
+      catch { return null; }
+    }
+
+    async function primeSessionPrompt() {
+      if (!sessionPrimeContext) return;
+      const gen = profileChangeGeneration;
+      sessionPromptOverride = null;
+      sessionPromptGeneration = -1;
+      try {
+        const primeProfileId = sessionProfileId();
+        const primeRes = await fetch('/api/prime-agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
+          body: JSON.stringify(primeProfileId ? { ...sessionPrimeContext, profileId: primeProfileId } : sessionPrimeContext),
+        });
+        const p = await primeRes.json();
+        if (p?.ok && typeof p.prompt === 'string') {
+          if (gen === profileChangeGeneration) {
+            sessionPromptOverride = p.prompt;
+            sessionPromptGeneration = gen;
+          } else {
+            // A newer profile change landed while this prime was in
+            // flight; its generation is the authority, so re-read
+            // rather than install a read of the in-between state.
+            return primeSessionPrompt();
+          }
+        }
+        console.log('[CapstoneFoundry] primed — memories:', p.memoryCount, 'buddy:', p.buddyName, 'user:', p.userId, 'promptLen:', sessionPromptOverride?.length || 0);
+      } catch (e) { console.warn('[CapstoneFoundry] prime failed', e); }
+    }
+
+    // The only prompt a new call may start from: the cached override
+    // when it was primed from the CURRENT profile generation, else
+    // null (never a stale prime). The :call handler applies exactly
+    // this function's result.
+    function currentSessionPrompt() {
+      return sessionPromptGeneration === profileChangeGeneration ? sessionPromptOverride : null;
+    }
+
+    // Awaitable re-prime (bite 5): concurrent callers share one
+    // in-flight prime instead of racing duplicate fetches.
+    function reprimeSessionPrompt() {
+      if (!sessionReprimeInFlight) {
+        sessionReprimeInFlight = primeSessionPrompt().finally(() => { sessionReprimeInFlight = null; });
+      }
+      return sessionReprimeInFlight;
+    }
+    window.reprimeSessionPrompt = reprimeSessionPrompt;
+
+    window.addEventListener('tb-profile-changed', () => {
+      profileChangeGeneration += 1;
+      // Refresh immediately, so by the time the user next taps call
+      // the override is normally already the new profile's prime.
+      // Until it lands, the generation gate withholds the stale
+      // override rather than starting a call from an old decision.
+      reprimeSessionPrompt();
+    });
 
     function fireExtractMemories(reason) {
       if (extractFired) { console.log('[MEM-HB] fire skipped — already fired:', reason); return; }
@@ -827,8 +1206,8 @@
       try {
         fetch('/api/extract-memories', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentUser.userId, conversationId: lastConversationId }),
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
+          body: JSON.stringify({ userId: tbCallUserId() || currentUser.userId, conversationId: lastConversationId }),
           keepalive: true,
         });
         console.log('[MEM-HB] extract-memories POSTed:', reason, lastConversationId);
@@ -846,6 +1225,10 @@
       console.log('[MEM-HB] :call handler running — has detail?', !!e.detail, 'has config?', !!e.detail?.config);
       startImagePoller();
       startVideoPoller();
+      // Relay bite R1: a widget call is a live voice surface too —
+      // the second script block's relay poll runs while this is set,
+      // and cfg.onMessage below mirrors user turns into the relay.
+      widgetCallActive = true;
       extractFired = false;
       lastConversationId = null;
       liveSessionId = crypto.randomUUID();
@@ -863,11 +1246,18 @@
       // (overrides.agent.prompt: { prompt?: string }) + lib.iife.js:457-461
       // (config.overrides.agent.prompt -> conversation_config_override.agent.prompt).
       // REQUIRES "Overrides → System prompt" enabled in the agent's Security tab.
-      if (sessionPromptOverride) {
+      const promptForCall = currentSessionPrompt();
+      if (promptForCall) {
         cfg.overrides = cfg.overrides || {};
         cfg.overrides.agent = cfg.overrides.agent || {};
-        cfg.overrides.agent.prompt = { ...(cfg.overrides.agent.prompt || {}), prompt: sessionPromptOverride };
-        console.log('[MEM-HB] applied per-session prompt override — len:', sessionPromptOverride.length);
+        cfg.overrides.agent.prompt = { ...(cfg.overrides.agent.prompt || {}), prompt: promptForCall };
+        console.log('[MEM-HB] applied per-session prompt override — len:', promptForCall.length);
+      } else if (sessionPromptOverride) {
+        // Bite 5: the cached prompt was primed before the latest
+        // profile change — a stale safety decision. It is withheld,
+        // never applied; the re-prime the change kicked lands for
+        // the next call.
+        console.warn('[MEM-HB] withheld a stale session prompt override (profile changed since it was primed) — agent will use its default prompt for this call');
       } else {
         console.warn('[MEM-HB] no sessionPromptOverride set — agent will use its default (non-personalized) prompt');
       }
@@ -875,17 +1265,25 @@
       // Expose this user's id to the agent's tools as a dynamic variable.
       // SDK ships this as dynamic_variables on the session (verified:
       // @elevenlabs/client lib.iife.js:472 `overridesEvent.dynamic_variables`).
-      // DASHBOARD STEP REQUIRED: edit the agent's `save_memory` webhook tool
-      // (Agent → Tools → save_memory) to add a `userId` body param bound to
-      // {{user_id}} so in-call saves post to THIS user's prefix instead of
-      // /api/memory's now-removed 'troy' default. Until that schema edit ships,
-      // in-call save_memory calls will 400 (safe failure) rather than leak.
+      // TOOL SCHEMA REQUIREMENT: every identity-bearing tool (save_memory,
+      // recall_memory, the media tools, set_alarm) must declare a required
+      // `userId` body param bound to {{user_id}}, so in-call tools act on
+      // THIS tenant's identity. scripts/update-agent-config.mjs applies and
+      // verifies those bindings; the deployed agent's readback is still
+      // UNVERIFIED (see the TOOL IDENTITY note above). A tool missing the
+      // binding fails closed server-side in hosted mode rather than leaking
+      // into a default identity.
       // Agent tools declare {{user_id}}; ElevenLabs closes the call (1008
       // "Missing required dynamic variables") if it is absent, so always send one.
       {
-        let uid = currentUser?.userId || localStorage.getItem('thinkinbuddy_user_id');
+        let uid = tbCallUserId();
         if (!uid) { uid = 'guest-' + crypto.randomUUID(); localStorage.setItem('thinkinbuddy_user_id', uid); }
-        cfg.dynamicVariables = { ...(cfg.dynamicVariables || {}), user_id: uid };
+        // The active profile rides beside user_id (bite 9b): the
+        // session names the profile it runs under. Like the prime
+        // request's profileId, it is a name, not a selector — the
+        // server resolves safety from its own active pointer.
+        const pid = sessionProfileId();
+        cfg.dynamicVariables = { ...(cfg.dynamicVariables || {}), user_id: uid, ...(pid ? { profile_id: pid } : {}) };
         console.log('[MEM-HB] set dynamicVariables.user_id for in-call tools');
       }
 
@@ -935,12 +1333,24 @@
           document.dispatchEvent(new CustomEvent('thinkinbuddy:turn', {
             detail: { role: turnRole === 'user' ? 'user' : 'assistant', content: turnContent },
           }));
+          // RELAY (bite R1): what the user says to the buddy also
+          // reaches their paired computer — the same mirroring the
+          // browser-voice path has always done in sendToThinkinBuddy.
+          // Before this hook the widget path never touched the relay
+          // at all, so a spoken "spin up a landing page" reached
+          // ElevenLabs and died there. Agent turns are NOT mirrored —
+          // the desktop hears the user, not the buddy talking to
+          // itself. Fire and forget: relaySend never throws and
+          // surfaces its own failures, so a dead relay can never
+          // break turn capture.
+          if (turnRole === 'user') relaySend(turnContent);
         }
         if (idleTimer) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           console.log('[MEM-HB] idle timer expired — firing extract-memories');
           stopImagePoller();
           stopVideoPoller();
+          widgetCallActive = false;
           fireExtractMemories('idle-timeout');
         }, IDLE_MS);
         if (typeof userOnMessage === 'function') try { userOnMessage(msg); } catch {}
@@ -950,6 +1360,7 @@
         console.log('[MEM-HB] onDisconnect fired — firing extract-memories');
         stopImagePoller();
         stopVideoPoller();
+        widgetCallActive = false;
         fireExtractMemories('disconnect');
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-ended'));
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
@@ -977,6 +1388,7 @@
       console.log('[MEM-HB] pagehide (teardown) — firing extract-memories');
       stopImagePoller();
       stopVideoPoller();
+      widgetCallActive = false;
       fireExtractMemories('pagehide');
     });
 
@@ -1028,6 +1440,7 @@
     const onboardingEl = document.getElementById('onboarding');
     const onboardNameEl = document.getElementById('onboardName');
     const onboardBuddyNameEl = document.getElementById('onboardBuddyName');
+    const onboardAiConsentEl = document.getElementById('onboardAiConsent');
     const onboardConsentEl = document.getElementById('onboardConsent');
     const onboardSubmitEl = document.getElementById('onboardSubmit');
 
@@ -1053,12 +1466,19 @@
     function completeOnboarding() {
       const name = onboardNameEl.value.trim();
       if (!name) { onboardNameEl.focus(); return; }
-      const buddyName = onboardBuddyNameEl.value.trim() || 'ThinkinBuddy';
+      if (!onboardAiConsentEl.checked) {
+        document.getElementById('onboardAiConsentHint').style.display = 'block';
+        onboardAiConsentEl.focus();
+        return;
+      }
+      const buddyName = onboardBuddyNameEl.value.trim() || 'Capstone Foundry';
       const consent = onboardConsentEl.checked;
       const user = {
         userId: genUserId(),
         name,
         buddyName,
+        consentAiProcessing: true,
+        consentAiDate: new Date().toISOString(),
         consentResearch: consent,
         consentDate: consent ? new Date().toISOString() : null,
         firstVisit: true,
@@ -1080,14 +1500,14 @@
 
     function refreshChrome() {
       if (!currentUser) return;
-      const buddyName = currentUser.buddyName || 'ThinkinBuddy';
+      const buddyName = currentUser.buddyName || 'Capstone Foundry';
       // Update title to show the buddy's name
       document.querySelector('.title').textContent = buddyName.toUpperCase();
       const mode = window.thinkinBuddyMode || 'default';
       const modeLabel =
         mode === 'spanish_tutor' ? ' · 🇪🇸 ESPAÑOL TUTOR' :
         mode === 'feynman_module1' ? ' · 🧠 FEYNMAN MODULE 1' : '';
-      subtitleEl.textContent = `YOUR THINKING PARTNER — ${currentUser.name.toUpperCase()}${modeLabel}`;
+      subtitleEl.textContent = `DISCOVER WHAT'S NEXT — ${currentUser.name.toUpperCase()}${modeLabel}`;
       const tutorToggleHtml =
         mode === 'spanish_tutor'
           ? `<a id="tutorOffLink">Switch back to regular buddy</a> · `
@@ -1173,7 +1593,7 @@
     function buildExportText() {
       const date   = new Date().toISOString().slice(0, 10);
       const userName = currentUser?.name || 'Session';
-      const buddyName = currentUser?.buddyName || 'ThinkinBuddy';
+      const buddyName = currentUser?.buddyName || 'Capstone Foundry';
       let txt = `${buddyName.toUpperCase()} SESSION — ${userName} — ${date}\n`;
       txt += `${exportProvenance()}\n\n`;
       for (const msg of currentHistory) {
@@ -1234,7 +1654,7 @@
         try {
           // Try sharing as a .txt file (works on Android Chrome ≥ 89, iOS ≥ 15.1)
           if (navigator.canShare) {
-            const file = new File([txt], `thinkinbuddy-${userName.toLowerCase()}-${date}.txt`, { type: 'text/plain' });
+            const file = new File([txt], `capstonefoundry-${userName.toLowerCase()}-${date}.txt`, { type: 'text/plain' });
             if (navigator.canShare({ files: [file] })) {
               await navigator.share({ title: shareTitle, files: [file] });
               return;
@@ -1249,7 +1669,7 @@
         }
       }
       // Fallback: download .txt
-      triggerDownload(txt, `thinkinbuddy-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
+      triggerDownload(txt, `capstonefoundry-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
       alert('Share not supported in this browser — downloaded as .txt instead.');
     });
 
@@ -1284,14 +1704,14 @@
     document.getElementById('exportMdBtn').addEventListener('click', () => {
       exportMenuEl.classList.add('hidden');
       const { md, userName, date } = buildMarkdown();
-      triggerDownload(md, `thinkinbuddy-${userName.toLowerCase()}-${date}.md`, 'text/markdown');
+      triggerDownload(md, `capstonefoundry-${userName.toLowerCase()}-${date}.md`, 'text/markdown');
     });
 
     // ─── 4. Plain text download ───────────────────────────────────────
     document.getElementById('exportTxtBtn').addEventListener('click', () => {
       exportMenuEl.classList.add('hidden');
       const { txt, userName, date } = buildExportText();
-      triggerDownload(txt, `thinkinbuddy-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
+      triggerDownload(txt, `capstonefoundry-${userName.toLowerCase()}-${date}.txt`, 'text/plain');
     });
 
     // ─── 5. Copy to clipboard ─────────────────────────────────────────
@@ -1353,6 +1773,33 @@
       currentHistory.push({ role, content });
       saveHistory(currentHistory);
     });
+
+    // ── "Report this answer" (store-readiness gap 2) ─────────────
+    // Beside the transcript: reports the LAST assistant answer the
+    // client holds (currentHistory) as an excerpt. With no answer
+    // yet there is nothing to report, and the button says so
+    // instead of sending an empty report the server would refuse.
+    const reportAnswerBtn = document.getElementById('reportAnswerBtn');
+    if (reportAnswerBtn) {
+      reportAnswerBtn.addEventListener('click', async () => {
+        if (reportAnswerBtn.disabled) return;
+        const lastAnswer = [...currentHistory].reverse()
+          .find((m) => m && m.role === 'assistant' && typeof m.content === 'string' && m.content.trim());
+        if (!lastAnswer) {
+          reportAnswerBtn.textContent = 'Nothing to report yet';
+          setTimeout(() => { reportAnswerBtn.textContent = 'Report this answer'; }, 2000);
+          return;
+        }
+        reportAnswerBtn.disabled = true;
+        const ok = typeof postSafetyReport === 'function'
+          ? await postSafetyReport({ kind: 'answer', excerpt: lastAnswer.content })
+          : false;
+        reportAnswerBtn.textContent = ok
+          ? REPORT_THANKS_TEXT
+          : 'Could not send the report — try again.';
+        if (!ok) reportAnswerBtn.disabled = false;
+      });
+    }
 
     // ══ BACKGROUND AUDIO ("pocket mode") ════════════════════════════════
     // Goal: lock the screen, put the phone in a pocket, keep talking over
@@ -1447,11 +1894,11 @@
 
       publishMetadata() {
         if (!('mediaSession' in navigator)) return;
-        const buddy = currentUser?.buddyName || 'ThinkinBuddy';
+        const buddy = currentUser?.buddyName || 'Capstone Foundry';
         navigator.mediaSession.metadata = new MediaMetadata({
           title: `${buddy} — listening`,
           artist: currentUser?.name ? `Talking with ${currentUser.name}` : 'Voice session',
-          album: 'ThinkinBuddy',
+          album: 'Capstone Foundry',
           artwork: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }],
         });
         navigator.mediaSession.playbackState = 'playing';
@@ -1546,8 +1993,8 @@
         usedBy: 'brain (Grok)', brain: 'xai' },
       { id: 'ELEVENLABS_API_KEY', label: 'ElevenLabs',  hint: 'sk_…',
         usedBy: 'voice list, speak endpoint, transcript fetch' },
-      { id: 'GOOGLE_API_KEY',     label: 'Google Imagen', hint: 'AIza…',
-        usedBy: 'Imagen image generation (not the free Gemini brain)' },
+      { id: 'GOOGLE_API_KEY',     label: 'Google Gemini Image', hint: 'AIza…',
+        usedBy: 'Gemini image generation (not the free Gemini brain)' },
       { id: 'REPLICATE_API_TOKEN',label: 'Replicate',   hint: 'r8_…',
         usedBy: 'Flux image generation' },
       { id: 'RUNWAY_API_KEY',     label: 'Runway',      hint: 'key_…',
@@ -1680,12 +2127,13 @@
       'memory':            TEXT_BRAIN_KEYS,
       'image':             ['OPENAI_API_KEY'],
       'image-flux':        ['REPLICATE_API_TOKEN', 'OPENAI_API_KEY'],
-      'image-imagen':      ['GOOGLE_API_KEY', 'OPENAI_API_KEY'],
+      'image-gemini':      ['GEMINI_API_KEY', 'OPENAI_API_KEY'],
       'video':             ['RUNWAY_API_KEY', 'OPENAI_API_KEY'],
       'video-runway':      ['RUNWAY_API_KEY', 'OPENAI_API_KEY'],
       'video-runway-veo':  ['RUNWAY_API_KEY'],
+      'video-omni':        ['GEMINI_API_KEY', 'OPENAI_API_KEY'],
+      'video-higgsfield':  ['HIGGSFIELD_API_KEY_ID', 'HIGGSFIELD_API_SECRET', 'OPENAI_API_KEY'],
       'video-heygen':      ['HEYGEN_API_KEY'],
-      'video-sora':        ['OPENAI_API_KEY'],
       'latest-video':      ['OPENAI_API_KEY'],
     };
 
@@ -1704,6 +2152,11 @@
         const model = loadBrainModel();
         if (model) headers['X-User-Model'] = model;
       }
+      // Hosted mode: ride the account session (tbSessionToken, first
+      // script block) so tenant-gated /api routes resolve THIS user.
+      // No token stored -> no header, exactly the pre-accounts behavior.
+      const sessionToken = tbSessionToken();
+      if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
       return fetch(url, { ...opts, headers });
     }
     window.thinkinBuddyApiFetch = apiFetch;
@@ -1856,7 +2309,7 @@
         }
         return;
       }
-      const sample = "Hi, I'm ThinkinBuddy. This is what I sound like.";
+      const sample = "Hi, I'm Capstone Foundry. This is what I sound like.";
       const elVoiceId = elVoiceSelectEl?.value || '';
 
       if (elVoiceId) {
@@ -1960,9 +2413,9 @@
 
       localStorage.setItem('thinkinbuddy_user_id', user.userId);
       localStorage.setItem('thinkinbuddy_user_name', user.name);
-      localStorage.setItem('thinkinbuddy_buddy_name', user.buddyName || 'ThinkinBuddy');
+      localStorage.setItem('thinkinbuddy_buddy_name', user.buddyName || 'Capstone Foundry');
 
-      const buddyName = user.buddyName || 'ThinkinBuddy';
+      const buddyName = user.buddyName || 'Capstone Foundry';
 
       // Prime the agent: fetch THIS user's per-session system prompt (built
       // server-side from their own Blob prefix) and stash it so the widget's
@@ -1984,33 +2437,22 @@
       else if (urlMode === 'feynman_module1' || urlParams.get('feynman') === '1') activeMode = 'feynman_module1';
       else if (storedMode === 'feynman_module1') activeMode = 'feynman_module1';
       window.thinkinBuddyMode = activeMode;
-      console.log('[ThinkinBuddy] active mode:', activeMode);
+      console.log('[CapstoneFoundry] active mode:', activeMode);
 
-      sessionPromptOverride = null;
-      try {
-        const primeRes = await fetch('/api/prime-agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            buddyName,
-            userName: user.name,
-            userId: user.userId,
-            mode: activeMode,
-          }),
-        });
-        const p = await primeRes.json();
-        if (p?.ok && typeof p.prompt === 'string') {
-          sessionPromptOverride = p.prompt;
-        }
-        console.log('[ThinkinBuddy] primed — memories:', p.memoryCount, 'buddy:', p.buddyName, 'user:', p.userId, 'promptLen:', sessionPromptOverride?.length || 0);
-      } catch (e) { console.warn('[ThinkinBuddy] prime failed', e); }
+      sessionPrimeContext = {
+        buddyName,
+        userName: user.name,
+        userId: user.userId,
+        mode: activeMode,
+      };
+      await primeSessionPrompt();
 
       // Create widget after agent is primed
       const mount = document.getElementById('widget-mount');
       if (mount) {
         const widget = document.createElement('elevenlabs-convai');
         widget.setAttribute('id', 'convai-widget');
-        widget.setAttribute('agent-id', 'agent_5301m50skfnvfza8bpkmjybc18z8');
+        widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
         mount.appendChild(widget);
       }
       document.body.classList.add('elevenlabs-mode');
@@ -2027,18 +2469,135 @@
     // video share #mediaArea — showing one hides the other so the orb area
     // doesn't get crowded.
     let lastMediaCheck = 0;
+
+    // ─── Fullscreen + cast helpers for the media overlays ──────────
+    // The live overlays are fixed inset-0 elements; on top of that we
+    // ask for the real Fullscreen API so a phone drops its browser
+    // chrome too. Everything here is feature-detected and try/caught:
+    // a fullscreen refusal or a missing cast API must never break
+    // media display.
+    function enterOverlayFullscreen(el) {
+      try {
+        if (!el || typeof document === 'undefined') return;
+        if (document.fullscreenElement) return;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (typeof req !== 'function') return;
+        const p = req.call(el);
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch {}
+    }
+
+    function exitOverlayFullscreen() {
+      try {
+        if (typeof document === 'undefined') return;
+        if (document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+          const p = document.exitFullscreen();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        }
+      } catch {}
+    }
+
+    // Cast route chooser — order matters: the native Remote Playback
+    // API (Chrome/Android) first, then Safari's AirPlay picker, then
+    // the share-this-public-URL fallback ("Watch on TV"). Generated
+    // media live at permanent public Blob URLs, so the fallback hands
+    // the TV a link it can open directly. Returns null when there is
+    // nothing to offer (no media URL) — the signal to not render a
+    // cast button at all.
+    function pickCastRoute(videoEl, url) {
+      if (videoEl && videoEl.remote) return 'remote';
+      if (videoEl && typeof videoEl.webkitShowPlaybackTargetPicker === 'function') return 'airplay';
+      if (url) return 'share';
+      return null;
+    }
+
+    // "Watch on TV" fallback: hand the media's public URL to the
+    // system share sheet, or copy it for pasting into the TV's
+    // browser. Returns which path was taken ('share-sheet' /
+    // 'copied' / null).
+    function shareMediaToTv(url, labelEl) {
+      if (!url) return null;
+      try {
+        if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+          const p = navigator.share({ title: 'Capstone Foundry media', url });
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+          return 'share-sheet';
+        }
+      } catch {}
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          const p = navigator.clipboard.writeText(url);
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+          if (labelEl) {
+            const old = labelEl.textContent;
+            labelEl.textContent = 'Link copied — open it on your TV';
+            setTimeout(() => { labelEl.textContent = old; }, 2500);
+          }
+          return 'copied';
+        }
+      } catch {}
+      return null;
+    }
+
+    function castButtonClick(videoEl, url, labelEl) {
+      const route = pickCastRoute(videoEl, url);
+      if (!route) return null;
+      try {
+        if (route === 'remote') {
+          const p = videoEl.remote.prompt();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } else if (route === 'airplay') {
+          videoEl.webkitShowPlaybackTargetPicker();
+        } else {
+          return shareMediaToTv(url, labelEl) || route;
+        }
+      } catch {}
+      return route;
+    }
+
+    // Show/hide + wire a cast/TV button for the media identified by
+    // `url`. `videoEl` is the <video> that would cast (null for still
+    // images — they can only take the share route). With the Remote
+    // Playback route we also register watchAvailability interest, the
+    // documented pre-step before prompt(). No route → button hidden.
+    function wireMediaCastButton(btn, videoEl, url) {
+      if (!btn) return null;
+      const route = pickCastRoute(videoEl, url);
+      if (!route) { btn.style.display = 'none'; btn.onclick = null; return null; }
+      btn.style.display = 'flex';
+      if (route === 'remote') {
+        try {
+          const r = videoEl.remote;
+          if (r && typeof r.watchAvailability === 'function') {
+            const p = r.watchAvailability(() => {});
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+          }
+        } catch {}
+      }
+      btn.onclick = () => castButtonClick(videoEl, url, btn);
+      return route;
+    }
+    // ─── end media display helpers ───
+
     function showMedia(url, caption) {
       const area = document.getElementById('mediaArea');
       const img = document.getElementById('mediaImg');
       const vid = document.getElementById('mediaVideo');
       const cap = document.getElementById('mediaCaption');
+      const btn = document.getElementById('mediaCloseBtn');
+      const castBtn = document.getElementById('mediaCastBtn');
       if (!area || !img) return;
       if (vid) { try { vid.pause(); } catch {} vid.style.display = 'none'; vid.src = ''; }
       img.src = url;
-      img.style.display = 'block';
-      area.style.display = 'flex';
-      area.style.flexDirection = 'column';
-      area.style.alignItems = 'center';
+      // Full-viewport overlay — the same pattern showVideo uses, so a
+      // live image fills the phone screen instead of sitting in the
+      // small card. Tap the image (or ✕) to close.
+      area.style.cssText = 'display:flex; position:fixed; inset:0; width:100vw; height:100vh; max-width:none; margin:0; padding:0; z-index:50; background:#000; align-items:center; justify-content:center;';
+      img.style.cssText = 'display:block; width:100vw; height:100vh; object-fit:contain; border-radius:0; border:none; background:#000; cursor:pointer;';
+      if (btn) btn.style.cssText = 'position:fixed; top:16px; right:16px; width:44px; height:44px; border-radius:50%; border:1px solid rgba(0,212,255,0.6); background:rgba(0,0,0,0.85); color:#00d4ff; font-size:1.2rem; font-family:monospace; cursor:pointer; z-index:51; display:flex; align-items:center; justify-content:center; padding:0;';
+      img.onclick = () => hideMedia();
+      wireMediaCastButton(castBtn, null, url);
+      enterOverlayFullscreen(area);
       if (cap) cap.textContent = '';
     }
 
@@ -2048,6 +2607,7 @@
       const vid = document.getElementById('mediaVideo');
       const cap = document.getElementById('mediaCaption');
       const btn = document.getElementById('mediaCloseBtn');
+      const castBtn = document.getElementById('mediaCastBtn');
       if (!area || !vid) return;
       if (img) { img.style.display = 'none'; img.src = ''; }
       vid.src = url;
@@ -2056,6 +2616,8 @@
       vid.style.cssText = 'display:block; width:100vw; height:100vh; object-fit:contain; border-radius:0; border:none; background:#000;';
       if (btn) btn.style.cssText = 'position:fixed; top:16px; right:16px; width:44px; height:44px; border-radius:50%; border:1px solid rgba(0,212,255,0.6); background:rgba(0,0,0,0.85); color:#00d4ff; font-size:1.2rem; font-family:monospace; cursor:pointer; z-index:51; display:flex; align-items:center; justify-content:center; padding:0;';
       try { vid.play().catch(() => {}); } catch {}
+      wireMediaCastButton(castBtn, vid, url);
+      enterOverlayFullscreen(area);
       if (cap) cap.textContent = '';
     }
 
@@ -2065,8 +2627,11 @@
       const vid = document.getElementById('mediaVideo');
       const cap = document.getElementById('mediaCaption');
       const btn = document.getElementById('mediaCloseBtn');
+      const castBtn = document.getElementById('mediaCastBtn');
+      exitOverlayFullscreen();
+      if (castBtn) { castBtn.style.display = 'none'; castBtn.onclick = null; }
       if (area) area.style.cssText = 'display:none; z-index:2; max-width:340px; width:90%; margin-top:20px; position:relative;';
-      if (img) { img.style.display = 'none'; img.src = ''; }
+      if (img) { img.style.cssText = 'width:100%; border-radius:12px; border:1px solid rgba(0,212,255,0.3); display:none;'; img.src = ''; img.onclick = null; }
       if (vid) { try { vid.pause(); } catch {} vid.style.cssText = 'width:100%; border-radius:12px; border:1px solid rgba(0,212,255,0.3); display:none;'; vid.src = ''; }
       if (btn) btn.style.cssText = 'position:absolute; top:-10px; right:-10px; width:32px; height:32px; border-radius:50%; border:1px solid rgba(0,212,255,0.5); background:rgba(0,0,0,0.85); color:#00d4ff; font-size:1rem; font-family:monospace; cursor:pointer; z-index:3; display:flex; align-items:center; justify-content:center; padding:0;';
       if (cap) cap.textContent = '';
@@ -2137,7 +2702,7 @@
         if (pick) utter.voice = pick;
 
         isSpeaking = true;
-        setStatus('THINKINBUDDY SPEAKING', 'speaking');
+        setStatus('CAPSTONE FOUNDRY SPEAKING', 'speaking');
         utter.onend = () => {
           isSpeaking = false;
           try { recognition.stop(); } catch(e) {}
@@ -2193,36 +2758,122 @@
       // cannot claim to be the desktop.
       let relayCursor = null;
 
-      // Send one line to the desktop. Never throws — offline is normal in a car
-      // and the conversation has to carry on regardless.
+      // True while an ElevenLabs widget call is live (set and cleared
+      // by the first script block's :call wiring). The poll below runs
+      // while EITHER voice surface is live: the browser-voice orb sets
+      // sessionActive, a widget call sets this. Before relay bite R1
+      // only sessionActive gated the poll, and the widget path never
+      // sent at all — on the hosted buddy the relay was wired to the
+      // browser-voice fallback only, and in hosted mode not even to
+      // that (see relaySend).
+      let widgetCallActive = false;
+
+      // ── Relay health, surfaced honestly (relay bite R1) ─────────────
+      // The first cut swallowed every outcome: the send's response was
+      // never read and the catch was empty, so a refused door (401
+      // sign-in, 403 not-on-plan, 502 unreachable) was indistinguishable
+      // from a delivered line — the user talked, the computer never
+      // heard, and nobody said so. Now every send/poll outcome lands
+      // here. A state CHANGE is what reaches the user: the first
+      // failure speaks its reason once (this app is used by voice, and
+      // the transcript line is hidden in widget mode), repeats stay
+      // quiet, and recovery is noted on the transcript.
+      let relayDown = false;
+      function relayReasonFor(status, data) {
+        const err = typeof data?.error === 'string' ? data.error : '';
+        if (status === 403 || err === 'helmian_connect_required') {
+          return "Helmian Connect is not on this account's plan";
+        }
+        if (status === 401) return 'the relay could not verify your sign-in';
+        if (status === 503) return 'the relay is not set up on the server yet';
+        if (status === 502) return 'the relay door is unreachable';
+        if (status) return `the relay returned ${status}`;
+        return 'the relay door is unreachable';
+      }
+      function relayHealthNote(ok, reason) {
+        if (ok) {
+          if (relayDown) {
+            relayDown = false;
+            transcriptEl.textContent = 'Helmian relay: connected again.';
+            console.log('[RELAY] recovered');
+          }
+          return;
+        }
+        console.warn('[RELAY] not delivered:', reason);
+        if (relayDown) return; // already announced — do not nag on every line
+        relayDown = true;
+        transcriptEl.textContent = 'Helmian relay: ' + reason + '.';
+        speak(`I can't reach your computer right now: ${reason}.`);
+      }
+
+      // Send one line to the desktop. Never throws — offline is normal
+      // in a car and the conversation has to carry on regardless — but
+      // it RETURNS the outcome and reports it through relayHealthNote:
+      // fire-and-forget about waiting, never about the result.
+      //
+      // IDENTITY (relay bite R1): the call goes through apiFetch, the
+      // same seam the chat call uses, so the account session
+      // (Authorization: Bearer <tb_token>) rides along. The bare fetch
+      // this used before carried no session at all: in hosted mode
+      // relay-proxy's requireTenant refused it 401 before the
+      // entitlement gate even ran, and the refusal was swallowed
+      // (above), so the hosted relay silently delivered nothing. The
+      // body also NAMES the active profile (sessionProfileId — the
+      // prime request's contract since bite 9b): a name, never a
+      // selector. relay-proxy forwards only the text, by design, and
+      // relay-http resolves the profile it stamps from its own active
+      // pointer.
       async function relaySend(text) {
         const body = String(text || '').trim();
-        if (!body || body.length > 4000) return;
+        if (!body) return { ok: false, reason: 'nothing to send' };
+        if (body.length > 4000) return { ok: false, reason: 'too long' };
         try {
-          await fetch('/api/relay-proxy', {
+          const pid = typeof sessionProfileId === 'function' ? sessionProfileId() : null;
+          const res = await apiFetch('/api/relay-proxy', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ body }),   // the field is `body`, not `text`
+            body: JSON.stringify(pid ? { body, profileId: pid } : { body }),   // the field is `body`, not `text`
           });
-        } catch (e) {}
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const reason = relayReasonFor(res.status, data);
+            relayHealthNote(false, reason);
+            return { ok: false, reason };
+          }
+          relayHealthNote(true);
+          return { ok: true };
+        } catch (e) {
+          const reason = relayReasonFor(0, null);
+          relayHealthNote(false, reason);
+          return { ok: false, reason };
+        }
       }
 
       // Poll for anything the desktop said. since=0 means "just woke up" and
       // deliberately returns no history — it hands back a cursor to read from.
+      // Same identity seam as relaySend; a refused poll surfaces the
+      // same way instead of reading as "the desktop said nothing."
       async function relayPoll() {
         try {
-          const r = await fetch(`/api/relay-proxy?since=${relayCursor ?? 0}`);
-          if (!r.ok) return;
+          const r = await apiFetch(`/api/relay-proxy?since=${relayCursor ?? 0}`);
+          if (!r.ok) {
+            const data = await r.json().catch(() => ({}));
+            relayHealthNote(false, relayReasonFor(r.status, data));
+            return;
+          }
           const d = await r.json();
+          relayHealthNote(true);
           if (typeof d.cursor === 'number') relayCursor = d.cursor;
           for (const m of d.messages || []) {
             if (m.from !== 'desktop') continue;
             transcriptEl.textContent = 'Helmion: ' + m.body;
             speak(m.body);
           }
-        } catch (e) {}
+        } catch (e) {
+          relayHealthNote(false, relayReasonFor(0, null));
+        }
       }
-      setInterval(() => { if (sessionActive) relayPoll(); }, 4000);
+      setInterval(() => { if (sessionActive || widgetCallActive) relayPoll(); }, 4000);
 
       async function sendToThinkinBuddy(userText) {
         currentHistory.push({ role: 'user', content: userText });
@@ -2235,7 +2886,19 @@
         relaySend(userText);
 
         try {
-          const res = await fetch(CONFIG.apiEndpoint, {
+          // Text-chat contract (safety wiring bite 6): the chat call
+          // goes through apiFetch to the deployment's own /api/chat —
+          // apiFetch attaches the account session (Authorization:
+          // Bearer <tb_token>) and this surface's user brain keys when
+          // they exist, and nothing cross-origin. The body carries NO
+          // safety fields: the server resolves safety from the account
+          // profile named by the session (server/handlers/chat.js), so
+          // this path can never reach a less-safe configuration than
+          // the voice path allows for the same profile. (This call used
+          // to fetch through a config object defined nowhere in the
+          // shipped client, so no request from here could ever be
+          // traced to /api/chat.)
+          const res = await apiFetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2248,8 +2911,17 @@
               }
             })
           });
-          const data = await res.json();
-          const reply = data.reply || 'Sorry, I had trouble with that.';
+          const data = await res.json().catch(() => ({}));
+          // The server speaks two refusal shapes (server/handlers/
+          // chat.js): reply-shaped — moderation refusals and its own
+          // failure messages arrive as { reply } and ARE the buddy's
+          // turn, spoken and kept in history; error-shaped — { error }
+          // refusals (401 Unauthorized, 402 credits_exhausted, ...)
+          // are NOT buddy speech, so they fall through to the
+          // connection-error path and never enter the history as an
+          // assistant turn.
+          if (!data.reply) throw new Error(data.error || `chat ${res.status}`);
+          const reply = data.reply;
           currentHistory.push({ role: 'assistant', content: reply });
           saveHistory(currentHistory);
           handleActions(reply);
@@ -2340,8 +3012,8 @@
           if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
               title: 'Talking with ' + (currentUser?.buddyName || 'Mark'),
-              artist: 'ThinkinBuddy',
-              album: 'ThinkinBuddy',
+              artist: 'Capstone Foundry',
+              album: 'Capstone Foundry',
             });
             navigator.mediaSession.playbackState = 'playing';
             // Wired to the real conversation. A lock-screen button that does
@@ -2430,6 +3102,8 @@
     const galleryLbVideo     = document.getElementById('galleryLightboxVideo');
     const galleryLbCaption   = document.getElementById('galleryLightboxCaption');
     const galleryLbCloseEl   = document.getElementById('galleryLightboxClose');
+    const galleryLbCastEl    = document.getElementById('galleryLightboxCast');
+    const galleryLbReportEl  = document.getElementById('galleryLightboxReport');
 
     let gallerySearchTimer = null;
 
@@ -2542,7 +3216,15 @@
     });
 
     // ── Lightbox ──────────────────────────────────────────────────
+    // The item the lightbox is currently showing — the report
+    // button below reports THIS item (store-readiness gap 2).
+    let lightboxItem = null;
     function openLightbox(item) {
+      lightboxItem = item;
+      if (galleryLbReportEl) {
+        galleryLbReportEl.disabled = false;
+        galleryLbReportEl.textContent = 'Report this';
+      }
       galleryLbImg.style.display   = 'none';
       galleryLbVideo.style.display = 'none';
       galleryLbImg.src             = '';
@@ -2561,16 +3243,47 @@
 
       galleryLbCaption.textContent = item.caption || '';
       galleryLightboxEl.classList.remove('hidden');
+
+      // Cast / "Watch on TV" for the lightbox media (helpers live in
+      // the main script block; typeof-guarded like showMedia above).
+      // Videos get the full remote → AirPlay → share chooser; still
+      // images only ever take the share route. No route, no button.
+      if (typeof wireMediaCastButton === 'function') {
+        wireMediaCastButton(galleryLbCastEl, item.type === 'video' ? galleryLbVideo : null, item.blobUrl || '');
+      } else if (galleryLbCastEl) {
+        galleryLbCastEl.style.display = 'none';
+      }
+      if (typeof enterOverlayFullscreen === 'function') enterOverlayFullscreen(galleryLightboxEl);
     }
 
     function closeLightbox() {
+      lightboxItem = null;
       galleryLightboxEl.classList.add('hidden');
       try { galleryLbVideo.pause(); } catch {}
       galleryLbVideo.src = '';
       galleryLbImg.src   = '';
+      if (galleryLbCastEl) { galleryLbCastEl.style.display = 'none'; galleryLbCastEl.onclick = null; }
+      if (typeof exitOverlayFullscreen === 'function') exitOverlayFullscreen();
     }
 
     galleryLbCloseEl.addEventListener('click', closeLightbox);
+    // "Report this" — flags the shown media for human review
+    // (store-readiness gap 2). The server answers { ok: true }
+    // either way, so the button thanks the reporter and disables
+    // itself until the next item opens.
+    if (galleryLbReportEl) {
+      galleryLbReportEl.addEventListener('click', async () => {
+        if (!lightboxItem || galleryLbReportEl.disabled) return;
+        galleryLbReportEl.disabled = true;
+        const ok = typeof postSafetyReport === 'function'
+          ? await postSafetyReport({ kind: 'media', media_url: lightboxItem.blobUrl || '' })
+          : false;
+        galleryLbReportEl.textContent = ok
+          ? REPORT_THANKS_TEXT
+          : 'Could not send the report — try again.';
+        if (!ok) galleryLbReportEl.disabled = false;
+      });
+    }
     galleryLightboxEl.addEventListener('click', (e) => {
       if (e.target === galleryLightboxEl) closeLightbox();
     });
@@ -2599,5 +3312,12 @@
       mo.observe(document.getElementById('mediaArea'), { attributes: true, attributeFilter: ['style'] });
     }
   </script>
+
+  <!-- Account sign-in + onboarding overlay (hosted accounts mode only;
+       populated by /onboarding.js, stays hidden in legacy single-user mode) -->
+  <div class="onboarding hidden" id="accountOverlay"></div>
+
+  <script type="module" src="/onboarding.js"></script>
+  <script type="module" src="/connect.js"></script>
 </body>
 </html>

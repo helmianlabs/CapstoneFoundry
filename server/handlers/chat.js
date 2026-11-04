@@ -6,8 +6,14 @@
 
 import { buildSystemPrompt } from '../../lib/personality.js';
 import { applyBrowserCors, requireBrowserFetch } from '../../lib/security.js';
-import { isAllowed } from '../../lib/moderation.js';
-import { completeText, hasTextLlm } from '../../lib/llm.js';
+import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
+import { getKey } from '../../lib/userKeys.js';
+import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
+import { completeText, hasTextLlm, keyForProvider, preferredBrain } from '../../lib/llm.js';
+import { resolveTenant, activeTenantId, tenantEnforced } from '../../lib/tenant.js';
+import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
+import { randomUUID } from 'node:crypto';
 
 // Payload ceilings. A single request cannot be made expensive: input tokens are
 // what cost money here (max_tokens caps only the OUTPUT at 400), so an
@@ -69,11 +75,55 @@ export default async function handler(req, res) {
     : Array.isArray(lastUser?.content)
       ? lastUser.content.map((b) => (typeof b === 'string' ? b : b?.text || '')).join(' ')
       : '';
-  const mod = await isAllowed(lastUserText, process.env.OPENAI_API_KEY);
+  // Safety posture for this request. Hosted mode (tenant enforcement
+  // on): the tenant PROFILE is the authority, resolved through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1, the same helper the wiring tests pin). The
+  // request's own safety fields are IGNORED in hosted mode, and when
+  // the profile cannot decide (no row, onboarding unfinished, or the
+  // profile read failed) the resolver's safe default applies safety —
+  // a hosted request is never served under request-claimed safety,
+  // and an enforced request with no resolvable tenant is rejected
+  // outright below. In compat mode the request plumbing decides
+  // exactly as before this bite (lib/safety.js
+  // safetyInputsFromRequest) and NO profile query is made at all.
+  // When safety applies, moderation fails CLOSED and the kid safety
+  // core joins the system prompt: unscreened never reaches the LLM.
+  const chatTenant = resolveTenant(req);
+  const chatTenantId = activeTenantId(chatTenant);
+  let safetyIn = safetyInputsFromRequest(req);
+  let safety = safetyDecision(safetyIn);
+  if (tenantEnforced()) {
+    if (!chatTenantId) return res.status(401).json({ error: 'Unauthorized' });
+    const resolved = await resolveProfileSafety(getProfileDb, chatTenantId);
+    safetyIn = resolved.inputs;
+    safety = resolved.decision;
+    if (resolved.safeDefault) {
+      console.error(`[chat] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+  const mod = await isAllowed(lastUserText, getKey(req, 'OPENAI_API_KEY'), { failClosed: safety.failClosed });
   if (!mod.allowed) {
     console.warn('[chat] user message blocked by moderation:', mod.reason);
     return res.status(200).json({ reply: "Let's keep it friendly — I'm not going there. What else is on your mind?" });
   }
+
+  // Usage metering (hosted model, lib/usage.js): enforced mode + a
+  // server (env) key for the chosen brain -> the tenant's monthly
+  // bucket must cover this message BEFORE the LLM call (402 when
+  // exhausted). If the request runs on the user's own key for their
+  // chosen brain (BYO), or in compat mode, meterGate skips metering
+  // entirely and makes no DB call.
+  const chatBrain = preferredBrain(req);
+  const chatReqId = randomUUID();
+  const chatEst = costFor('chat');
+  const chatGate = await meterGate({
+    db: getUsageDb,
+    tenantId: chatTenantId,
+    keySource: keyForProvider(req, chatBrain).source,
+    estCredits: chatEst,
+  });
+  if (!chatGate.allowed) return denyMetering(res, chatGate);
 
   const systemPrompt = buildSystemPrompt({
     buddyName: userContext?.buddyName,
@@ -82,6 +132,8 @@ export default async function handler(req, res) {
     includeToolsBlock: false,   // no webhook tools on this surface
     includeActionTags: true,    // text path uses ACTION tags as its "tools"
     mode,
+    safetyMode: safetyIn.safetyMode,
+    ageBand: safetyIn.ageBand,
   });
 
   try {
@@ -99,6 +151,23 @@ export default async function handler(req, res) {
         return `${role}: ${c}`;
       }).join('\n\n'),
     })) || 'No response.';
+
+    // The provider call succeeded — the cost is incurred even if the
+    // output gate below replaces the reply, so record it now.
+    await recordMetered(chatGate, getUsageDb, {
+      tenantId: chatTenantId, provider: chatBrain, action: 'chat',
+      units: 1, credits: chatEst, requestId: chatReqId,
+    });
+
+    // Output gate (audit §2 gap 4): screen the buddy's reply BEFORE it
+    // leaves — input-only moderation let anything the model produced
+    // through. A flagged reply is replaced with the standard refusal:
+    // never returned, never scanned for ACTION tags.
+    const outMod = await isAllowed(reply, getKey(req, 'OPENAI_API_KEY'), { failClosed: safety.failClosed });
+    if (!outMod.allowed) {
+      console.warn('[chat] assistant reply blocked by moderation:', outMod.reason);
+      return res.status(200).json({ reply: SAFE_REFUSAL });
+    }
 
     // If the buddy emitted [ACTION:SAVE_TASK:x], persist it silently.
     const taskMatch = reply.match(/\[ACTION:SAVE_TASK:([^\]]+)\]/);

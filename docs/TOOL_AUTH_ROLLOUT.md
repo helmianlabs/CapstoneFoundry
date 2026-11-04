@@ -40,15 +40,17 @@ breaks the voice assistant mid-call: `search_web`, `browse_url` and
 
 ## STEP 1 — add the header to three tools
 
-The pattern already works on this agent. Five tools carry it today and are
-calling successfully, so this is a copy of a known-good config, not a new idea:
+The pattern already works on this agent. Five tools carried it when probed
+and were calling successfully, so this is a copy of a known-good config, not
+a new idea — two of the five have since retired and are marked RETIRED in
+the table:
 
 | Tool | Tool ID | Sends `X-Webhook-Secret` today |
 |---|---|---|
 | `generate_image` | `tool_9001kt5rne5tf1v9449ghmvtd8tz` | YES — 64 chars |
 | `generate_image_flux` | `tool_1201kt61mgjzfcfsrq9efnx3hjvh` | YES |
-| `generate_image_imagen` | `tool_3701kt61mgjyfkzvymzs5p2ywn2e` | YES |
-| `generate_video_sora` | `tool_8101kt61mgjwfhssdj9q6zek7q5w` | YES |
+| `generate_image_imagen` | `tool_3701kt61mgjyfkzvymzs5p2ywn2e` | YES — **RETIRED 2026-08-17** (Google shut the Gemini-API Imagen path; handler deleted — do not provision) |
+| `generate_video_sora` | `tool_8101kt61mgjwfhssdj9q6zek7q5w` | YES — **RETIRED 2026-09-24** (OpenAI retired the Videos/Sora API; handler deleted — do not provision) |
 | `generate_video_runway` | `tool_3901kt61mgjxe0xaeae836s1gxg5` | YES |
 | **`search_web`** | **`tool_7701krkqhd7we908q6kv52mpvv96`** | **no — add it** |
 | **`browse_url`** | **`tool_0601krkqhd7tfe68whs7cjq1nt86`** | **no — add it** |

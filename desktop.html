@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>ThinkinBuddy — Desktop</title>
+  <title>Capstone Foundry — Desktop</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -62,7 +62,7 @@
 <body>
   <div class="corner tl"></div><div class="corner tr"></div>
   <div class="corner bl"></div><div class="corner br"></div>
-  <h1>THINKINBUDDY</h1>
+  <h1>CAPSTONE FOUNDRY</h1>
   <div class="sub">DESKTOP — CLYDE DIRECT</div>
   <div class="orb" id="orb">🎙️</div>
   <div class="status" id="status">TAP TO START</div>
@@ -70,7 +70,28 @@
   <div class="hint">TAP = START / STOP SESSION &nbsp;|&nbsp; TAP WHILE SPEAKING = INTERRUPT</div>
 
   <script>
-    const API = 'https://thinkinbuddy.vercel.app/api/chat';
+    // Text-chat contract (safety wiring bite 6): same-origin /api/chat
+    // on the deployment serving THIS page — never a hard-coded foreign
+    // host. The server resolves safety from the account PROFILE named
+    // by the session token; this page sends no safety fields of its
+    // own, because a client-supplied claim must never be able to reach
+    // a less-safe configuration than the profile allows.
+    const API = '/api/chat';
+
+    // Account session, read exactly the way public/onboarding.js
+    // stores it (localStorage tb_token at signup/login). This page is
+    // standalone and does not load onboarding.js, so it reads the same
+    // key itself — the same session, not a parallel one. No token
+    // stored -> no Authorization header, the pre-accounts behavior.
+    function chatSessionToken() {
+      try { return localStorage.getItem('tb_token') || null; } catch { return null; }
+    }
+    function chatHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = chatSessionToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return headers;
+    }
 
     const orb    = document.getElementById('orb');
     const status = document.getElementById('status');
@@ -121,7 +142,7 @@
       if (v) u.voice = v;
 
       speaking = true;
-      setState('talk', 'THINKINBUDDY SPEAKING');
+      setState('talk', 'CAPSTONE FOUNDRY SPEAKING');
 
       // Stop mic BEFORE speaking to kill feedback loop
       try { rec.stop(); } catch (_) {}
@@ -148,11 +169,19 @@
       try {
         const r = await fetch(API, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: chatHeaders(),
           body: JSON.stringify({ messages: history })
         });
-        const d = await r.json();
-        const reply = d.reply || 'No response.';
+        const d = await r.json().catch(() => ({}));
+        // The server speaks two refusal shapes (server/handlers/chat.js):
+        // reply-shaped — moderation refusals and its own failure
+        // messages arrive as { reply } and ARE the buddy's turn, spoken
+        // and kept in history; error-shaped — { error } refusals
+        // (401 Unauthorized, 402 credits_exhausted, ...) are NOT buddy
+        // speech, so they fall through to the connection-error path
+        // and never enter the history as an assistant turn.
+        if (!d.reply) throw new Error(d.error || `chat ${r.status}`);
+        const reply = d.reply;
         history.push({ role: 'assistant', content: reply });
         speak(reply, () => { if (active) setTimeout(startListening, 600); });
       } catch (e) {

@@ -1,6 +1,7 @@
-// api/video.js — short video generation for ThinkinBuddy.
+// api/video-runway-veo.js — short video generation for ThinkinBuddy.
 //
-// Uses Runway's API (gen4_turbo via /v1/text_to_video). Runway returns a task
+// Uses Runway's API (veo3 via /v1/text_to_video — Google Veo 3 hosted on
+// Runway's key and meter). Runway returns a task
 // ID; we poll /v1/tasks/{id} until status is SUCCEEDED, then download the MP4
 // and upload it to Vercel Blob so the widget can render it from a stable URL
 // and /api/latest-video can find it across cold starts.
@@ -11,6 +12,13 @@
 
 import { put } from '@vercel/blob';
 import { requireWebhookSecret } from '../../lib/security.js';
+import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
+import { getKey, resolveKey } from '../../lib/userKeys.js';
+import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
+import { randomUUID } from 'node:crypto';
+import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { saveMediaMemory } from '../../lib/mediaMemory.js';
 
 const RUNWAY_BASE = 'https://api.dev.runwayml.com/v1';
@@ -24,7 +32,10 @@ const POLL_TIMEOUT_MS = 270000; // 4.5 min — leaves headroom under our 300s ma
 
 const blobPrefix = (userId) => `thinkinbuddy/videos/${userId}/`;
 
-export const maxDuration = 300;
+// Declared in the standard config shape. NOTE: through the single
+// api/[...path].js router this export is informational only — the
+// effective value lives in the router's ROUTE_FUNCTION_CONFIG map.
+export const config = { maxDuration: 300 };
 
 export default async function handler(req, res) {
   // Shared-secret gate. Called server-to-server by the ElevenLabs agent
@@ -38,16 +49,66 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ result: 'prompt required' });
 
   const userId = req.body?.userId || req.query?.userId || 'anonymous';
+  // Tenant for metering (lib/tenant.js, bite-1b pattern): compat mode
+  // resolves ok with no scoping tenant and the metering block below is
+  // a no-op; enforced (hosted) mode requires a session token or the
+  // tenant id carried as userId.
+  const resolvedTenant = resolveHandlerTenant(req, userId);
+  if (!resolvedTenant.ok) {
+    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  }
+
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
   let duration = Number(req.body?.duration || req.query?.duration || DEFAULT_DURATION);
   if (!ALLOWED_DURATIONS.includes(duration)) {
     // Snap to nearest allowed value rather than failing
     duration = duration >= 7 ? 8 : (duration >= 5 ? 6 : 4);
   }
 
-  const apiKey = process.env.RUNWAY_API_KEY;
+  const { key: apiKey, source: keySource } = resolveKey(req, 'RUNWAY_API_KEY');
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
   if (!apiKey)    return res.status(500).json({ result: 'RUNWAY_API_KEY not configured' });
   if (!blobToken) return res.status(500).json({ result: 'BLOB_READ_WRITE_TOKEN not configured' });
+
+  // Kid-safe gate: moderate the prompt via OpenAI BEFORE calling Runway
+  // (audit §2 gap 2 — this handler used to send it straight through).
+  // Same pattern and refusal shape as video-runway.js.
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 3); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
+  let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  if (resolvedTenant.enforced && resolvedTenant.tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[video-runway-veo] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+  const mod = await isAllowed(prompt, getKey(req, 'OPENAI_API_KEY'), { failClosed });
+  if (!mod.allowed) {
+    console.warn('[video-runway-veo] prompt blocked by moderation:', mod.reason);
+    return res.status(200).json({ result: SAFE_REFUSAL });
+  }
+
+
+  // Usage metering (hosted model, lib/usage.js): enforced mode + our
+  // server key -> the tenant's bucket must cover the estimate BEFORE
+  // the provider call (402 credits_exhausted, no provider call made).
+  // Compat mode and BYO user keys skip metering entirely — see
+  // shouldMeter in lib/usage.js.
+  const veoReqId = randomUUID();
+  const veoEst = costFor('video', { seconds: duration });
+  const veoGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: veoEst, action: 'video' });
+  if (!veoGate.allowed) return denyMetering(res, veoGate);
 
   try {
     // 1) Kick off the generation task
@@ -124,7 +185,7 @@ export default async function handler(req, res) {
     }
     const buf = Buffer.from(await dl.arrayBuffer());
     const ts = Date.now();
-    const key = `${blobPrefix(userId)}${ts}.mp4`;
+    const key = `${blobPrefix(mediaUserId)}${ts}.mp4`;
     const blob = await put(key, buf, {
       access: 'public',
       contentType: 'video/mp4',
@@ -135,7 +196,7 @@ export default async function handler(req, res) {
     // Sidecar with prompt (mirrors image flow)
     try {
       await put(
-        `${blobPrefix(userId)}${ts}.meta.json`,
+        `${blobPrefix(mediaUserId)}${ts}.meta.json`,
         JSON.stringify({ prompt, duration }),
         { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken }
       );
@@ -143,9 +204,14 @@ export default async function handler(req, res) {
       console.error('[video] sidecar write failed (non-fatal):', err?.message || err);
     }
     // Persist to Neon memory so this video is recallable by semantic search.
-    saveMediaMemory({ userId, type: 'video', blobUrl: blob.url, prompt, createdAt: ts }).catch(
+    saveMediaMemory({ userId: mediaUserId, type: 'video', blobUrl: blob.url, prompt, createdAt: ts, tenantId: resolvedTenant.tenantId }).catch(
       (e) => console.error('[video] saveMediaMemory failed (non-fatal):', e?.message || e)
     );
+
+    await recordMetered(veoGate, getUsageDb, {
+      tenantId: resolvedTenant.tenantId, provider: 'runway', action: 'video',
+      units: duration, credits: veoEst, requestId: veoReqId,
+    });
 
     return res.status(200).json({
       result: `Video generated (${duration}s).`,

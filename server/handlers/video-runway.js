@@ -8,6 +8,12 @@
 import { put } from '@vercel/blob';
 import { requireWebhookSecret } from '../../lib/security.js';
 import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
+import { getKey, resolveKey } from '../../lib/userKeys.js';
+import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
+import { randomUUID } from 'node:crypto';
+import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 
 // Runway model variant.
 //
@@ -17,7 +23,9 @@ import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
 //     promptImage (image-to-video only)
 //   - Pure text-to-video is NOT enabled on this account.
 //
-// For pure text prompts → use /api/video-sora (works on Troy's OpenAI tier).
+// For pure text prompts → use the Veo paths (/api/video-runway-veo, or
+// /api/video, which generates a start frame first). The old Sora route was
+// removed in Oct 2026 when OpenAI retired the Videos API.
 // To wake Runway up, either upgrade the Runway plan to one that includes
 // text-to-video, OR call this route with a promptImage URL for image-to-video.
 const DEFAULT_MODEL = 'gen4_turbo';
@@ -40,23 +48,71 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   const userId = req.body?.userId || req.query?.userId || 'anonymous';
+  // Tenant for metering (lib/tenant.js, bite-1b pattern): compat mode
+  // resolves ok with no scoping tenant and the metering block below is
+  // a no-op; enforced (hosted) mode requires a session token or the
+  // tenant id carried as userId.
+  const resolvedTenant = resolveHandlerTenant(req, userId);
+  if (!resolvedTenant.ok) {
+    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  }
+
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
   const aspect = (req.body?.aspect || 'portrait').toLowerCase();
   const ratio = ASPECT_TO_RATIO[aspect] || ASPECT_TO_RATIO.portrait;
   const seconds = [5, 10].includes(parseInt(req.body?.seconds, 10))
     ? parseInt(req.body?.seconds, 10)
     : 5;
 
-  const apiKey = process.env.RUNWAY_API_KEY;
+  const { key: apiKey, source: keySource } = resolveKey(req, 'RUNWAY_API_KEY');
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
   if (!apiKey)    return res.status(500).json({ result: 'RUNWAY_API_KEY not configured' });
   if (!blobToken) return res.status(500).json({ result: 'BLOB_READ_WRITE_TOKEN not configured' });
 
   // Kid-safe gate: moderate the prompt via OpenAI BEFORE calling Runway.
-  const mod = await isAllowed(prompt, process.env.OPENAI_API_KEY);
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 3); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
+  let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  if (resolvedTenant.enforced && resolvedTenant.tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[video-runway] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+  const mod = await isAllowed(prompt, getKey(req, 'OPENAI_API_KEY'), { failClosed });
   if (!mod.allowed) {
     console.warn('[video-runway] prompt blocked by moderation:', mod.reason);
     return res.status(200).json({ result: SAFE_REFUSAL });
   }
+
+
+  // Usage metering (hosted model, lib/usage.js): enforced mode + our
+  // server key -> the tenant's bucket must cover the estimate BEFORE
+  // the provider call (402 credits_exhausted, no provider call made).
+  // Compat mode and BYO user keys skip metering entirely — see
+  // shouldMeter in lib/usage.js.
+  const rwReqId = randomUUID();
+  const rwEst = costFor('video', { seconds });
+  const rwGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: rwEst, action: 'video' });
+  if (!rwGate.allowed) return denyMetering(res, rwGate);
+
+  // Bucket-paid (metered) requests are Turbo-only: the 60-credit/sec
+  // meter rate covers gen4_turbo's $0.05/s but NOT Gen-4.5 ($0.12/s),
+  // so a client-chosen pricier model must never ride the subscription
+  // bucket (pricing report). BYO-key requests are unmetered and keep
+  // the caller's model choice — they pay Runway directly.
+  const runwayModel = rwGate.meter ? DEFAULT_MODEL : (req.body?.model || DEFAULT_MODEL);
 
   try {
     // Runway uses text_to_video task creation.
@@ -68,7 +124,7 @@ export default async function handler(req, res) {
         'X-Runway-Version': '2024-11-06',
       },
       body: JSON.stringify({
-        model: req.body?.model || DEFAULT_MODEL,
+        model: runwayModel,
         promptText: prompt,
         promptImage: req.body?.promptImage, // image-to-video on Gen-4+
         ratio,
@@ -123,7 +179,7 @@ export default async function handler(req, res) {
     if (!dl.ok) return res.status(502).json({ result: 'Runway content download failed' });
     const buf = Buffer.from(await dl.arrayBuffer());
     const ts = Date.now();
-    const key = `${blobPrefix(userId)}${ts}.mp4`;
+    const key = `${blobPrefix(mediaUserId)}${ts}.mp4`;
     const blob = await put(key, buf, {
       access: 'public',
       contentType: 'video/mp4',
@@ -133,13 +189,18 @@ export default async function handler(req, res) {
 
     try {
       await put(
-        `${blobPrefix(userId)}${ts}.meta.json`,
+        `${blobPrefix(mediaUserId)}${ts}.meta.json`,
         JSON.stringify({ prompt, provider: 'runway', ratio, seconds }),
         { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken },
       );
     } catch (err) {
       console.error('[video-runway] sidecar write failed (non-fatal):', err?.message || err);
     }
+
+    await recordMetered(rwGate, getUsageDb, {
+      tenantId: resolvedTenant.tenantId, provider: 'runway', action: 'video',
+      units: seconds, credits: rwEst, requestId: rwReqId,
+    });
 
     return res.status(200).json({
       result: 'Video generated.',

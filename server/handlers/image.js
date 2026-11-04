@@ -9,6 +9,12 @@
 import { put } from '@vercel/blob';
 import { requireWebhookSecret } from '../../lib/security.js';
 import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
+import { resolveKey } from '../../lib/userKeys.js';
+import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
+import { randomUUID } from 'node:crypto';
+import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { saveMediaMemory } from '../../lib/mediaMemory.js';
 
 const MODEL = 'gpt-image-2';
@@ -27,6 +33,22 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   const userId = req.body?.userId || req.query?.userId || 'anonymous';
+  // Tenant for metering (lib/tenant.js, bite-1b pattern): compat mode
+  // resolves ok with no scoping tenant and the metering block below is
+  // a no-op; enforced (hosted) mode requires a session token or the
+  // tenant id carried as userId.
+  const resolvedTenant = resolveHandlerTenant(req, userId);
+  if (!resolvedTenant.ok) {
+    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  }
+
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
 
   // Aspect: default = portrait phone fill (the widget displays full-screen on
   // mobile). User / agent can override via body.aspect = 'square' | 'portrait'
@@ -44,17 +66,42 @@ export default async function handler(req, res) {
   if (rawSize && VALID_SIZES.has(rawSize)) size = rawSize;
   else if (ASPECT_TO_SIZE[rawAspect]) size = ASPECT_TO_SIZE[rawAspect];
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const { key: apiKey, source: keySource } = resolveKey(req, 'OPENAI_API_KEY');
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
   if (!apiKey)    return res.status(500).json({ result: 'OPENAI_API_KEY not configured' });
   if (!blobToken) return res.status(500).json({ result: 'BLOB_READ_WRITE_TOKEN not configured' });
 
   // Kid-safe gate: moderate the prompt BEFORE spending a provider call.
-  const mod = await isAllowed(prompt, apiKey);
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
+  let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  if (resolvedTenant.enforced && resolvedTenant.tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[image] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+  const mod = await isAllowed(prompt, apiKey, { failClosed });
   if (!mod.allowed) {
     console.warn('[image] prompt blocked by moderation:', mod.reason);
     return res.status(200).json({ result: SAFE_REFUSAL });
   }
+
+
+  // Usage metering (hosted model, lib/usage.js): enforced mode + our
+  // server key -> the tenant's bucket must cover the estimate BEFORE
+  // the provider call (402 credits_exhausted, no provider call made).
+  // Compat mode and BYO user keys skip metering entirely — see
+  // shouldMeter in lib/usage.js.
+  const imgReqId = randomUUID();
+  const imgEst = costFor('image');
+  const imgGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: imgEst, action: 'image' });
+  if (!imgGate.allowed) return denyMetering(res, imgGate);
 
   try {
     const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -89,7 +136,7 @@ export default async function handler(req, res) {
     } else if (b64) {
       const buf = Buffer.from(b64, 'base64');
       const ts = Date.now();
-      const key = `${blobPrefix(userId)}${ts}.png`;
+      const key = `${blobPrefix(mediaUserId)}${ts}.png`;
       const blob = await put(key, buf, {
         access: 'public',
         contentType: 'image/png',
@@ -100,7 +147,7 @@ export default async function handler(req, res) {
       // Sidecar so /api/latest-image can return the original prompt as caption.
       try {
         await put(
-          `${blobPrefix(userId)}${ts}.meta.json`,
+          `${blobPrefix(mediaUserId)}${ts}.meta.json`,
           JSON.stringify({ prompt }),
           { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken }
         );
@@ -108,12 +155,17 @@ export default async function handler(req, res) {
         console.error('[image] sidecar write failed (non-fatal):', err?.message || err);
       }
       // Persist to Neon memory so this image is recallable by semantic search.
-      saveMediaMemory({ userId, type: 'image', blobUrl: publicUrl, prompt, createdAt: ts }).catch(
+      saveMediaMemory({ userId: mediaUserId, type: 'image', blobUrl: publicUrl, prompt, createdAt: ts, tenantId: resolvedTenant.tenantId }).catch(
         (e) => console.error('[image] saveMediaMemory failed (non-fatal):', e?.message || e)
       );
     } else {
       return res.status(502).json({ result: 'OpenAI returned no image data' });
     }
+
+    await recordMetered(imgGate, getUsageDb, {
+      tenantId: resolvedTenant.tenantId, provider: 'openai', action: 'image',
+      units: 1, credits: imgEst, requestId: imgReqId,
+    });
 
     // Tool-call response: ElevenLabs reads `result` and speaks it; the widget
     // separately polls /api/latest-image and shows the picture once it lands.

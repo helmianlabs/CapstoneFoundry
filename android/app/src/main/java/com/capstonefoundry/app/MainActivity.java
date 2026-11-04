@@ -1,4 +1,4 @@
-package com.thinkinbuddy.app;
+package com.capstonefoundry.app;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -7,8 +7,8 @@
 //   1. prompt → start frame via OpenAI images (same pipeline as image.js)
 //   2. start frame + prompt → Runway gen4_turbo image-to-video
 //   3. rehost the mp4 to Blob + sidecar meta + save to media memory
-// Sora remains available at /api/video-sora; the old pure-text attempt is
-// preserved at api/video-runway-veo.js.
+// (OpenAI Sora was removed in Oct 2026 — the Videos API was retired;
+// pure-text video now goes through the Veo paths.)
 //
 // Body: { prompt, userId?, aspect? = 'landscape'|'portrait'|'square', seconds? = 10, promptImage? }
 // If promptImage is supplied we skip step 1 and animate that image directly.
@@ -16,6 +16,12 @@
 import { put } from '@vercel/blob';
 import { requireWebhookSecret } from '../../lib/security.js';
 import { isAllowed, SAFE_REFUSAL } from '../../lib/moderation.js';
+import { resolveKey } from '../../lib/userKeys.js';
+import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { costFor, meterGate, denyMetering, recordMetered, getUsageDb } from '../../lib/usage.js';
+import { randomUUID } from 'node:crypto';
+import { safetyDecision, safetyInputsFromRequest } from '../../lib/safety.js';
+import { getProfileDb, resolveProfileSafety } from '../../lib/profile.js';
 import { saveMediaMemory } from '../../lib/mediaMemory.js';
 
 export const config = { maxDuration: 300 };
@@ -107,30 +113,71 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   const userId = req.body?.userId || req.query?.userId || 'anonymous';
+  // Tenant for metering (lib/tenant.js, bite-1b pattern): compat mode
+  // resolves ok with no scoping tenant and the metering block below is
+  // a no-op; enforced (hosted) mode requires a session token or the
+  // tenant id carried as userId.
+  const resolvedTenant = resolveHandlerTenant(req, userId);
+  if (!resolvedTenant.ok) {
+    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  }
+
+  // Media identity (safety wiring bite 4): in enforced mode the
+  // resolved tenant — never a caller-claimed userId — keys Blob
+  // storage and media memory, so the session-scoped latest-media
+  // pollers find this tenant's media and no one else's. Compat mode
+  // preserves the legacy request userId exactly.
+  const mediaUserId = resolvedTenant.enforced ? resolvedTenant.tenantId : userId;
+
   const aspect = (req.body?.aspect || 'landscape').toLowerCase();
   const ratio = ASPECT_TO_RATIO[aspect] || ASPECT_TO_RATIO.landscape;
   const seconds = [5, 10].includes(parseInt(req.body?.seconds, 10))
     ? parseInt(req.body?.seconds, 10)
     : 10;
 
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const runwayKey = process.env.RUNWAY_API_KEY;
+  const { key: openaiKey, source: openaiSource } = resolveKey(req, 'OPENAI_API_KEY');
+  const { key: runwayKey, source: keySource } = resolveKey(req, 'RUNWAY_API_KEY');
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
   if (!openaiKey) return res.status(500).json({ result: 'OPENAI_API_KEY not configured' });
   if (!runwayKey) return res.status(500).json({ result: 'RUNWAY_API_KEY not configured' });
   if (!blobToken) return res.status(500).json({ result: 'BLOB_READ_WRITE_TOKEN not configured' });
 
-  const mod = await isAllowed(prompt, openaiKey);
+  // Hosted mode: the tenant profile decides fail-closed through the
+  // shared resolver (lib/profile.js resolveProfileSafety — safety
+  // wiring bite 1); when the profile cannot decide (no row,
+  // onboarding unfinished, or the profile read failed) the resolver's
+  // safe default applies safety — the request inputs are never the
+  // fallback in hosted mode. Compat mode never queries a profile.
+  let { failClosed } = safetyDecision(safetyInputsFromRequest(req));
+  if (resolvedTenant.enforced && resolvedTenant.tenantId) {
+    const resolved = await resolveProfileSafety(getProfileDb, resolvedTenant.tenantId);
+    ({ failClosed } = resolved.decision);
+    if (resolved.safeDefault) {
+      console.error(`[video] profile safety unresolved (${resolved.source}) — safe default applied`);
+    }
+  }
+  const mod = await isAllowed(prompt, openaiKey, { failClosed });
   if (!mod.allowed) {
     console.warn('[video] prompt blocked by moderation:', mod.reason);
     return res.status(200).json({ result: SAFE_REFUSAL });
   }
 
+
+  // Usage metering (hosted model, lib/usage.js): enforced mode + our
+  // server key -> the tenant's bucket must cover the estimate BEFORE
+  // the provider call (402 credits_exhausted, no provider call made).
+  // Compat mode and BYO user keys skip metering entirely — see
+  // shouldMeter in lib/usage.js.
+  const vidReqId = randomUUID();
+  const vidEst = costFor('video', { seconds });
+  const vidGate = await meterGate({ db: getUsageDb, tenantId: resolvedTenant.tenantId, keySource: keySource, estCredits: vidEst, action: 'video' });
+  if (!vidGate.allowed) return denyMetering(res, vidGate);
+
   try {
     // 1. Start frame (skipped when the caller supplies one).
     const promptImage =
       req.body?.promptImage ||
-      (await makeStartFrame({ prompt, aspect, apiKey: openaiKey, blobToken, userId }));
+      (await makeStartFrame({ prompt, aspect, apiKey: openaiKey, blobToken, userId: mediaUserId }));
 
     // 2. Runway image-to-video.
     const job = await startRunwayTask({
@@ -168,7 +215,7 @@ export default async function handler(req, res) {
     if (!dl.ok) return res.status(502).json({ result: 'Runway content download failed' });
     const buf = Buffer.from(await dl.arrayBuffer());
     const ts = Date.now();
-    const blob = await put(`${blobPrefix(userId)}${ts}.mp4`, buf, {
+    const blob = await put(`${blobPrefix(mediaUserId)}${ts}.mp4`, buf, {
       access: 'public',
       contentType: 'video/mp4',
       addRandomSuffix: false,
@@ -176,7 +223,7 @@ export default async function handler(req, res) {
     });
     try {
       await put(
-        `${blobPrefix(userId)}${ts}.meta.json`,
+        `${blobPrefix(mediaUserId)}${ts}.meta.json`,
         JSON.stringify({ prompt, provider: 'runway-i2v', ratio, seconds }),
         { access: 'public', contentType: 'application/json', addRandomSuffix: false, token: blobToken },
       );
@@ -186,11 +233,17 @@ export default async function handler(req, res) {
 
     // 5. Media memory (fire-and-forget — never fail the response on it).
     saveMediaMemory({
-      userId,
+      userId: mediaUserId,
       type: 'video',
       blobUrl: blob.url,
       prompt,
+      tenantId: resolvedTenant.tenantId,
     }).catch((e) => console.error('[video] media memory save failed:', e?.message || e));
+
+    await recordMetered(vidGate, getUsageDb, {
+      tenantId: resolvedTenant.tenantId, provider: 'runway', action: 'video',
+      units: seconds, credits: vidEst, requestId: vidReqId,
+    });
 
     return res.status(200).json({
       result: 'Video generated.',

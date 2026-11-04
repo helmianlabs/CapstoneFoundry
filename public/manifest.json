@@ -1,7 +1,7 @@
 {
-  "name": "ThinkinBuddy",
-  "short_name": "ThinkinBuddy",
-  "description": "Your personal AI thinking partner",
+  "name": "Capstone Foundry",
+  "short_name": "Capstone",
+  "description": "A full AI assistant with hands: a real curriculum, video creation, and practical help for ages 2 to 70.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#050508",

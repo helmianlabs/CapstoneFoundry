@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ThinkinBuddy</string>
-    <string name="title_activity_main">ThinkinBuddy</string>
-    <string name="package_name">com.thinkinbuddy.app</string>
-    <string name="custom_url_scheme">com.thinkinbuddy.app</string>
+    <string name="app_name">Capstone Foundry</string>
+    <string name="title_activity_main">Capstone Foundry</string>
+    <string name="package_name">com.capstonefoundry.app</string>
+    <string name="custom_url_scheme">com.capstonefoundry.app</string>
 </resources>
