@@ -37,6 +37,16 @@ re-present them). This line stays blank until Troy gives words he likes:**
 - ~~Candidate A: `AI assistant with hands — talks, remembers, teaches, creates, for all ages.`~~ REJECTED
 - ~~Candidate B: `Talk to an AI assistant that remembers, teaches, makes videos, and lends a hand.`~~ REJECTED
 
+**Round 2 — four more, written 2026-11-03 at Troy's request ("come up
+with like three or four more"). TROY'S VERDICT 2026-11-03 23:13 MST:
+none of the four fits. Do not re-present. Troy is working the wording
+out with Claude AI; the line stays open until he brings words back:**
+
+1. `Talk, learn, and make videos with an AI buddy for the whole family.` (67 chars)
+2. `An AI buddy who listens, remembers, teaches, and gets things done.` (66 chars)
+3. `Voice AI that talks, teaches, remembers, and creates. For ages 2 to 70.` (71 chars)
+4. `Your talking AI buddy — learns with you, remembers for you, helps you do more.` (78 chars)
+
 **Description (draft):**
 
 > Meet Capstone Foundry — a full AI assistant you can talk to out

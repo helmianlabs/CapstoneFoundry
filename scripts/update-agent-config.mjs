@@ -38,7 +38,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { pathToFileURL } from 'node:url';
 
-export const AGENT_ID = 'agent_5301m50skfnvfza8bpkmjybc18z8';
+export const AGENT_ID = 'agent_9101m6kwm1sqe0ctz33pn1q7p07w';
 
 // The API rejects setting more than one of {description, dynamic_variable,
 // is_system_provided, constant_value, is_omitted} on a param at once --

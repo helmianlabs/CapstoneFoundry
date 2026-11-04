@@ -97,6 +97,7 @@ const routes = {
   'relay-proxy': () => import('../server/handlers/relay-proxy.js'),
   'requests': () => import('../server/handlers/requests.js'),
   'research-log': () => import('../server/handlers/research-log.js'),
+  'safety-report': () => import('../server/handlers/safety-report.js'),
   'search': () => import('../server/handlers/search.js'),
   'speak': () => import('../server/handlers/speak.js'),
   'task': () => import('../server/handlers/task.js'),

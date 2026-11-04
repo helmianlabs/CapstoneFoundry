@@ -1,17 +1,10 @@
-# Capstone Foundry Privacy Policy — DRAFT
+# Capstone Foundry Privacy Policy
 
-> **DRAFT — NOT LEGAL ADVICE, NOT YET IN EFFECT.**
-> This is a plain-language working draft written from the app's actual
-> data flows, for Troy and his counsel to review, complete, and
-> approve before it is published. Every legal-specific slot is marked
-> with [BRACKETS] and must be filled in before use. Do not publish
-> this file as-is.
+**Effective date:** November 4, 2026
 
-**Effective date:** [EFFECTIVE DATE]
-
-**Who we are:** Capstone Foundry is operated by [LEGAL ENTITY NAME],
-[ENTITY ADDRESS] ("we", "us"). Questions about this policy or your
-data: [PRIVACY CONTACT EMAIL]. [DPO NAME/ROLE, IF APPLICABLE]
+**Who we are:** Capstone Foundry is operated by DairyForge LLC
+("we", "us"). Questions about this policy or your data:
+support@capstonefoundry.helmian.cloud.
 
 ---
 
@@ -103,15 +96,13 @@ service. We do not sell information to them or to anyone else.
 
 ## 5. Families and Safety Mode
 
-The account holder creates the account, holds the password, and
-controls Safety Mode. When Safety Mode is on, additional content
-guardrails apply and turning it off requires the parent PIN when one
-is set. Age bands in a profile are a parent's household setting used
-to apply the right safety level — they are not shared with third
-parties as advertising data. [COUNSEL TO REVIEW: this section must be
-aligned with the final age-audience decision for the store listing —
-kids-directed (COPPA) vs family/13+ with a parent account holder —
-before publication.]
+Capstone Foundry is for a general audience. The account holder
+creates the account, holds the password, and controls Safety Mode.
+When Safety Mode is on, additional content guardrails apply and
+turning it off requires the parent PIN when one is set. Age bands in
+a profile are a parent's household setting used to apply the right
+safety level — they are not shared with third parties as advertising
+data.
 
 ## 6. How long we keep information
 
@@ -121,22 +112,20 @@ you delete your account (Section 7), that information is erased from
 our service databases. Limited billing records — purchase event ids
 and plan history, without conversation content — may be retained
 after deletion where needed for accounting, tax, and dispute
-purposes. [RETENTION PERIODS TO BE COMPLETED BY COUNSEL.]
+purposes.
 
 ## 7. Your choices and rights
 
 - **Access and correction:** your profile is visible and editable in
-  the app (Settings → Account & Safety).
-- **Delete your account:** in the app at Settings → Account &
-  Safety → Delete my account. Deletion requires your password and
-  permanently erases your profile, memories, conversations, saved
-  keys, paired computers, and credit grants. Deleting your account
-  does **not** cancel a subscription — cancel it in the App Store,
-  Play Store, or Stripe to stop billing.
+  the app's account area.
+- **Delete your account:** in the app, open your account area and
+  choose "Delete my account". Deletion requires your password and
+  typing DELETE to confirm, and permanently erases your profile,
+  memories, conversations, saved keys, paired computers, and credit
+  grants. Deleting your account does **not** cancel a subscription —
+  cancel it in the App Store, Play Store, or Stripe to stop billing.
 - **Questions or requests** (including requests a parent makes about
-  their child's information): [PRIVACY CONTACT EMAIL]. [ADD ANY
-  JURISDICTION-SPECIFIC RIGHTS LANGUAGE — e.g. GDPR/CCPA — ON
-  COUNSEL'S ADVICE.]
+  their child's information): support@capstonefoundry.helmian.cloud.
 
 ## 8. Security
 
@@ -148,12 +137,12 @@ work to protect your information and limit access to it.
 ## 9. Changes to this policy
 
 If we change this policy in a way that matters, we will update the
-effective date above and [DESCRIBE NOTICE METHOD — e.g. notify
-account holders by email / in-app notice] before the change takes
-effect.
+effective date above and notify account holders by email and in the
+app before the change takes effect.
 
 ## 10. Contact
 
-[LEGAL ENTITY NAME]
-[ENTITY ADDRESS]
-[PRIVACY CONTACT EMAIL]
+DairyForge LLC
+303 E 6th St, Shoshone, ID 83352
+support@capstonefoundry.helmian.cloud
+

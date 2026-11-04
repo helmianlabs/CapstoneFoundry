@@ -37,6 +37,9 @@ export class FakeDb {
     // the generic tenant DELETE below reaches them too.
     this.rows.requests = [];
     this.requestSeq = 0;
+    // Content reports (sql/store/009): same arrangement as requests.
+    this.rows.content_reports = [];
+    this.reportSeq = 0;
     // Table names whose DELETE should fail with pg 42P01 (undefined
     // table) — tests use this to prove optional-table tolerance.
     this.missingTables = new Set();
@@ -227,6 +230,29 @@ export class FakeDb {
       if (!row) return { rows: [] };
       row.status = params[0];
       return { rows: [{ ...row, payload: { ...row.payload } }] };
+    }
+    if (/^INSERT INTO content_reports/i.test(s)) {
+      const [tenantId, userId, kind, mediaUrl, excerpt, reason] = params;
+      this.reportSeq += 1;
+      const row = {
+        id: `00000000-0000-4000-8000-${String(this.reportSeq).padStart(12, '0')}`,
+        tenant_id: tenantId,
+        user_id: userId,
+        kind,
+        media_url: mediaUrl,
+        excerpt,
+        reason,
+        // Stagger timestamps so ORDER BY created_at DESC is testable.
+        created_at: new Date(Date.now() + this.reportSeq * 1000),
+      };
+      this.rows.content_reports.push(row);
+      return { rows: [{ ...row }] };
+    }
+    if (/^SELECT .* FROM content_reports WHERE tenant_id/i.test(s)) {
+      const mine = this.rows.content_reports
+        .filter((r) => r.tenant_id === params[0])
+        .sort((a, b) => b.created_at - a.created_at);
+      return { rows: mine.map((r) => ({ ...r })) };
     }
     throw new Error(`FakeDb: unhandled SQL: ${s.slice(0, 140)}`);
   }

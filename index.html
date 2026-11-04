@@ -98,6 +98,18 @@
       min-height: 3em;
       padding: 0 20px;
     }
+    .report-answer-btn {
+      margin-top: 6px;
+      background: none;
+      border: none;
+      color: #4b5563;
+      font-size: 0.72rem;
+      text-decoration: underline;
+      cursor: pointer;
+      z-index: 2;
+      padding: 4px 8px;
+    }
+    .report-answer-btn:disabled { text-decoration: none; cursor: default; }
 
     /* ─── Onboarding overlay ─────────────────────────────────────── */
     .onboarding {
@@ -536,6 +548,19 @@
       cursor: pointer;
       align-items: center; justify-content: center;
     }
+    .gallery-lightbox-report {
+      position: absolute; bottom: 18px; left: 20px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(0,212,255,0.4);
+      color: #00d4ff;
+      height: 36px; padding: 0 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gallery-lightbox-report:disabled { opacity: 0.6; cursor: default; }
   </style>
 </head>
 <body>
@@ -547,6 +572,11 @@
     <input type="text" id="onboardName" placeholder="Your first name" autocomplete="off" />
     <p style="margin-top:18px; margin-bottom:12px;">What do you want to call your buddy?</p>
     <input type="text" id="onboardBuddyName" placeholder="Capstone Foundry" autocomplete="off" />
+    <div class="onboarding-consent">
+      <input type="checkbox" id="onboardAiConsent" />
+      <label for="onboardAiConsent">To answer you, Capstone Foundry sends your messages and voice to AI providers (OpenAI, Anthropic, Google, and ElevenLabs). I understand and agree.</label>
+    </div>
+    <p id="onboardAiConsentHint" style="display:none;margin-top:6px;font-size:0.8rem;color:#f87171;">Please check the box above so your buddy can answer you.</p>
     <div class="onboarding-consent">
       <input type="checkbox" id="onboardConsent" />
       <label for="onboardConsent">I'm okay with anonymized conversations being saved to help improve this app. I can opt out anytime.</label>
@@ -615,6 +645,7 @@
   <div class="gallery-lightbox hidden" id="galleryLightbox">
     <button class="gallery-lightbox-close" id="galleryLightboxClose">✕</button>
     <button class="gallery-lightbox-cast" id="galleryLightboxCast" type="button" aria-label="Watch on TV" style="display:none;">📺 TV</button>
+    <button class="gallery-lightbox-report" id="galleryLightboxReport" type="button">Report this</button>
     <img id="galleryLightboxImg" src="" alt="" style="display:none;" />
     <video id="galleryLightboxVideo" playsinline controls style="display:none;"></video>
     <div class="gallery-lightbox-caption" id="galleryLightboxCaption"></div>
@@ -894,6 +925,7 @@
   </div>
   <div class="status" id="status">TAP TO START</div>
   <div class="transcript" id="transcript"></div>
+  <button class="report-answer-btn" id="reportAnswerBtn" type="button">Report this answer</button>
 
   <!-- Footer disclosure -->
   <div class="footer-note" id="footerNote"></div>
@@ -923,6 +955,24 @@
     function tbAuthHeaders() {
       const t = tbSessionToken();
       return t ? { Authorization: `Bearer ${t}` } : {};
+    }
+    // ── Content reporting (store-readiness gap 2) ──────────────────
+    // POST one report of AI-generated content to /api/safety-report
+    // (server/handlers/safety-report.js). The server is no oracle: a
+    // signed-in POST always answers { ok: true }, so the callers show
+    // the same thanks either way. Resolves true when the server
+    // answered ok, false on any failure — never throws.
+    const REPORT_THANKS_TEXT = "Thanks — reported. We'll review it.";
+    async function postSafetyReport(body) {
+      try {
+        const res = await fetch('/api/safety-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => null);
+        return res.status === 200 && data?.ok === true;
+      } catch { return false; }
     }
     // The identity the in-call surfaces carry (the widget's user_id
     // dynamic variable, conversation-turn, extract-memories): the
@@ -1390,6 +1440,7 @@
     const onboardingEl = document.getElementById('onboarding');
     const onboardNameEl = document.getElementById('onboardName');
     const onboardBuddyNameEl = document.getElementById('onboardBuddyName');
+    const onboardAiConsentEl = document.getElementById('onboardAiConsent');
     const onboardConsentEl = document.getElementById('onboardConsent');
     const onboardSubmitEl = document.getElementById('onboardSubmit');
 
@@ -1415,12 +1466,19 @@
     function completeOnboarding() {
       const name = onboardNameEl.value.trim();
       if (!name) { onboardNameEl.focus(); return; }
+      if (!onboardAiConsentEl.checked) {
+        document.getElementById('onboardAiConsentHint').style.display = 'block';
+        onboardAiConsentEl.focus();
+        return;
+      }
       const buddyName = onboardBuddyNameEl.value.trim() || 'Capstone Foundry';
       const consent = onboardConsentEl.checked;
       const user = {
         userId: genUserId(),
         name,
         buddyName,
+        consentAiProcessing: true,
+        consentAiDate: new Date().toISOString(),
         consentResearch: consent,
         consentDate: consent ? new Date().toISOString() : null,
         firstVisit: true,
@@ -1715,6 +1773,33 @@
       currentHistory.push({ role, content });
       saveHistory(currentHistory);
     });
+
+    // ── "Report this answer" (store-readiness gap 2) ─────────────
+    // Beside the transcript: reports the LAST assistant answer the
+    // client holds (currentHistory) as an excerpt. With no answer
+    // yet there is nothing to report, and the button says so
+    // instead of sending an empty report the server would refuse.
+    const reportAnswerBtn = document.getElementById('reportAnswerBtn');
+    if (reportAnswerBtn) {
+      reportAnswerBtn.addEventListener('click', async () => {
+        if (reportAnswerBtn.disabled) return;
+        const lastAnswer = [...currentHistory].reverse()
+          .find((m) => m && m.role === 'assistant' && typeof m.content === 'string' && m.content.trim());
+        if (!lastAnswer) {
+          reportAnswerBtn.textContent = 'Nothing to report yet';
+          setTimeout(() => { reportAnswerBtn.textContent = 'Report this answer'; }, 2000);
+          return;
+        }
+        reportAnswerBtn.disabled = true;
+        const ok = typeof postSafetyReport === 'function'
+          ? await postSafetyReport({ kind: 'answer', excerpt: lastAnswer.content })
+          : false;
+        reportAnswerBtn.textContent = ok
+          ? REPORT_THANKS_TEXT
+          : 'Could not send the report — try again.';
+        if (!ok) reportAnswerBtn.disabled = false;
+      });
+    }
 
     // ══ BACKGROUND AUDIO ("pocket mode") ════════════════════════════════
     // Goal: lock the screen, put the phone in a pocket, keep talking over
@@ -2367,7 +2452,7 @@
       if (mount) {
         const widget = document.createElement('elevenlabs-convai');
         widget.setAttribute('id', 'convai-widget');
-        widget.setAttribute('agent-id', 'agent_5301m50skfnvfza8bpkmjybc18z8');
+        widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
         mount.appendChild(widget);
       }
       document.body.classList.add('elevenlabs-mode');
@@ -3018,6 +3103,7 @@
     const galleryLbCaption   = document.getElementById('galleryLightboxCaption');
     const galleryLbCloseEl   = document.getElementById('galleryLightboxClose');
     const galleryLbCastEl    = document.getElementById('galleryLightboxCast');
+    const galleryLbReportEl  = document.getElementById('galleryLightboxReport');
 
     let gallerySearchTimer = null;
 
@@ -3130,7 +3216,15 @@
     });
 
     // ── Lightbox ──────────────────────────────────────────────────
+    // The item the lightbox is currently showing — the report
+    // button below reports THIS item (store-readiness gap 2).
+    let lightboxItem = null;
     function openLightbox(item) {
+      lightboxItem = item;
+      if (galleryLbReportEl) {
+        galleryLbReportEl.disabled = false;
+        galleryLbReportEl.textContent = 'Report this';
+      }
       galleryLbImg.style.display   = 'none';
       galleryLbVideo.style.display = 'none';
       galleryLbImg.src             = '';
@@ -3163,6 +3257,7 @@
     }
 
     function closeLightbox() {
+      lightboxItem = null;
       galleryLightboxEl.classList.add('hidden');
       try { galleryLbVideo.pause(); } catch {}
       galleryLbVideo.src = '';
@@ -3172,6 +3267,23 @@
     }
 
     galleryLbCloseEl.addEventListener('click', closeLightbox);
+    // "Report this" — flags the shown media for human review
+    // (store-readiness gap 2). The server answers { ok: true }
+    // either way, so the button thanks the reporter and disables
+    // itself until the next item opens.
+    if (galleryLbReportEl) {
+      galleryLbReportEl.addEventListener('click', async () => {
+        if (!lightboxItem || galleryLbReportEl.disabled) return;
+        galleryLbReportEl.disabled = true;
+        const ok = typeof postSafetyReport === 'function'
+          ? await postSafetyReport({ kind: 'media', media_url: lightboxItem.blobUrl || '' })
+          : false;
+        galleryLbReportEl.textContent = ok
+          ? REPORT_THANKS_TEXT
+          : 'Could not send the report — try again.';
+        if (!ok) galleryLbReportEl.disabled = false;
+      });
+    }
     galleryLightboxEl.addEventListener('click', (e) => {
       if (e.target === galleryLightboxEl) closeLightbox();
     });
