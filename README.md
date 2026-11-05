@@ -13,6 +13,16 @@ servers to set up.
 repository is the app's source code (see "For developers" below) — it is
 not a self-host kit.*
 
+## Links
+
+- **Website:** https://capstonefoundry.helmian.cloud
+- **Support:** https://capstonefoundry.helmian.cloud/support/ ·
+  support@capstonefoundry.helmian.cloud
+- **Privacy Policy:** https://capstonefoundry.helmian.cloud/privacy/
+- **Terms of Use:** https://capstonefoundry.helmian.cloud/terms/
+- **Delete your account:**
+  https://capstonefoundry.helmian.cloud/delete-account/
+
 ## What your buddy does
 
 - **Real conversation, out loud** — talk in real time; your buddy
