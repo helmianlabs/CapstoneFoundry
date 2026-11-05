@@ -1245,6 +1245,55 @@
       } catch (e) { console.warn('[MEM-HB] extract-memories failed', e); }
     }
 
+    // ── DURING-SESSION MEMORY AUTOSAVE (memory-fix bite, 2026-11-05) ──
+    // End-of-call extraction alone loses everything when a call drops:
+    // the tab dies, the signal drops, the extract fetch 404s — and until
+    // now nothing had been saved since the call started. The turns are
+    // already durable server-side (fireConversationTurn posts each one
+    // to /api/conversation-turn), so a checkpoint just asks the server
+    // to extract memories from the turns it holds past the last
+    // checkpoint cursor. Fires: on an interval while a call runs, every
+    // CHECKPOINT_EVERY_TURNS turns, and FORCED on disconnect / pagehide
+    // so the tail lands even when the end-of-call extract can't.
+    let checkpointTimer = null;
+    let lastCheckpointTurn = 0; // count of live turns the server has checkpointed (cursorTurn + 1)
+    const CHECKPOINT_EVERY_MS = 90000;
+    const CHECKPOINT_EVERY_TURNS = 8;
+
+    function fireMemoryCheckpoint(force) {
+      if (!liveSessionId || !currentUser?.userId) return;
+      if (!force && liveTurnIndex - lastCheckpointTurn < 4) return; // server enforces the same floor
+      try {
+        fetch('/api/checkpoint-memories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...tbAuthHeaders() },
+          body: JSON.stringify({
+            userId: tbCallUserId() || currentUser.userId,
+            sessionId: liveSessionId,
+            conversationId: lastConversationId,
+            force: !!force,
+          }),
+          keepalive: true,
+        }).then((r) => r.json()).then((d) => {
+          // Advance only on the server's word: a failed or skipped
+          // checkpoint leaves lastCheckpointTurn behind, so the next
+          // interval retries the same slice instead of skipping it.
+          if (d && typeof d.cursorTurn === 'number') {
+            lastCheckpointTurn = Math.max(lastCheckpointTurn, d.cursorTurn + 1);
+          }
+          if (d && d.extracted) console.log('[MEM-HB] checkpoint saved memories:', d.extracted, 'cursor:', d.cursorTurn);
+        }).catch(() => {});
+      } catch (e) { console.warn('[MEM-HB] checkpoint failed', e); }
+    }
+
+    function startCheckpointTimer() {
+      stopCheckpointTimer();
+      checkpointTimer = setInterval(() => fireMemoryCheckpoint(false), CHECKPOINT_EVERY_MS);
+    }
+    function stopCheckpointTimer() {
+      if (checkpointTimer) { clearInterval(checkpointTimer); checkpointTimer = null; }
+    }
+
     // ── Client error beacon (2026-11-04) ─────────────────────────────
     // Ships widget events + mic-probe results to /api/client-log, whose
     // server logs are readable off-device — the remote substitute for
@@ -1328,6 +1377,8 @@
       lastConversationId = null;
       liveSessionId = crypto.randomUUID();
       liveTurnIndex = 0;
+      lastCheckpointTurn = 0;
+      startCheckpointTimer();
       console.log('[CONV-LOG] new live session:', liveSessionId);
       const cfg = e.detail?.config;
       if (!cfg) { console.warn('[MEM-HB] BAIL — no e.detail.config, cannot inject onConnect'); return; }
@@ -1437,6 +1488,10 @@
         const turnContent = typeof msg?.message === 'string' ? msg.message : (typeof msg?.text === 'string' ? msg.text : null);
         if (turnContent) {
           fireConversationTurn(turnRole, turnContent, msg);
+          // DURING-SESSION AUTOSAVE: every CHECKPOINT_EVERY_TURNS turns,
+          // checkpoint what the server has captured so far (see
+          // fireMemoryCheckpoint above).
+          if (liveTurnIndex - lastCheckpointTurn >= CHECKPOINT_EVERY_TURNS) fireMemoryCheckpoint(false);
           // EXPORT FIX: the export menu builds from `currentHistory`, which
           // previously only ever grew on the TEXT path (sendToThinkinBuddy). A voice
           // brain dump left it empty, so Export produced a header and nothing
@@ -1463,6 +1518,10 @@
           stopImagePoller();
           stopVideoPoller();
           widgetCallActive = false;
+          // Flush the captured turns now (the call may be over), but
+          // leave the checkpoint timer running: if the user resumes
+          // after the silence, checkpoints continue with the call.
+          fireMemoryCheckpoint(true);
           fireExtractMemories('idle-timeout');
         }, IDLE_MS);
         if (typeof userOnMessage === 'function') try { userOnMessage(msg); } catch {}
@@ -1473,6 +1532,11 @@
         stopImagePoller();
         stopVideoPoller();
         widgetCallActive = false;
+        stopCheckpointTimer();
+        // Forced final checkpoint FIRST: it extracts from the turns the
+        // server already holds, so the call's memories land even if the
+        // extract-memories transcript fetch fails.
+        fireMemoryCheckpoint(true);
         fireExtractMemories('disconnect');
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-ended'));
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
@@ -1623,6 +1687,11 @@
       stopImagePoller();
       stopVideoPoller();
       widgetCallActive = false;
+      stopCheckpointTimer();
+      // The drop-off case this bite exists for: flush the captured
+      // turns through the checkpoint (keepalive) before the end-of-call
+      // extract — the checkpoint needs nothing from ElevenLabs.
+      fireMemoryCheckpoint(true);
       fireExtractMemories('pagehide');
     });
 

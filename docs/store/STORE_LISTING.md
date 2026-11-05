@@ -30,9 +30,10 @@ wants a different id, decide BEFORE step 1 of the build checklist.
 
 **Subtitle (App Store, ≤30 chars):** `Your AI assistant, with hands`
 
-**Short description (Play, ≤80 chars) — OPEN. Two drafted candidates
-were REJECTED by Troy on 2026-11-03 (he did not like either one — do not
-re-present them). This line stays blank until Troy gives words he likes:**
+**Short description (Play, ≤80 chars) — SETTLED by Troy 2026-11-05
+05:26 MST, in his own words: `From your wild thoughts, to the real world.`
+(42 chars; punctuation as Troy stated it in the main chat). Two earlier drafted candidates were REJECTED by Troy on
+2026-11-03 (he did not like either one — do not re-present them):**
 
 - ~~Candidate A: `AI assistant with hands — talks, remembers, teaches, creates, for all ages.`~~ REJECTED
 - ~~Candidate B: `Talk to an AI assistant that remembers, teaches, makes videos, and lends a hand.`~~ REJECTED
@@ -110,9 +111,10 @@ nothing here promises offline mode — the app doesn't do those today.
 **Keywords (App Store, ≤100 chars, draft):**
 `ai assistant,voice assistant,ai tutor,spanish,homework,video creator,reminders,memory,family,chat`
 
-**Support URL:** `[PLACEHOLDER — Troy: a public support page/email URL]`
-**Privacy policy URL:** `[PLACEHOLDER — host docs/store/PRIVACY_POLICY.md content at a public URL]`
-**Marketing URL:** `[PLACEHOLDER — optional]`
+**Support URL:** https://capstonefoundry.helmian.cloud/support
+**Privacy policy URL:** https://capstonefoundry.helmian.cloud/privacy
+**Terms of Use URL:** https://capstonefoundry.helmian.cloud/terms
+**Marketing URL:** https://capstonefoundry.helmian.cloud/
 
 ---
 

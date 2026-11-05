@@ -90,7 +90,12 @@ async function fetchTranscript(conversationId, elevenKey) {
 // (spec lines 328-341): scope, kind, subject, content, confidence, importance,
 // valid_until, source_session, source_span{start,end}. PII/length filtering is
 // applied here so nothing dirty reaches the persistence layer.
-async function extractCandidates(transcript, conversationId, req) {
+//
+// EXPORTED (memory-fix bite, 2026-11-05) so the post-call webhook
+// (api/conversation-webhook.js) and the during-session checkpoint handler
+// (server/handlers/checkpoint-memories.js) run THIS pipeline — one
+// extractor, one dedup engine, three triggers.
+export async function extractCandidates(transcript, conversationId, req) {
   if (!Array.isArray(transcript) || transcript.length === 0) return [];
 
   // Number each line so the LLM can cite source_span message indices, and so the
@@ -181,7 +186,8 @@ function parseCandidates(raw) {
 // spec :360-455). Slice A adds that export to memory.js in parallel; if it isn't
 // available yet, fall back to upsertExtractedFact (one row per candidate, no
 // embedding-based dedup). Returns a normalized summary either way.
-async function persistCandidates(userId, candidates, conversationId, req, tenantId = null) {
+// EXPORTED for the webhook / checkpoint triggers (see extractCandidates).
+export async function persistCandidates(userId, candidates, conversationId, req, tenantId = null) {
   let saveMemoryCandidates = null;
   try {
     const mod = await import('./memory.js');
@@ -229,6 +235,50 @@ async function persistCandidates(userId, candidates, conversationId, req, tenant
   return { path: 'upsertExtractedFact(fallback)', persisted, keys };
 }
 
+
+// ---------------------------------------------------------------------------
+// extractAndPersistMemories — the shared pipeline core (memory-fix bite,
+// 2026-11-05). Runs extract → PII/length filter → semantic-dedup persist
+// over a transcript the CALLER already holds, with no ElevenLabs fetch:
+//
+//   - api/conversation-webhook.js passes the post-call payload's
+//     transcript (ElevenLabs delivers it server-to-server), so saving no
+//     longer depends on the client firing, or on an API key that can
+//     re-fetch the conversation (the wrong-account ELEVENLABS_API_KEY is
+//     what silently killed this path at the Nov 4 account switch-over).
+//   - server/handlers/checkpoint-memories.js passes the turns captured
+//     live into conversation_turns, for during-session autosave.
+//
+// The client-fired HTTP handler below keeps its existing behavior
+// (ElevenLabs fetch + 425-on-empty) as a third trigger; all three land in
+// saveMemoryCandidates, whose ≥0.92 merge makes overlapping triggers
+// idempotent rather than duplicating.
+//
+// `req` may be null (server-to-server triggers): the LLM resolution then
+// uses env keys only. Returns a summary; { skipped: 'no-llm' } when no
+// text LLM is reachable, so callers can leave their retry state untouched.
+// ---------------------------------------------------------------------------
+export async function extractAndPersistMemories({ transcript, userId, sessionId, tenantId = null, req = null } = {}) {
+  if (!userId) return { skipped: 'no-user' };
+  if (!Array.isArray(transcript) || transcript.length === 0) {
+    return { candidates: 0, extracted: 0, reason: 'empty transcript' };
+  }
+  if (!hasTextLlm(req)) return { skipped: 'no-llm' };
+
+  const candidates = await extractCandidates(transcript, sessionId, req);
+  if (candidates.length === 0) {
+    return { candidates: 0, extracted: 0, reason: 'no durable facts' };
+  }
+  const result = await persistCandidates(userId, candidates, sessionId, req, tenantId);
+  return {
+    candidates: candidates.length,
+    extracted: result.persisted,
+    path: result.path,
+    ...(result.path === 'saveMemoryCandidates'
+      ? { inserted: result.inserted, updated: result.updated, superseded: result.superseded }
+      : { keys: result.keys }),
+  };
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

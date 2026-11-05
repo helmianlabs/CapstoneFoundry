@@ -72,6 +72,7 @@ const routes = {
   'browse': () => import('../server/handlers/browse.js'),
   'chat': () => import('../server/handlers/chat.js'),
   'conversation-history': () => import('../server/handlers/conversation-history.js'),
+  'checkpoint-memories': () => import('../server/handlers/checkpoint-memories.js'),
   'conversation-turn': () => import('../server/handlers/conversation-turn.js'),
   'cron-expire-memories': () => import('../server/handlers/cron-expire-memories.js'),
   'diary': () => import('../server/handlers/diary.js'),

@@ -90,13 +90,32 @@ export { getPool, embed, vecLiteral };
 //
 // RETURN SHAPE is preserved: [{key, value, importance, updatedAt}]. buildSystemPrompt
 // (lib/personality.js:92) reads m.value; prime-agent.js reads facts.length. Extra
-// fields are additive and harmless.
+// fields are additive and harmless. (2026-11-05: rows also carry kind + scope so
+// buildSystemPrompt can group the briefing by kind.)
 //
 // Signature stays backward-compatible: retrieveMemories(userId, limit) still works
 // exactly as before (no query → boot path, default semantic scope). New callers
 // pass an options object: retrieveMemories(userId, { limit, query, scopes }).
+//
+// MODE VISIBILITY (memory-fix bite, 2026-11-05): retrieveMemoriesWithMeta is
+// the same retrieval, but it also reports HOW the rows were ranked:
+//   mode 'vector'        — the query embedded and the vector ranking ran.
+//   mode 'boot'          — no query was given (session-start briefing path).
+//   mode 'boot-fallback' — a query WAS given but its embedding failed, so the
+//                          rows are boot-ranked, NOT search results.
+// Production ran for weeks in permanent silent 'boot-fallback' (the deployed
+// OPENAI_API_KEY exists only on the Preview target, so every production
+// embed threw "OPENAI_API_KEY not set" and recall returned the boot top-5
+// for any query). Callers that face the user/agent (recall-memory.js) must
+// use the WithMeta variant and surface the mode — a dead vector path must
+// never again fail silently.
 export async function retrieveMemories(userId, optsOrLimit = 30) {
-  if (!userId) return [];
+  const { facts } = await retrieveMemoriesWithMeta(userId, optsOrLimit);
+  return facts;
+}
+
+export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
+  if (!userId) return { facts: [], mode: 'boot', embedError: null };
 
   // Back-compat: a bare number means "limit, no query, default scope".
   const opts = typeof optsOrLimit === 'number'
@@ -125,12 +144,24 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
   const identityId = tenantId || userId;
 
   const pool = getPool();
+  const mapRow = (r) => ({
+    key: r.key,
+    value: r.value,
+    kind: r.kind || 'fact',
+    scope: r.scope || 'semantic',
+    importance: r.importance,
+    updatedAt: r.updated_at?.toISOString?.() || null,
+  });
 
   // VECTOR-FIRST path: embed the query and rank by cosine distance.
   if (query) {
     let vec = null;
+    let embedError = null;
     try { vec = await embed(query); }
-    catch (e) { console.error('[memory] retrieve embed failed (falling back to boot rank):', e?.message || e); }
+    catch (e) {
+      embedError = e?.message || String(e);
+      console.error('[memory] retrieve embed failed (falling back to boot rank):', embedError);
+    }
 
     if (vec) {
       const params = [identityId, scopes];
@@ -139,6 +170,8 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
       const { rows } = await pool.query(
         `SELECT subject AS key,
                 content AS value,
+                kind,
+                scope,
                 importance,
                 updated_at
            FROM memory_items
@@ -153,22 +186,27 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
           LIMIT $${limitParam}`,
         params
       );
-      return rows.map(r => ({
-        key: r.key,
-        value: r.value,
-        importance: r.importance,
-        updatedAt: r.updated_at?.toISOString?.() || null,
-      }));
+      return { facts: rows.map(mapRow), mode: 'vector', embedError: null };
     }
-    // Embedding failed → fall through to boot rank rather than erroring.
+    // Embedding failed → fall through to boot rank rather than erroring,
+    // but the mode SAYS so (see the WithMeta contract above).
+    const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow);
+    return { facts: boot, mode: 'boot-fallback', embedError };
   }
 
-  // BOOT path (no query, or embed failed): importance/confidence/recency.
+  // BOOT path (no query): importance/confidence/recency.
+  const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow);
+  return { facts: boot, mode: 'boot', embedError: null };
+}
+
+async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow) {
   const bootParams = [identityId, scopes];
   bootParams.push(limit); const bootLimitParam = bootParams.length;
   const { rows } = await pool.query(
     `SELECT subject AS key,
             content AS value,
+            kind,
+            scope,
             importance,
             updated_at
        FROM memory_items
@@ -181,12 +219,7 @@ export async function retrieveMemories(userId, optsOrLimit = 30) {
       LIMIT $${bootLimitParam}`,
     bootParams
   );
-  return rows.map(r => ({
-    key: r.key,
-    value: r.value,
-    importance: r.importance,
-    updatedAt: r.updated_at?.toISOString?.() || null,
-  }));
+  return rows.map(mapRow);
 }
 
 // upsertExtractedFact: write path for extract-memories.js. Same semantics as the

@@ -15,9 +15,15 @@
 // response_body_schema configured, so whatever JSON comes back is handed to
 // the LLM as raw context for it to speak naturally, not parsed structurally.
 
-import { retrieveMemories } from './memory.js';
+import { retrieveMemoriesWithMeta } from './memory.js';
 import { requireToolAuth } from '../../lib/security.js';
 import { resolveHandlerTenant } from '../../lib/tenant.js';
+
+// Mid-call recall depth. Was hardcoded 5, which — combined with the silent
+// boot fallback — meant the agent only ever saw the same five boot-top
+// facts. 8 gives a real search room to surface something beyond the
+// briefing's head without flooding the call's context.
+export const RECALL_LIMIT = 8;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -52,12 +58,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const facts = await retrieveMemories(userId, { limit: 5, query, tenantId: resolvedTenant.tenantId });
+    // MODE VISIBILITY (memory-fix bite, 2026-11-05): the response carries
+    // `mode` — 'vector' when the semantic search actually ran,
+    // 'boot-fallback' when the query embedding failed and these rows are
+    // merely the top boot-ranked facts. Production silently served
+    // boot-fallback for every query for weeks (OPENAI_API_KEY is set on
+    // the Preview target only); the mode makes that state observable in
+    // every tool result and log line from now on.
+    const { facts, mode } = await retrieveMemoriesWithMeta(userId, { limit: RECALL_LIMIT, query, tenantId: resolvedTenant.tenantId });
     if (!facts.length) {
-      return res.status(200).json({ found: false, summary: "I don't have anything saved about that." });
+      return res.status(200).json({ found: false, mode, summary: "I don't have anything saved about that." });
     }
     const summary = facts.map((f) => f.value).join(' ');
-    return res.status(200).json({ found: true, count: facts.length, facts, summary });
+    return res.status(200).json({ found: true, mode, count: facts.length, facts, summary });
   } catch (err) {
     console.error('[recall-memory] failed:', err?.message || err);
     return res.status(200).json({ found: false, summary: "I couldn't check my memory just now.", error: err?.message });

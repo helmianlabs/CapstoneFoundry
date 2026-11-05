@@ -7,7 +7,7 @@
       "maxDuration": 300
     },
     "api/conversation-webhook.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -20,13 +20,19 @@
     {
       "source": "/",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     }
   ]

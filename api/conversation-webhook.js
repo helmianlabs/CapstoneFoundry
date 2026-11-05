@@ -8,6 +8,12 @@
 // missed something (tab killed, network blip), the full authoritative
 // transcript still lands here and reconciles the record.
 //
+// Since the 2026-11-05 memory-fix bite it is also a MEMORY WRITE trigger:
+// after reconciling, it runs the shared extraction pipeline
+// (server/handlers/extract-memories.js) over the transcript it already
+// holds, so session-end memory saving no longer depends on the client
+// firing or on a re-fetchable transcript.
+//
 // ONE-TIME MANUAL SETUP REQUIRED (ElevenLabs workspace webhooks are
 // dashboard-configured, not API-configurable -- confirmed via their docs):
 //   1. ElevenLabs dashboard -> Settings -> Webhooks -> Create webhook
@@ -28,6 +34,7 @@
 
 import crypto from 'node:crypto';
 import { getPool } from '../server/handlers/memory.js';
+import { extractAndPersistMemories } from '../server/handlers/extract-memories.js';
 import { tenantEnforced, isTenantId } from '../lib/tenant.js';
 
 // ─── TENANT MAPPING (store wiring bite) ────────────────────────────────────
@@ -164,14 +171,18 @@ export default async function handler(req, res) {
     //
     // In enforced mode the session row's tenant_id is read too (compat
     // mode keeps the original id-only SELECT — the live DB may not have
-    // the tenant_id column yet).
+    // the tenant_id column yet). user_id is read in BOTH modes (the
+    // column predates the wiring — both INSERTs below write it): the
+    // memory extraction at the end of this handler saves under the
+    // session's own identity.
     const existing = await pool.query(
       enforced
-        ? `SELECT id, tenant_id FROM conversation_sessions WHERE conversation_id = $1`
-        : `SELECT id FROM conversation_sessions WHERE conversation_id = $1`,
+        ? `SELECT id, user_id, tenant_id FROM conversation_sessions WHERE conversation_id = $1`
+        : `SELECT id, user_id FROM conversation_sessions WHERE conversation_id = $1`,
       [conversationId]
     );
     let sessionId = existing.rows[0]?.id;
+    let sessionUserId = existing.rows[0]?.user_id || null;
     // The tenant this reconcile writes under. Existing session's stamp
     // wins; otherwise the session-metadata mapping decides (enforced).
     let tenantId = enforced ? (existing.rows[0]?.tenant_id || null) : null;
@@ -187,6 +198,7 @@ export default async function handler(req, res) {
           return res.status(200).json({ ok: true, reconciled: false, reason: 'no tenant mapping' });
         }
         tenantId = metaUserId;
+        sessionUserId = metaUserId;
         await pool.query(
           `INSERT INTO conversation_sessions (id, user_id, conversation_id, agent_id, source, tenant_id)
            VALUES ($1, $2, $3, $4, 'post_call_webhook_only', $5)
@@ -194,6 +206,7 @@ export default async function handler(req, res) {
           [insertId, metaUserId, conversationId, agentId || null, tenantId]
         );
       } else {
+        sessionUserId = 'troy';
         await pool.query(
           `INSERT INTO conversation_sessions (id, user_id, conversation_id, agent_id, source)
            VALUES ($1, $2, $3, $4, 'post_call_webhook_only')
@@ -248,7 +261,40 @@ export default async function handler(req, res) {
     );
 
     console.log('[conversation-webhook] reconciled', conversationId, 'turns:', turns.length);
-    return res.status(200).json({ ok: true, reconciled: true, turns: turns.length });
+
+    // ─── MEMORY EXTRACTION (memory-fix bite, 2026-11-05) ─────────────
+    // The webhook already HOLDS the authoritative transcript — run the
+    // shared extraction pipeline over it so a call's memories are saved
+    // server-side, with no dependence on the client firing
+    // /api/extract-memories or on an ElevenLabs API key that can
+    // re-fetch the conversation (the wrong-account key silently killed
+    // the client-fired path at the Nov 4 switch-over: transcript fetch
+    // 404 → client ignores the response → nothing saved since Oct 23).
+    // Identity follows the extract handler's rule: tenant id in
+    // enforced mode, the session row's user_id in compat mode. Failures
+    // are logged, never fatal — the reconcile above already landed and
+    // ElevenLabs must still get its clean 200. Overlapping triggers
+    // (client extract, mid-session checkpoints) are safe: persistence
+    // runs through saveMemoryCandidates' semantic dedup.
+    let memory = null;
+    const userTurns = turns.filter((t) => t.role === 'user' && t.content && t.content.trim());
+    if (turns.length >= 2 && userTurns.length >= 1) {
+      try {
+        memory = await extractAndPersistMemories({
+          transcript: turns.map((t) => ({ role: t.role, message: t.content })),
+          userId: tenantId || sessionUserId,
+          sessionId: conversationId,
+          tenantId,
+          req: null,
+        });
+        console.log('[conversation-webhook] memory extraction', conversationId, JSON.stringify(memory));
+      } catch (err) {
+        console.error('[conversation-webhook] memory extraction failed:', err?.message || err);
+        memory = { error: err?.message || 'extraction failed' };
+      }
+    }
+
+    return res.status(200).json({ ok: true, reconciled: true, turns: turns.length, memory });
   } catch (err) {
     console.error('[conversation-webhook] failed:', err?.message || err);
     // Still 200 -- we don't want ElevenLabs retry-storming an endpoint that
