@@ -207,6 +207,11 @@ globalThis.fetch = async (url, opts = {}) => {
     // memory.js embed() on the handler's saveMediaMemory path.
     return jsonRes({ data: [{ embedding: [0.01, 0.02, 0.03] }] });
   }
+  if (u.includes(':embedContent')) {
+    // memory.js embed() tries Gemini first since 2026-11-05 (free road);
+    // a valid 1536-dim reply keeps it off the OpenAI fallback above.
+    return jsonRes({ embedding: { values: Array(1536).fill(0.01) } });
+  }
   if (u.includes('generativelanguage.googleapis.com')) {
     events.push('provider');
     const method = String(opts.method || 'GET').toUpperCase();
@@ -251,7 +256,7 @@ globalThis.fetch = async (url, opts = {}) => {
   }
   throw new Error(`unexpected fetch in g2p fixture: ${u}`);
 };
-const countFetches = (needle, from) => fetchCalls.slice(from).filter((u) => u.includes(needle)).length;
+const countFetches = (needle, from) => fetchCalls.slice(from).filter((u) => u.includes(needle) && !u.includes(':embedContent')).length;
 
 // ─── Handler under test (imported AFTER the mocks) ─────────────────
 

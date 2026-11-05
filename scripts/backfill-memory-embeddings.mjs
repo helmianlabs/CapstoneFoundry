@@ -2,7 +2,8 @@
 // ---------------------------------------------------------------------------
 // ONE-SHOT, IDEMPOTENT backfill: give every memory_items row that is
 // missing its embedding one, using the SAME embed contract as the live
-// write paths (OpenAI text-embedding-3-small over "subject: content" —
+// write paths (Gemini gemini-embedding-001 at 1536 dims first, OpenAI
+// text-embedding-3-small as fallback, over "subject: content" —
 // see server/handlers/memory.js embed() call sites).
 //
 // WHY THIS EXISTS (memory-fix bite, 2026-11-05): recall's vector ranking
@@ -35,8 +36,18 @@ if (!conn || conn.trim().length < 12) {
   process.exit(1);
 }
 const openAiKey = process.env.OPENAI_API_KEY;
-if (!openAiKey && !dryRun) {
-  console.error('✗ OPENAI_API_KEY not set (required unless --dry-run).');
+const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+if (!openAiKey && !geminiKey && !dryRun) {
+  console.error('✗ Neither GEMINI_API_KEY nor OPENAI_API_KEY is set (one is required unless --dry-run).');
+  process.exit(1);
+}
+// Guard step for a provider switch (approved 2026-11-05): with
+// --reset-embeddings AND --user=<id>, existing embeddings for that user are
+// cleared first, so the backfill re-embeds the whole store in ONE vector
+// space (no old-provider vectors mixed in). Refused without --user.
+const resetEmbeddings = args.includes('--reset-embeddings');
+if (resetEmbeddings && !onlyUser) {
+  console.error('✗ --reset-embeddings requires --user=<id>.');
   process.exit(1);
 }
 
@@ -50,7 +61,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-async function embed(text) {
+async function embedViaOpenAI(text) {
   const r = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { Authorization: `Bearer ${openAiKey}`, 'Content-Type': 'application/json' },
@@ -61,7 +72,53 @@ async function embed(text) {
   return data.data[0].embedding;
 }
 
+async function embedViaGemini(text) {
+  const r = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
+      body: JSON.stringify({
+        content: { parts: [{ text: String(text).slice(0, 8000) }] },
+        outputDimensionality: 1536,
+      }),
+    }
+  );
+  if (!r.ok) throw new Error(`Gemini embed ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const data = await r.json();
+  const values = data?.embedding?.values;
+  if (!Array.isArray(values) || values.length !== 1536) throw new Error('Gemini embed: unexpected response shape');
+  let norm = 0;
+  for (const v of values) norm += v * v;
+  norm = Math.sqrt(norm) || 1;
+  return values.map((v) => v / norm);
+}
+
+// SAME contract as the live write paths: Gemini first when its key is
+// present (free tier), OpenAI as fallback.
+async function embed(text) {
+  if (geminiKey) {
+    try {
+      return await embedViaGemini(text);
+    } catch {
+      /* fall through to OpenAI */
+    }
+  }
+  return embedViaOpenAI(text);
+}
+
 try {
+  if (resetEmbeddings) {
+    if (dryRun) {
+      console.log(`[dry-run] would clear existing embeddings for user ${onlyUser} (guard step), then backfill all rows`);
+    } else {
+      const cleared = await pool.query(
+        `UPDATE memory_items SET embedding = NULL WHERE user_id = $1 AND embedding IS NOT NULL`,
+        [onlyUser]
+      );
+      console.log(`guard step: cleared ${cleared.rowCount} existing embedding(s) for user ${onlyUser}`);
+    }
+  }
   const { rows: before } = await pool.query(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE embedding IS NULL)::int AS missing

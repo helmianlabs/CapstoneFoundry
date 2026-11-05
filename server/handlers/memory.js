@@ -15,7 +15,11 @@
 //   kind    ← 'fact' (default; extractor handles richer kinds)
 //   scope   ← 'semantic'
 //
-// Embeddings via OpenAI text-embedding-3-small (1536 dims).
+// Embeddings: Gemini gemini-embedding-001 at 1536 dims (free tier) first,
+// OpenAI text-embedding-3-small (1536 dims) as fallback — Troy's free-road
+// steer, 2026-11-05. Both fit the VECTOR(1536) column; embed() normalizes
+// Gemini's output (not pre-normalized below 3072 dims) so every consumer
+// sees unit vectors exactly as with OpenAI's.
 // Semantic dedup: skipped for v1 of the rewrite — TODO wire SIM_UPDATE/
 // SIM_CONFLICT_LO logic per spec lines 355-468. Current behavior:
 //   - Same (user_id, scope='semantic', kind='fact', subject=key) → UPDATE.
@@ -52,15 +56,57 @@ function getOpenAI() {
   return _openai;
 }
 
-async function embed(text) {
-  const trimmed = String(text || '').slice(0, 8000);
-  if (!trimmed) return null;
+async function embedViaOpenAI(text) {
   const oa = getOpenAI();
   const res = await oa.embeddings.create({
     model: 'text-embedding-3-small',
-    input: trimmed,
+    input: text,
   });
   return res.data[0].embedding;
+}
+
+async function embedViaGemini(text) {
+  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY not set');
+  const r = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        content: { parts: [{ text }] },
+        outputDimensionality: 1536,
+      }),
+    }
+  );
+  if (!r.ok) throw new Error(`Gemini embed ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const data = await r.json();
+  const values = data?.embedding?.values;
+  if (!Array.isArray(values) || values.length !== 1536) {
+    throw new Error('Gemini embed: unexpected response shape');
+  }
+  // Below 3072 dims the API does not pre-normalize; normalize so stored and
+  // query vectors are unit length, matching OpenAI's output contract.
+  let norm = 0;
+  for (const v of values) norm += v * v;
+  norm = Math.sqrt(norm) || 1;
+  return values.map((v) => v / norm);
+}
+
+async function embed(text) {
+  const trimmed = String(text || '').slice(0, 8000);
+  if (!trimmed) return null;
+  // Free road first (Troy, 2026-11-05): Gemini when its key is present, with
+  // the OpenAI call kept as fallback. If both fail, the OpenAI error throws —
+  // the exact failure surface callers already handle (NULL row / boot-fallback).
+  if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY) {
+    try {
+      return await embedViaGemini(trimmed);
+    } catch {
+      /* fall through to OpenAI */
+    }
+  }
+  return embedViaOpenAI(trimmed);
 }
 
 function vecLiteral(vec) {

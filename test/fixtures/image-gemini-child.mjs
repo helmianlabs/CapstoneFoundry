@@ -176,6 +176,11 @@ globalThis.fetch = async (url, opts = {}) => {
     // memory.js embed() on the handler's saveMediaMemory path.
     return jsonRes({ data: [{ embedding: [0.01, 0.02, 0.03] }] });
   }
+  if (u.includes(':embedContent')) {
+    // memory.js embed() tries Gemini first since 2026-11-05 (free road);
+    // a valid 1536-dim reply keeps it off the OpenAI fallback above.
+    return jsonRes({ embedding: { values: Array(1536).fill(0.01) } });
+  }
   if (u.includes('generativelanguage.googleapis.com')) {
     events.push('provider');
     geminiRequests.push({
@@ -264,7 +269,7 @@ async function runGemini({ body = {}, headers = {}, userId = TENANT, expectMemor
     url: typeof res.body?.url === 'string' ? res.body.url : null,
     providerField: res.body?.provider ?? null,
     modelField: res.body?.model ?? null,
-    providerDelta: countFetches('generativelanguage.googleapis.com', before.fetch),
+    providerDelta: countFetches(':generateContent', before.fetch),
     profileDelta: profileQueries - before.profiles,
     puts: blobPuts.slice(before.puts),
     ledger: ledgerInserts.slice(before.ledger),
