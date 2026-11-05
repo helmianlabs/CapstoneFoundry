@@ -388,6 +388,22 @@
     elevenlabs-convai { display: none; }
     .elevenlabs-mode .orb, .elevenlabs-mode .status, .elevenlabs-mode .transcript { display: none; }
 
+    /* Direct voice (app-owned call pill) — the phone app's voice surface */
+    #directCallBtn {
+      position: fixed; right: 20px; bottom: 24px; z-index: 60;
+      background: rgba(0,212,255,0.12); border: 1px solid rgba(0,212,255,0.6);
+      color: #00d4ff; font-family: 'Courier New', monospace; font-size: 0.95rem;
+      padding: 14px 22px; border-radius: 999px; cursor: pointer;
+      letter-spacing: 0.08em;
+    }
+    #directCallBtn.live { border-color: rgba(248,113,113,0.85); color: #f87171; }
+    #directCallBtn:disabled { opacity: 0.6; cursor: wait; }
+    #directCallStatus {
+      position: fixed; right: 20px; bottom: 86px; z-index: 60;
+      color: #a0aec0; font-family: 'Courier New', monospace; font-size: 0.8rem;
+      text-align: right; max-width: 70vw;
+    }
+
     /* ─── Media gallery panel ───────────────────────────────────────── */
     .gallery-panel {
       position: fixed; inset: 0;
@@ -943,6 +959,10 @@
 
   <!-- ElevenLabs widget injected dynamically by initApp AFTER memories are loaded -->
   <div id="widget-mount"></div>
+
+  <!-- Direct voice pill: shown only in the phone app (see directVoiceWanted) -->
+  <div id="directCallStatus" style="display:none;"></div>
+  <button id="directCallBtn" type="button" style="display:none;">🎙 Talk</button>
   <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
 
   <script>
@@ -1458,6 +1478,128 @@
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
       };
     });
+
+    // ── DIRECT VOICE (app-owned call surface) ────────────────────────
+    // Why: inside the Android app window, the hosted widget's two
+    // transports each break a different direction (WebRTC: silent mic
+    // track — ElevenLabs logged 0.0s of user audio; websocket: the
+    // playback engine starts asleep and only wakes on a screen tap).
+    // Full trace in the 2026-11-04 memory log. On the phone app the app
+    // therefore runs the session itself through the ElevenLabs SDK
+    // (bundled by src/voice-direct.js): the tap below first fires the
+    // SAME elevenlabs-convai:call event the widget fires, so the
+    // handler above builds the config — per-user prompt override,
+    // voice choice, dynamic variables, turn-capture callbacks, media
+    // pollers, background-audio holder — identically to a widget call.
+    // Then the prepared config goes to the SDK on the websocket
+    // transport, whose microphone path (plain capture) is the one that
+    // works in this window. The widget stays the voice surface in
+    // ordinary browsers, where both of its directions work.
+    const DIRECT_VOICE_AGENT_ID = 'agent_9101m6kwm1sqe0ctz33pn1q7p07w';
+    let directSession = null;
+    let directLevelsTimer = null;
+
+    function directVoiceWanted() {
+      try {
+        const forced = localStorage.getItem('thinkinbuddy_direct_voice_v1');
+        if (forced === '1') return true;
+        if (forced === '0') return false;
+      } catch (e) { /* storage unavailable — fall through to platform */ }
+      return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+    }
+
+    function directCallUi(state, text) {
+      const btn = document.getElementById('directCallBtn');
+      const status = document.getElementById('directCallStatus');
+      if (!btn || !status) return;
+      const buddy = (typeof currentUser !== 'undefined' && currentUser && currentUser.buddyName) || 'Mark';
+      if (state === 'idle') {
+        btn.disabled = false; btn.classList.remove('live');
+        btn.textContent = '🎙 Talk to ' + buddy;
+        status.style.display = 'none';
+      } else if (state === 'connecting') {
+        btn.disabled = true; btn.classList.remove('live');
+        btn.textContent = 'Connecting…';
+        status.style.display = 'block'; status.textContent = 'Starting the call…';
+      } else if (state === 'live') {
+        btn.disabled = false; btn.classList.add('live');
+        btn.textContent = '■ End call';
+        status.style.display = 'block'; status.textContent = text || 'Listening…';
+      } else if (state === 'error') {
+        btn.disabled = false; btn.classList.remove('live');
+        btn.textContent = '🎙 Talk to ' + buddy;
+        status.style.display = 'block'; status.textContent = text || 'Something went wrong.';
+      }
+    }
+
+    function startDirectLevels() {
+      stopDirectLevels();
+      directLevelsTimer = setInterval(() => {
+        if (!directSession) return;
+        try {
+          cfBeacon('voice-levels', {
+            in: +directSession.getInputVolume().toFixed(3),
+            out: +directSession.getOutputVolume().toFixed(3),
+          });
+        } catch (e) { /* session already gone */ }
+      }, 5000);
+    }
+    function stopDirectLevels() {
+      if (directLevelsTimer) { clearInterval(directLevelsTimer); directLevelsTimer = null; }
+    }
+
+    async function startDirectVoice() {
+      if (directSession) {
+        try { await directSession.endSession(); } catch (e) { /* already closed */ }
+        return;
+      }
+      if (!window.__cfVoice || typeof window.__cfVoice.startSession !== 'function') {
+        directCallUi('error', 'Voice engine still loading — try again in a moment.');
+        return;
+      }
+      directCallUi('connecting');
+      // Build the config through the widget's own call handler (above)
+      // so a direct call is configured exactly like a widget call.
+      const cfg = {};
+      document.dispatchEvent(new CustomEvent('elevenlabs-convai:call', { detail: { config: cfg } }));
+      try {
+        directSession = await window.__cfVoice.startSession({
+          agentId: DIRECT_VOICE_AGENT_ID,
+          connectionType: 'websocket',
+          overrides: cfg.overrides,
+          dynamicVariables: cfg.dynamicVariables,
+          userId: (cfg.dynamicVariables && cfg.dynamicVariables.user_id) || undefined,
+          onConnect: (info) => {
+            if (typeof cfg.onConnect === 'function') try { cfg.onConnect(info); } catch {}
+            directCallUi('live');
+          },
+          onMessage: cfg.onMessage,
+          onDisconnect: (info) => {
+            if (typeof cfg.onDisconnect === 'function') try { cfg.onDisconnect(info); } catch {}
+            directSession = null;
+            stopDirectLevels();
+            directCallUi('idle');
+          },
+          onError: (err) => {
+            cfBeacon('direct-voice-error', { message: String((err && err.message) || err || '').slice(0, 200) });
+            directCallUi('error', 'The call hit a problem — ' + String((err && err.message) || 'unknown error').slice(0, 120));
+          },
+          onModeChange: (m) => {
+            if (!directSession) return;
+            const mode = (m && m.mode) || m;
+            directCallUi('live', mode === 'speaking' ? 'Mark is talking…' : 'Listening…');
+          },
+        });
+        startDirectLevels();
+      } catch (err) {
+        directSession = null;
+        cfBeacon('direct-voice-error', { message: String((err && err.message) || err || '').slice(0, 200) });
+        directCallUi('error', 'Could not start the call — ' + String((err && err.message) || 'unknown error').slice(0, 120));
+      }
+    }
+
+    const directBtnEl = document.getElementById('directCallBtn');
+    if (directBtnEl) directBtnEl.addEventListener('click', startDirectVoice);
 
     // pagehide fires for TWO very different situations, and treating them the
     // same is what used to end a call the moment the phone was pocketed:
@@ -2539,15 +2681,25 @@
       };
       await primeSessionPrompt();
 
-      // Create widget after agent is primed
+      // Create widget after agent is primed — except in the phone app,
+      // where the app runs voice itself (see DIRECT VOICE above): there
+      // the widget is never created and the app's own call pill shows.
+      const useDirectVoice = (typeof directVoiceWanted === 'function') && directVoiceWanted();
       const mount = document.getElementById('widget-mount');
-      if (mount) {
+      if (mount && !useDirectVoice) {
         const widget = document.createElement('elevenlabs-convai');
         widget.setAttribute('id', 'convai-widget');
         widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
         mount.appendChild(widget);
+        document.body.classList.add('elevenlabs-mode');
       }
-      document.body.classList.add('elevenlabs-mode');
+      if (useDirectVoice) {
+        const pill = document.getElementById('directCallBtn');
+        if (pill) {
+          pill.style.display = 'block';
+          if (typeof directCallUi === 'function') directCallUi('idle');
+        }
+      }
 
       // Mark first visit done
       if (user.firstVisit) {
@@ -3411,5 +3563,6 @@
 
   <script type="module" src="/onboarding.js"></script>
   <script type="module" src="/connect.js"></script>
+  <script type="module" src="/src/voice-direct.js"></script>
 </body>
 </html>
