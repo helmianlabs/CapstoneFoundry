@@ -1312,6 +1312,23 @@
       const cfg = e.detail?.config;
       if (!cfg) { console.warn('[MEM-HB] BAIL — no e.detail.config, cannot inject onConnect'); return; }
 
+      // ── TRANSPORT: WEBSOCKET, NOT WEBRTC (2026-11-04 night) ──────
+      // The widget's public flow carries a conversationToken, and the
+      // SDK's determineConnectionType (@elevenlabs/client,
+      // ConnectionFactory) maps token sessions to WebRTC unless the
+      // config says otherwise. Inside this app's Android WebView the
+      // WebRTC microphone track comes up silent: ElevenLabs' own call
+      // records show total_audio_input_seconds 0.0 and zero ASR calls
+      // on the dead calls (plus their "non-continuous audio input"
+      // warning), while plain getUserMedia capture on the same phone
+      // succeeds every time (mic-probe-ok) and one lucky WebRTC
+      // negotiation carried 9.44s of user audio. The websocket
+      // transport sends the mic as PCM chunks over the socket — the
+      // plain capture path — so force it here, on the same config
+      // object whose prompt override provably reaches the session.
+      cfg.connectionType = 'websocket';
+      cfBeacon('call-config', { connectionType: 'websocket' });
+
       // ── PER-USER ISOLATION ──────────────────────────────────────────────
       // Apply THIS user's prompt (with only THEIR memories) as a per-session
       // override scoped to this call's socket. SDK ships cfg.overrides.agent.
