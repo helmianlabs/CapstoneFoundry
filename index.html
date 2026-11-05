@@ -1214,10 +1214,58 @@
       } catch (e) { console.warn('[MEM-HB] extract-memories failed', e); }
     }
 
+    // ── Client error beacon (2026-11-04) ─────────────────────────────
+    // Ships widget events + mic-probe results to /api/client-log, whose
+    // server logs are readable off-device — the remote substitute for
+    // logcat. Built after the first on-phone test: conversations died
+    // at 0 seconds (ElevenLabs recorded them "failed", 0 messages) with
+    // no error visible on the phone and no mic prompt ever shown.
+    function cfBeacon(kind, data) {
+      try {
+        fetch('/api/client-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, data: data || {}, ua: navigator.userAgent, ts: Date.now() }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch (e) { /* the beacon must never break the app */ }
+    }
+    window.addEventListener('error', (e) => cfBeacon('window-error', { message: String(e.message || '').slice(0, 200) }));
+    let cfSawCallLife = false;
+
     // Catch-all heartbeat: log EVERY elevenlabs-* event so we can see what the widget actually dispatches.
     ['elevenlabs-convai:call', 'elevenlabs-convai:call-started', 'elevenlabs-convai:call-ended', 'elevenlabs-convai:message', 'elevenlabs-convai:disconnect', 'elevenlabs-convai:status'].forEach(evtName => {
       document.addEventListener(evtName, (e) => {
         console.log('[MEM-HB] event fired:', evtName, 'detail keys:', Object.keys(e.detail || {}));
+        if (evtName === 'elevenlabs-convai:call-started' || evtName === 'elevenlabs-convai:message') cfSawCallLife = true;
+        const d = e.detail || {};
+        const small = {};
+        ['error', 'message', 'reason', 'status', 'type'].forEach(k => {
+          if (typeof d[k] === 'string') small[k] = d[k].slice(0, 200);
+          else if (typeof d[k] === 'number') small[k] = d[k];
+        });
+        small.keys = Object.keys(d).slice(0, 12);
+        cfBeacon('widget-event', { event: evtName, ...small });
+        if (evtName === 'elevenlabs-convai:call') {
+          cfSawCallLife = false;
+          // If the call shows no sign of life within 9 seconds, probe
+          // the microphone directly and report the exact result — this
+          // distinguishes "permission never granted" from widget-side
+          // failures without anyone relaying screenshots.
+          setTimeout(() => {
+            if (cfSawCallLife) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+              cfBeacon('mic-probe-fail', { name: 'no-mediaDevices' });
+              return;
+            }
+            navigator.mediaDevices.getUserMedia({ audio: true })
+              .then((stream) => {
+                stream.getTracks().forEach(t => t.stop());
+                cfBeacon('mic-probe-ok', {});
+              })
+              .catch((err) => cfBeacon('mic-probe-fail', { name: String(err.name || ''), message: String(err.message || '').slice(0, 200) }));
+          }, 9000);
+        }
       });
     });
 
