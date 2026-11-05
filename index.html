@@ -1232,6 +1232,15 @@
     }
     window.addEventListener('error', (e) => cfBeacon('window-error', { message: String(e.message || '').slice(0, 200) }));
     let cfSawCallLife = false;
+    // The widget bundle does NOT emit call-started/message DOM events
+    // (see the note at the :call handler below), so call life is ALSO
+    // signaled by the config-callback wrappers in that handler:
+    // onConnect dispatches 'thinkinbuddy:call-connected' and onMessage
+    // dispatches 'thinkinbuddy:turn'. Without these listeners
+    // cfSawCallLife stayed false on healthy calls and the mic probe
+    // below fired mid-call (found 2026-11-04, see the probe comment).
+    document.addEventListener('thinkinbuddy:call-connected', () => { cfSawCallLife = true; });
+    document.addEventListener('thinkinbuddy:turn', () => { cfSawCallLife = true; });
 
     // Catch-all heartbeat: log EVERY elevenlabs-* event so we can see what the widget actually dispatches.
     ['elevenlabs-convai:call', 'elevenlabs-convai:call-started', 'elevenlabs-convai:call-ended', 'elevenlabs-convai:message', 'elevenlabs-convai:disconnect', 'elevenlabs-convai:status'].forEach(evtName => {
@@ -1248,10 +1257,17 @@
         cfBeacon('widget-event', { event: evtName, ...small });
         if (evtName === 'elevenlabs-convai:call') {
           cfSawCallLife = false;
-          // If the call shows no sign of life within 9 seconds, probe
-          // the microphone directly and report the exact result — this
-          // distinguishes "permission never granted" from widget-side
-          // failures without anyone relaying screenshots.
+          // Probe ONLY a call that never connected (the 0-second death
+          // this beacon was built for). It must NEVER run during a live
+          // call: a second getUserMedia contends for the phone's capture
+          // device mid-conversation. On 2026-11-04 the probe keyed on
+          // DOM events this widget never emits, so it fired 9s into
+          // HEALTHY calls too; call life now also arrives via the
+          // 'thinkinbuddy:call-connected' / 'thinkinbuddy:turn' events
+          // above. The dead-mic-on-a-live-call failure class is read
+          // from the ElevenLabs transcript instead (2026-11-04: a full
+          // two-way call at 22:43 MST, then a greeting-only call 45s
+          // later whose transcript held zero user turns).
           setTimeout(() => {
             if (cfSawCallLife) return;
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
