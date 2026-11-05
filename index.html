@@ -2092,6 +2092,7 @@
 
     const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const IS_NATIVE_APP = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
     const bgAudio = {
       el: null, url: null, wakeLock: null, active: false, lastError: null,
 
@@ -2100,6 +2101,14 @@
         // the mic switches the audio session and silently stops mic capture
         // (Mark greets, then hears nothing). Skip the keepalive on iOS.
         if (IS_IOS) { this.note('skipped on iOS (keeps mic alive)'); console.log('[BG-AUDIO] skipped on iOS'); return; }
+        // The same audio-session switch bites inside the native app's web
+        // view on Android: the night of 2026-11-04 every in-app call greeted
+        // and then heard nothing (ElevenLabs recorded 0.0s of user audio;
+        // the app's own input meter read zero at the source), across the
+        // widget and the direct SDK surface and both transports, while plain
+        // page-level mic capture on the same phone worked. The keepalive is
+        // a browser pocket-mode aid; the native app does not need it. Skip.
+        if (IS_NATIVE_APP) { this.note('skipped in app (keeps mic alive)'); console.log('[BG-AUDIO] skipped in native app'); return; }
         if (this.active) return;
         if (!bgAudioPrefs().background) { this.note('disabled in settings'); return; }
         try {
