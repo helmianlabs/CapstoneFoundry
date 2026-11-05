@@ -112,15 +112,26 @@
     .report-answer-btn:disabled { text-decoration: none; cursor: default; }
 
     /* ─── Onboarding overlay ─────────────────────────────────────── */
+    /* Overflow law (found 2026-11-04, Troy's phone): a fixed, centered
+       flex column with no scrolling clips its content off BOTH screen
+       edges when the content outgrows the viewport — which large
+       accessibility font sizes guarantee here (two name fields, two
+       consent boxes, two buttons). The "Let's go" button sat at/below
+       the screen edge, barely touchable. Fix: the column scrolls, and
+       auto margins on the first/last child center the group when it
+       fits and collapse when it doesn't, so the top is never clipped. */
     .onboarding {
       position: fixed; inset: 0;
       background: rgba(5,5,8,0.95);
       backdrop-filter: blur(8px);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      overflow-y: auto;
       z-index: 100;
       padding: 20px;
       text-align: center;
     }
+    .onboarding > :first-child { margin-top: auto; }
+    .onboarding > :last-child { margin-bottom: auto; }
     .onboarding.hidden { display: none; }
     .onboarding h1 {
       font-size: 1.5rem; letter-spacing: 0.3em; color: #00d4ff;
