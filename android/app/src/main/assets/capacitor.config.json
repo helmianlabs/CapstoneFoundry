@@ -2,7 +2,7 @@
 	"appId": "com.capstonefoundry.app",
 	"appName": "Capstone Foundry",
 	"server": {
-		"url": "https://thinkbuddy-sandy.vercel.app",
+		"url": "https://capstonefoundry.vercel.app",
 		"cleartext": false,
 		"androidScheme": "https"
 	},

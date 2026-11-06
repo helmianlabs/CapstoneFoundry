@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capstone Foundry — Autonomous Executive AI Pair Programmer</title>
+  <meta name="description" content="Capstone Foundry pairs executive voice interaction with persistent PostgreSQL memory and Helmion Hands desktop execution.">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(13, 17, 27, 0.7);
+      --card-border: rgba(0, 212, 255, 0.25);
+      --accent: #00d4ff;
+      --accent-glow: rgba(0, 212, 255, 0.4);
+      --purple: #8b5cf6;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --green: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: var(--bg); color: var(--text); overflow-x: hidden; line-height: 1.6; }
+    
+    /* Background Glows */
+    .glow-orb {
+      position: absolute; width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, rgba(0,0,0,0) 70%);
+      top: -200px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 0;
+    }
+    .glow-orb-2 {
+      position: absolute; width: 500px; height: 500px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(0,0,0,0) 70%);
+      top: 600px; right: -100px; pointer-events: none; z-index: 0;
+    }
+
+    /* Container */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* Nav */
+    nav { height: 80px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.25rem; color: #fff; text-decoration: none; }
+    .logo-badge { background: linear-gradient(135deg, var(--accent), var(--purple)); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000; }
+    .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--accent); }
+    .btn-nav { background: rgba(0, 212, 255, 0.12); border: 1px solid var(--accent); color: var(--accent); padding: 8px 18px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+    .btn-nav:hover { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent-glow); }
+
+    /* Hero */
+    .hero { padding: 90px 0 60px; text-align: center; }
+    .hero-pill { display: inline-flex; align-items: center; gap: 8px; background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.3); padding: 6px 16px; border-radius: 999px; font-size: 0.85rem; color: var(--accent); margin-bottom: 24px; }
+    .hero-pill .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+    .hero h1 { font-size: 3.5rem; font-weight: 800; line-height: 1.15; margin-bottom: 20px; letter-spacing: -0.02em; }
+    .hero h1 span { background: linear-gradient(135deg, #fff 30%, var(--accent) 70%, var(--purple) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 1.25rem; color: var(--text-muted); max-width: 780px; margin: 0 auto 36px; }
+    
+    .hero-cta { display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 48px; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #0099ff); color: #000; font-weight: 700; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-size: 1.05rem; box-shadow: 0 0 25px var(--accent-glow); transition: all 0.2s; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 35px var(--accent-glow); }
+    .btn-secondary { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 600; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-size: 1.05rem; transition: all 0.2s; }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
+
+    /* Live Telemetry Card */
+    .telemetry-card {
+      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+      padding: 24px; max-width: 900px; margin: 0 auto; backdrop-filter: blur(12px);
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left;
+    }
+    .tele-item { border-left: 2px solid var(--accent); padding-left: 14px; }
+    .tele-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 4px; }
+    .tele-val { font-size: 1.05rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; }
+    .badge-green { color: var(--green); }
+
+    /* Features Grid */
+    .features { padding: 90px 0; }
+    .section-title { text-align: center; margin-bottom: 54px; }
+    .section-title h2 { font-size: 2.4rem; font-weight: 800; margin-bottom: 12px; }
+    .section-title p { color: var(--text-muted); font-size: 1.1rem; }
+    
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; }
+    .card { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 32px; backdrop-filter: blur(10px); transition: all 0.3s; }
+    .card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0, 212, 255, 0.15); }
+    .card-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(0, 212, 255, 0.1); border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 20px; }
+    .card h3 { font-size: 1.35rem; font-weight: 700; margin-bottom: 12px; }
+    .card p { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; }
+
+    /* Pricing Table */
+    .pricing { padding: 80px 0; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.06); }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+    .price-card { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 28px 24px; text-align: center; position: relative; }
+    .price-card.featured { border-color: var(--accent); box-shadow: 0 0 25px rgba(0,212,255,0.2); }
+    .featured-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; font-size: 0.75rem; font-weight: 800; padding: 2px 12px; border-radius: 999px; text-transform: uppercase; }
+    .price-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+    .price-val { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; color: #fff; }
+    .price-val span { font-size: 0.9rem; color: var(--text-muted); font-weight: 400; }
+    .price-features { list-style: none; margin: 20px 0 24px; text-align: left; font-size: 0.88rem; color: var(--text-muted); }
+    .price-features li { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .price-features li::before { content: "✓"; color: var(--accent); font-weight: 700; }
+
+    /* Footer */
+    footer { padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.4rem; }
+      nav .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-orb"></div>
+  <div class="glow-orb-2"></div>
+
+  <div class="container">
+    <!-- Navbar -->
+    <nav>
+      <a href="/" class="logo">
+        <div class="logo-badge">CF</div>
+        Capstone Foundry
+      </a>
+      <div class="nav-links">
+        <a href="#features">Capabilities</a>
+        <a href="#hands">Helmion Hands</a>
+        <a href="#security">Security</a>
+        <a href="#pricing">Tiers</a>
+      </div>
+      <a href="/" class="btn-nav">Launch App</a>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-pill">
+        <span class="dot"></span>
+        Production Live on Vercel • Helmion Spoke Connected
+      </div>
+      <h1>
+        Build Fast. Remember Everything.<br>
+        <span>Executive Voice AI with Hands.</span>
+      </h1>
+      <p>
+        Capstone Foundry pairs low-latency ElevenLabs conversational voice with persistent PostgreSQL memory categorization and real-world desktop execution via Helmion Hands.
+      </p>
+
+      <div class="hero-cta">
+        <a href="/" class="btn-primary">Open Voice Foundry</a>
+        <a href="/mark-android.apk" class="btn-secondary">Download Android APK</a>
+      </div>
+
+      <!-- Telemetry Status Card -->
+      <div class="telemetry-card">
+        <div class="tele-item">
+          <div class="tele-label">Persistent Memory</div>
+          <div class="tele-val"><span class="badge-green">●</span> Neon PostgreSQL</div>
+        </div>
+        <div class="tele-item">
+          <div class="tele-label">Hands Spoke</div>
+          <div class="tele-val"><span class="badge-green">●</span> Online (pc-troy)</div>
+        </div>
+        <div class="tele-item">
+          <div class="tele-label">Voice Agent</div>
+          <div class="tele-val"><span class="badge-green">●</span> Mark (11 Tools)</div>
+        </div>
+        <div class="tele-item">
+          <div class="tele-label">Security Shield</div>
+          <div class="tele-val"><span class="badge-green">●</span> Swarm + Injection Gate</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Key Features -->
+    <section class="features" id="features">
+      <div class="section-title">
+        <h2>Engineered for Autonomous Execution</h2>
+        <p>A unified suite built for executives, engineers, and real-world operations.</p>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="card-icon">🧠</div>
+          <h3>Librarian Persistent Memory</h3>
+          <p>Every decision, truck route, and project specification is automatically indexed into Neon PostgreSQL with exact timestamps and categorical classification (Business, Build, Personal, Operations).</p>
+        </div>
+
+        <div class="card" id="hands">
+          <div class="card-icon">🛠</div>
+          <h3>Helmion Hands into Desktop</h3>
+          <p>Voice-driven execution into your computer. Connect your PC via 6-digit pairing to run builds, scaffold applications, and execute governed tasks through Helmion.exe and Hetzner cloud runners.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎙</div>
+          <h3>Low-Latency Voice Foundry</h3>
+          <p>Ultra-responsive conversational interface powered by ElevenLabs with real-time webhook tool execution, structured document exports, and dynamic context injection.</p>
+        </div>
+
+        <div class="card" id="security">
+          <div class="card-icon">🛡</div>
+          <h3>AI Swarm & Injection Defense</h3>
+          <p>Dual-window sliding rate limiter, automated bot-swarm interception, adversarial prompt injection filtering, and full COPPA & Apple/Google App Store compliance.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📦</div>
+          <h3>Tangible Artifact Exporter</h3>
+          <p>Export conversation outputs, reports, and code instantly to formatted PDF, Google Docs, Markdown, and the interactive Media Gallery.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📱</div>
+          <h3>Cross-Platform Mobile & Web</h3>
+          <p>Runs as an installable PWA or native Android (APK/AAB) and iOS (IPA) wrapper powered by Capacitor with push notifications, camera, and offline capabilities.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing Grid -->
+    <section class="pricing" id="pricing">
+      <div class="section-title">
+        <h2>Subscription Tiers</h2>
+        <p>Powered by RevenueCat, supporting Apple In-App Purchase, Google Play Billing, and Stripe.</p>
+      </div>
+
+      <div class="pricing-grid">
+        <div class="price-card">
+          <div class="price-title">Free</div>
+          <div class="price-val">$0<span>/mo</span></div>
+          <ul class="price-features">
+            <li>Core voice conversation</li>
+            <li>50 basic memory recalls</li>
+            <li>Community support</li>
+          </ul>
+        </div>
+
+        <div class="price-card">
+          <div class="price-title">Buddy Starter</div>
+          <div class="price-val">$2.99<span>/mo</span></div>
+          <ul class="price-features">
+            <li>Extended voice minutes</li>
+            <li>Basic memory categorization</li>
+            <li>Curriculum exercises</li>
+          </ul>
+        </div>
+
+        <div class="price-card">
+          <div class="price-title">Buddy</div>
+          <div class="price-val">$9.99<span>/mo</span></div>
+          <ul class="price-features">
+            <li>Unlimited memory Librarian</li>
+            <li>Full Voice Foundry access</li>
+            <li>Document exports (PDF/MD)</li>
+          </ul>
+        </div>
+
+        <div class="price-card featured">
+          <div class="featured-badge">Top Tier</div>
+          <div class="price-title">Helmian Connect</div>
+          <div class="price-val">$29.99<span>/mo</span></div>
+          <ul class="price-features">
+            <li><strong>Hands into Desktop:</strong> Helmion.exe</li>
+            <li>Phone ↔ PC relay execution</li>
+            <li>Hetzner cloud runner access</li>
+            <li>Priority 3D Meshy & Media export</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p>&copy; 2026 Capstone Foundry &bull; Built with Helmion Autonomous Systems &bull; <a href="/">Open App</a></p>
+    </footer>
+  </div>
+</body>
+</html>

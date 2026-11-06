@@ -82,6 +82,7 @@ const routes = {
   'export-document': () => import('../server/handlers/export-document.js'),
   'extract-memories': () => import('../server/handlers/extract-memories.js'),
   'generate-3d': () => import('../server/handlers/generate-3d.js'),
+  'hands-build': () => import('../server/handlers/hands-build.js'),
   'image': () => import('../server/handlers/image.js'),
   'image-flux': () => import('../server/handlers/image-flux.js'),
   'image-gemini': () => import('../server/handlers/image-gemini.js'),

@@ -21,7 +21,7 @@ test('capacitor.config.ts carries the store identity and the live hostname', () 
   const src = read('capacitor.config.ts');
   assert.ok(src.includes("appId: 'com.capstonefoundry.app'"));
   assert.ok(src.includes("appName: 'Capstone Foundry'"));
-  assert.ok(src.includes("url: 'https://thinkbuddy-sandy.vercel.app'"));
+  assert.ok(src.includes("url: 'https://capstonefoundry.vercel.app'"));
   // The dead hostname the audit flagged must not be the server URL.
   assert.ok(!src.includes('thinkinbuddy.vercel.app'));
 });
@@ -32,7 +32,7 @@ test('the CLI-parsed iOS config (capacitor.config.json) parses and matches', () 
   const cfg = JSON.parse(readFileSync(path, 'utf8'));
   assert.equal(cfg.appId, 'com.capstonefoundry.app');
   assert.equal(cfg.appName, 'Capstone Foundry');
-  assert.equal(cfg.server.url, 'https://thinkbuddy-sandy.vercel.app');
+  assert.equal(cfg.server.url, 'https://capstonefoundry.vercel.app');
 });
 
 test('the Xcode project carries the same bundle id', () => {

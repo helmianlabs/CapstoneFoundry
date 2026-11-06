@@ -4,7 +4,7 @@ import { CapacitorConfig } from '@capacitor/cli';
  * Capstone Foundry (Mark) — Capacitor Android wrapper
  *
  * STRATEGY: thin-shell / remote-URL mode.
- * The app loads https://thinkbuddy-sandy.vercel.app inside a native WebView.
+ * The app loads https://capstonefoundry.vercel.app inside a native WebView.
  * No assets are bundled locally. This means:
  *   - Zero change to the Vercel web deploy
  *   - APK auto-gets every web update without a Play Store re-release
@@ -25,7 +25,7 @@ const config: CapacitorConfig = {
 
   // Remote-URL shell — loads live Vercel site
   server: {
-    url: 'https://thinkbuddy-sandy.vercel.app',
+    url: 'https://capstonefoundry.vercel.app',
     cleartext: false,   // HTTPS only — never allow HTTP
     androidScheme: 'https',
   },

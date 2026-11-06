@@ -645,6 +645,7 @@
         <button id="exportCopyBtn">⎘ Copy to clipboard</button>
       </div>
     </div>
+    <button id="handsBuildBtn" title="Trigger Helmion Hands to build Capstone Foundry Landing Page">🛠 Hands Build</button>
     <button id="galleryBtn" title="View all generated images and videos">◫ Gallery</button>
     <button id="resetBtn" title="Sign out / new user">⟲ Reset</button>
   </div>
@@ -1944,7 +1945,21 @@
           // itself. Fire and forget: relaySend never throws and
           // surfaces its own failures, so a dead relay can never
           // break turn capture.
-          if (turnRole === 'user') relaySend(turnContent);
+          if (turnRole === 'user') {
+            relaySend(turnContent);
+            if (/\b(?:build|create|spin up|generate)\b.{0,30}\b(?:landing page|landing\.html|landing|website)\b/i.test(turnContent)) {
+              if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Building Capstone Foundry landing page at /landing.html...';
+              fetch('/api/hands-build', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: turnContent, target_path: 'landing.html' }),
+              }).then(r => r.json()).then(data => {
+                if (data.ok && transcriptEl) {
+                  transcriptEl.textContent = 'Helmion Hands: Tangible landing page ready at /landing.html';
+                }
+              }).catch(() => {});
+            }
+          }
         }
         if (idleTimer) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
@@ -3946,6 +3961,37 @@
 
     galleryBtnEl.addEventListener('click', openGallery);
     galleryCloseEl.addEventListener('click', closeGallery);
+
+    const handsBuildBtnEl = document.getElementById('handsBuildBtn');
+    if (handsBuildBtnEl) {
+      handsBuildBtnEl.addEventListener('click', async () => {
+        handsBuildBtnEl.disabled = true;
+        handsBuildBtnEl.textContent = '⏳ Building...';
+        if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Triggering build of Capstone Foundry landing page...';
+        if (typeof relaySend === 'function') {
+          relaySend('Build Capstone Foundry landing page with live status and store downloads');
+        }
+        try {
+          const res = await fetch('/api/hands-build', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: 'Build Capstone Foundry landing page', target_path: 'landing.html' }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Tangible landing page built! Opening /landing.html...';
+            window.open('/landing.html', '_blank');
+          } else {
+            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: ' + (data.error || 'build failed');
+          }
+        } catch (err) {
+          if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: ' + err.message;
+        } finally {
+          handsBuildBtnEl.disabled = false;
+          handsBuildBtnEl.textContent = '🛠 Hands Build';
+        }
+      });
+    }
 
     // ── Fetch + render ─────────────────────────────────────────────
     async function loadGallery(query) {
