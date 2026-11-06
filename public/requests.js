@@ -1,4 +1,4 @@
-// public/requests.js — ThinkinBuddy client for the unified request
+// public/requests.js — Capstone Foundry client for the unified request
 // box (requests bite B2; design: curriculum-requests-spec.md §1–§2 in
 // ~/workspace/thinkinbuddy-launch/).
 //

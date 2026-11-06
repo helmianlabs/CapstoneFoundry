@@ -1,8 +1,11 @@
 // scripts/setup-postcall-webhook-and-rename.mjs
 // ---------------------------------------------------------------------------
-// 1. Renames the agent from "ThinkinBuddy" (leftover from the original bootstrap
-//    script, create-agent.js) to "ThinkinBuddy", matching the app's actual
-//    branding everywhere else.
+// 1. Sets the ElevenLabs agent display name to "Capstone Foundry".
+//    Mark stays the persona inside the prompt. An older copy of this
+//    script wrote "ThinkinBuddy", which would undo the rename if run.
+//    Running this file PATCHes the live agent. The webhook resource name
+//    stays `thinkinbuddy-conversation-log` so an existing webhook is
+//    found instead of duplicated.
 // 2. Creates a workspace webhook (POST /v1/workspace/webhooks) pointing at
 //    api/conversation-webhook.js and wires it to this agent via
 //    platform_settings.workspace_overrides.webhooks.post_call_webhook_id --
@@ -35,11 +38,11 @@ async function api(path, opts = {}) {
 }
 
 (async () => {
-  console.log('[1/4] Renaming agent ThinkinBuddy -> ThinkinBuddy...');
+  console.log('[1/4] Setting agent display name to Capstone Foundry...');
   const before = await api(`/convai/agents/${AGENT_ID}`);
   console.log(`      was: "${before.name}"`);
-  await api(`/convai/agents/${AGENT_ID}`, { method: 'PATCH', body: JSON.stringify({ name: 'ThinkinBuddy' }) });
-  console.log('      now: "ThinkinBuddy"');
+  await api(`/convai/agents/${AGENT_ID}`, { method: 'PATCH', body: JSON.stringify({ name: 'Capstone Foundry' }) });
+  console.log('      now: "Capstone Foundry"');
 
   console.log('[2/4] Checking for an existing webhook pointing at this URL (avoid duplicates)...');
   const existingList = await api('/workspace/webhooks');
@@ -71,9 +74,9 @@ async function api(path, opts = {}) {
 
   console.log('[4/4] Verifying...');
   const verify = await api(`/convai/agents/${AGENT_ID}`);
-  const ok1 = verify.name === 'ThinkinBuddy';
+  const ok1 = verify.name === 'Capstone Foundry';
   const ok2 = verify.platform_settings.workspace_overrides.webhooks.post_call_webhook_id === webhookId;
-  console.log(`      name = ThinkinBuddy: ${ok1 ? 'OK' : 'FAILED'}`);
+  console.log(`      name = Capstone Foundry: ${ok1 ? 'OK' : 'FAILED'}`);
   console.log(`      post_call_webhook_id wired: ${ok2 ? 'OK' : 'FAILED'}`);
 
   if (webhookSecret) {

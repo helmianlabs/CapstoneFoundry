@@ -1,4 +1,4 @@
-// public/alarms.js — ThinkinBuddy client alarm / reminder scheduling.
+// public/alarms.js — Capstone Foundry client alarm / reminder scheduling.
 //
 // PLAIN ES module, no build step, loaded by public/onboarding.js via a
 // dynamic import (same pattern as ./billing.js).

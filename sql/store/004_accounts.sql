@@ -1,4 +1,4 @@
--- sql/store/004_accounts.sql — ThinkinBuddy store build, accounts bite:
+-- sql/store/004_accounts.sql — Capstone Foundry store build, accounts bite:
 -- real email/password accounts on the tenants table (bite 1 scaffolded
 -- tenants WITHOUT identity columns — accounts were a later bite, this one).
 --

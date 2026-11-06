@@ -1,6 +1,6 @@
 // scripts/setup-memory-db.mjs
 // ---------------------------------------------------------------------------
-// ONE-SHOT, IDEMPOTENT setup + verify for Mark / ThinkinBuddy's Neon memory DB.
+// ONE-SHOT, IDEMPOTENT setup + verify for Mark / Capstone Foundry's Neon memory DB.
 //
 // WHY THIS EXISTS: as of 2026-06-09 the Vercel `thinkbuddy` prod env var
 // DATABASE_URL_MEMORY is an EMPTY STRING, so every /api/memory call returns
@@ -12,7 +12,7 @@
 // clearly-fake probe row (user_id = '__setup_probe__'), runs a cosine query,
 // then deletes ONLY that probe row. It never touches real memories.
 //
-// USAGE (from thinkinbuddy/ project root):
+// USAGE (from the Capstone Foundry repo root):
 //   node scripts/setup-memory-db.mjs "postgresql://USER:PASS@HOST/db?sslmode=require"
 // or set the env var first and run with no arg:
 //   $env:DATABASE_URL_MEMORY="postgresql://..."; node scripts/setup-memory-db.mjs

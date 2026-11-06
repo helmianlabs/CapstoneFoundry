@@ -2,7 +2,7 @@
  * PushToScribe.gs — Google Apps Script web app.
  *
  * Purpose: receive a POST { title, content } from the MCP tool `push_to_scribe`
- * (see thinkinbuddy/api/mcp.js, function pushToScribe()), create a new Google Doc in
+ * (see server/handlers/mcp.js, function pushToDocs()), create a new Google Doc in
  * the deploying user's Google Drive, write `content` into the doc body, and
  * return JSON { url: <doc url> } so mcp.js can hand the link back to Claude.ai.
  *
@@ -10,11 +10,11 @@
  * Google's own environment (script.google.com). It is committed here purely
  * for version control / code review. To actually run it, a human with a
  * Google account must paste it into script.google.com and deploy it as a web
- * app. See thinkinbuddy/scribe/DEPLOY_INSTRUCTIONS.md for the exact steps — that
+ * app. See scribe/DEPLOY_INSTRUCTIONS.md for the exact steps — that
  * part cannot be done by Claude Code; it requires interactive Google OAuth
  * consent from a real Google account.
  *
- * Contract expected by thinkinbuddy/api/mcp.js pushToScribe():
+ * Contract expected by server/handlers/mcp.js pushToDocs():
  *   Request:  POST body = JSON { title: string, content: string }
  *   Response: JSON { url: string }                          on success
  *             HTTP 400-equivalent JSON { error: string }    on bad input

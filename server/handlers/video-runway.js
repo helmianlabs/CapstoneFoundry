@@ -1,4 +1,4 @@
-// api/video-runway.js — Runway Gen-3 / Gen-4 video generation for ThinkinBuddy.
+// api/video-runway.js — Runway Gen-3 / Gen-4 video generation for Capstone Foundry.
 //
 // Uses RUNWAY_API_KEY (already provisioned on Vercel 7d ago).
 // Runway charges per second of generated video; default 5s keeps cost low.

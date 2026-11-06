@@ -1,4 +1,4 @@
--- sql/store/008_relay_profile.sql — ThinkinBuddy store build, relay
+-- sql/store/008_relay_profile.sql — Capstone Foundry store build, relay
 -- bite R1: the active-profile stamp for hosted relay messages.
 --
 -- RUN ONCE BY US (Helmian Labs) against the shared hosted Neon

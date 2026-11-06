@@ -1,6 +1,6 @@
 # Curriculum Verification — the record-keeping method
 
-**What this document is.** ThinkinBuddy's curricula carry a written
+**What this document is.** Capstone Foundry's curricula carry a written
 verification record: one file per curriculum, kept in
 `docs/knowledge-base/verification/` in this repo, next to the map of the
 Knowledge Base itself (`docs/knowledge-base/README.md`). This document is
@@ -85,7 +85,7 @@ with these fields:
   to a university). Where no framework applies, the record carries the
   honest line, in so many words: **No framework — enrichment**.
 - **(e) The honesty line** — every record carries it, and the product
-  lives by it: **ThinkinBuddy is tutoring, not an accredited school.** It
+  lives by it: **Capstone Foundry is tutoring, not an accredited school.** It
   awards no credits, grades, or diplomas. The words *accredited* and
   *certified* are never claimed for the product or any curriculum until a
   body with the right to grant them has done so; until then the claim is

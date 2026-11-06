@@ -1,5 +1,7 @@
 # thinkbuddy (Vercel, team dairyforge1-6376s-projects) — env checklist
 
+> The product is **Capstone Foundry**. This checklist keeps the Vercel project name `thinkbuddy` and the Neon project name `thinkinbuddy` because those are the live resource names. Renaming either project is a separate cutover.
+
 Probe on 2026-10-15: the `thinkbuddy` project has **zero** env vars (CLI `vercel env ls production`).
 Production still serves `main` (old agent `agent_4401…`, old ElevenLabs account).
 

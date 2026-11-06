@@ -1,4 +1,4 @@
--- sql/store/011_password_resets.sql — ThinkinBuddy store build,
+-- sql/store/011_password_resets.sql — Capstone Foundry store build,
 -- password-reset bite: one-time password reset tokens for the
 -- email/password accounts of sql/store/004 (lib/accounts.js).
 --

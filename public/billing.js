@@ -1,4 +1,4 @@
-// public/billing.js — ThinkinBuddy client billing module (RevenueCat).
+// public/billing.js — Capstone Foundry client billing module (RevenueCat).
 //
 // PLAIN ES module, no build step, loaded by the app shell as-is.
 //

@@ -10,7 +10,7 @@
 // this project is Standard (2 GB) in iad1, so one socket open around the clock
 // reserves 2 GB x 24h = 48 GB-hrs a day against a Hobby allowance of 360
 // GB-hrs a month. That is the whole month gone in about seven and a half days,
-// on a plan shared with the live ThinkinBuddy app.
+// on a plan shared with the live Capstone Foundry app.
 //
 // Short polling costs a rounding error by comparison — an instance lives for
 // the length of one small query — so THIS is the default and the socket is

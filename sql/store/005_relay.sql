@@ -1,4 +1,4 @@
--- sql/store/005_relay.sql — ThinkinBuddy store build, Helmian Connect
+-- sql/store/005_relay.sql — Capstone Foundry store build, Helmian Connect
 -- bite: per-tenant relay pairing (devices + one-time pairing codes) for
 -- the relay that predates the store build (sql/relay.sql).
 --

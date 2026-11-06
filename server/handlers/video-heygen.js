@@ -1,4 +1,4 @@
-// api/video-heygen.js — HeyGen AI avatar talking-head video for ThinkinBuddy.
+// api/video-heygen.js — HeyGen AI avatar talking-head video for Capstone Foundry.
 //
 // HeyGen API: POST /v2/video/generate with avatar_id + voice + script,
 // poll /v1/video_status.get until status='completed', return video URL.

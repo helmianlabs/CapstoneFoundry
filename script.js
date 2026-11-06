@@ -22,7 +22,7 @@ function getUserName() {
 }
 
 function getBuddyName() {
-  return localStorage.getItem('thinkinbuddy_buddy_name') || 'ThinkinBuddy';
+  return localStorage.getItem('thinkinbuddy_buddy_name') || 'Capstone Foundry';
 }
 
 function setStatus(text, state = '') {
@@ -135,7 +135,7 @@ async function startConversation() {
       },
       onError: (error) => {
         setStatus('ERROR — TAP TO RETRY', '');
-        console.error('ThinkinBuddy error:', error);
+        console.error('Capstone Foundry error:', error);
         conversation = null;
       },
       onModeChange: ({ mode }) => {

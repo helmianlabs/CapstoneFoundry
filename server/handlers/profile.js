@@ -1,5 +1,5 @@
 // api/profile.js — the tenant's own profiles for the hosted
-// ThinkinBuddy (accounts bite). Routes (router dispatches on the
+// Capstone Foundry (accounts bite). Routes (router dispatches on the
 // first path segment, so this handler owns /api/profile/*):
 //   GET  /api/profile            -> active profile + entitlement plan
 //   PUT  /api/profile            -> update whitelisted fields on the

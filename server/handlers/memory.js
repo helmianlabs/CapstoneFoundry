@@ -1,7 +1,7 @@
-// api/memory.js — per-user persistent memory store for ThinkinBuddy.
+// api/memory.js — per-user persistent memory store for Capstone Foundry.
 //
 // 2026-06-02: REWRITTEN from Vercel Blob → Neon Postgres + pgvector.
-// Spec: thinkinbuddy/docs/persistent-memory-spec-2026-05-27.md
+// Spec: docs/persistent-memory-spec-2026-05-27.md
 //
 // HTTP CONTRACT PRESERVED so the ElevenLabs widget's `save_memory` tool keeps
 // working without dashboard changes:

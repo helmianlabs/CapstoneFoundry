@@ -1,5 +1,7 @@
 # Actionable — setup
 
+> The product is **Capstone Foundry**. URLs on `thinkinbuddy.vercel.app` in this file are registered OAuth redirect hosts. Leave them until a domain cutover updates each provider's redirect allowlist. Local folder names on Troy's machine are left as written.
+
 **Read this first: you can use Actionable tonight without creating anything.**
 Jump to "The 10-minute path". Everything after it is for shipping to other people.
 

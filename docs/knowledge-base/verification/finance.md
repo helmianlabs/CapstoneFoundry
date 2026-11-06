@@ -48,7 +48,7 @@ enrichment" where none applies.
 
 ## (e) Honesty line
 
-ThinkinBuddy is tutoring, not an accredited school: it awards no
+Capstone Foundry is tutoring, not an accredited school: it awards no
 credits, grades, or diplomas, and neither the product nor this
 curriculum is accredited or certified by any body. Those words will be
 used only when a body with the right to grant them has done so; until

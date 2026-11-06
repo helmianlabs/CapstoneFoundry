@@ -1,4 +1,4 @@
-// api/image.js — image generation for ThinkinBuddy.
+// api/image.js — image generation for Capstone Foundry.
 //
 // OpenAI deprecated dall-e-3 on this account; the live model is gpt-image-2,
 // which returns base64 instead of a URL. We upload the bytes to Vercel Blob

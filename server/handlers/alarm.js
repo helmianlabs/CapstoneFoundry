@@ -1,6 +1,6 @@
 // api/alarm.js — ElevenLabs webhook tool endpoint for scheduling alarms / reminders.
 //
-// Mark (ThinkinBuddy) calls this when the user says "remind me", "set an alarm",
+// Mark (Capstone Foundry) calls this when the user says "remind me", "set an alarm",
 // "wake me up", "alert me when", etc.  The endpoint persists the alarm to Vercel
 // Blob and returns a JSON payload.  The CLIENT (public/alarms.js, loaded by
 // public/onboarding.js) polls /api/alarm/pending and schedules each alarm

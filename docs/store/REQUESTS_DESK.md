@@ -9,7 +9,7 @@ along by hand.
 ## Safety, in plain words
 
 - **This desk exists only inside the operator's database console** (the
-  Neon console for the ThinkinBuddy app's database — the one
+  Neon console for the Capstone Foundry app's database — the one
   `sql/store/006_requests.sql` ran against). Database access itself is
   the lock: anyone who can run these statements is already past every
   door the product has.

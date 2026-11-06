@@ -1,4 +1,4 @@
-// Single router for the Thinkinbuddy API so the app fits Vercel Hobby's 12-function limit.
+// Single router for the Capstone Foundry API so the app fits Vercel Hobby's 12-function limit.
 // /api/<name>[/sub/path] -> server/handlers/<name>.js (same URLs as before).
 // api/conversation-webhook.js stays its own function because it needs the raw body (bodyParser: false).
 
