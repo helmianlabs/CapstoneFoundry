@@ -1052,6 +1052,17 @@
     function cfDirectVoiceWanted(forced) {
       return forced === '1';
     }
+    // Hosted-widget transport. Android WebView ("; wv)") and the Capacitor
+    // shell leave connectionType unset so the widget keeps its stock token
+    // session (WebRTC). Browsers keep the websocket override this page
+    // already applies. Native is passed in because Capacitor can inject
+    // after parse; the UA check covers a WebView whose bridge never arrives.
+    function cfAndroidOrCapacitor(env) {
+      env = env || {};
+      var ua = String(env.ua || '');
+      if (/Android/i.test(ua) && /; wv\)/i.test(ua)) return true;
+      return !!env.native;
+    }
     // cf-android-voice-guard:end
   </script>
 
@@ -1455,6 +1466,145 @@
       });
     });
 
+    // Output diagnostics for the transport A/B. Counts and element state
+    // only — never the audio bytes. client-log keeps 12 fields, so each
+    // beacon stays inside that cap. onAudio is chained, not replaced.
+    let cfAudioChunks = 0;
+    let cfAudioBytes = 0;
+    let cfOutputLive = false;
+    let cfOutputTimers = [];
+    let cfAudioObs = null;
+    let cfOutputFinished = false;
+
+    function cfAudioElState(el) {
+      const state = { hasEl: false, paused: true, muted: false, volume: -1, ready: 0, t: -1, err: 0, tracks: 0, live: 0 };
+      if (!el) return state;
+      state.hasEl = true;
+      state.paused = !!el.paused;
+      state.muted = !!el.muted;
+      state.volume = typeof el.volume === 'number' ? +el.volume.toFixed(2) : -1;
+      state.ready = el.readyState || 0;
+      state.t = typeof el.currentTime === 'number' ? +el.currentTime.toFixed(2) : -1;
+      state.err = el.error && el.error.code ? el.error.code : 0;
+      try {
+        const list = el.srcObject && el.srcObject.getAudioTracks ? el.srcObject.getAudioTracks() : [];
+        state.tracks = list.length;
+        state.live = list.filter((track) => track.readyState === 'live' && !track.muted).length;
+      } catch (e) {}
+      return state;
+    }
+
+    function cfWatchAudioElement(el, label) {
+      if (!el || el.__cfWatch) return;
+      el.__cfWatch = true;
+      const st = cfAudioElState(el);
+      cfBeacon('audio-el', { ev: 'added', label, paused: st.paused, muted: st.muted, volume: st.volume, ready: st.ready, t: st.t, err: st.err, tracks: st.tracks, live: st.live, chunks: cfAudioChunks });
+      ['play', 'playing', 'pause', 'waiting', 'stalled', 'suspend', 'ended', 'error', 'volumechange', 'loadedmetadata', 'emptied'].forEach((name) => {
+        el.addEventListener(name, () => {
+          const now = cfAudioElState(el);
+          cfBeacon('audio-el', { ev: name, label, paused: now.paused, muted: now.muted, volume: now.volume, ready: now.ready, t: now.t, err: now.err, tracks: now.tracks, live: now.live, chunks: cfAudioChunks });
+        });
+      });
+    }
+
+    function cfGuessTransport(session) {
+      const out = session && session.output;
+      const conn = session && session.connection;
+      if (conn && (conn.room || typeof conn.getRoom === 'function' || Array.isArray(conn.audioElements))) return 'webrtc';
+      if (out && out.audioElement) return 'websocket';
+      return 'unknown';
+    }
+
+    function cfBeaconSessionOutput(session, tag) {
+      const out = session && session.output;
+      const el = out && out.audioElement;
+      const st = cfAudioElState(el);
+      let ctx = '';
+      if (out && out.context && typeof out.context.state === 'string') ctx = out.context.state;
+      let outVol = -1;
+      try {
+        if (session && typeof session.getOutputVolume === 'function') outVol = +session.getOutputVolume().toFixed(3);
+      } catch (e) {}
+      cfBeacon('output-ready', {
+        tag, actual: cfGuessTransport(session), ctx, out: outVol,
+        hasEl: st.hasEl, paused: st.paused, muted: st.muted, volume: st.volume,
+        ready: st.ready, t: st.t, err: st.err, live: st.live,
+      });
+      if (el) cfWatchAudioElement(el, 'ws');
+      const els = session && session.connection && session.connection.audioElements;
+      if (Array.isArray(els)) els.forEach((node, i) => cfWatchAudioElement(node, 'rtc' + i));
+    }
+
+    function cfSnapshotAudio(tag) {
+      const all = document.querySelectorAll ? document.querySelectorAll('audio') : [];
+      let pick = null;
+      for (let i = 0; i < all.length; i++) {
+        pick = all[i];
+        if (pick && !pick.paused) break;
+      }
+      const st = cfAudioElState(pick);
+      cfBeacon('audio-snap', {
+        tag, n: all.length, chunks: cfAudioChunks, bytes: cfAudioBytes,
+        vis: document.visibilityState, paused: st.paused, muted: st.muted,
+        volume: st.volume, ready: st.ready, t: st.t, err: st.err, live: st.live,
+      });
+    }
+
+    function cfFinishOutputBeacons(tag) {
+      if (!cfOutputLive || cfOutputFinished) return;
+      cfOutputFinished = true;
+      cfOutputLive = false;
+      cfOutputTimers.forEach((id) => clearTimeout(id));
+      cfOutputTimers = [];
+      try { cfAudioObs && cfAudioObs.disconnect(); } catch (e) {}
+      cfAudioObs = null;
+      cfBeacon('audio-chunks', { n: cfAudioChunks, bytes: cfAudioBytes, tag: tag || 'end' });
+      try { cfSnapshotAudio(tag || 'end'); } catch (e) {}
+    }
+
+    function cfArmOutputBeacons(cfg) {
+      cfAudioChunks = 0;
+      cfAudioBytes = 0;
+      cfOutputFinished = false;
+      cfOutputLive = true;
+      cfOutputTimers.forEach((id) => clearTimeout(id));
+      cfOutputTimers = [];
+      try { cfAudioObs && cfAudioObs.disconnect(); } catch (e) {}
+      const prevAudio = cfg.onAudio;
+      cfg.onAudio = (b64) => {
+        cfAudioChunks += 1;
+        cfAudioBytes += typeof b64 === 'string' ? Math.floor(b64.length * 3 / 4) : 0;
+        if (cfAudioChunks === 1 || cfAudioChunks % 25 === 0) {
+          cfBeacon('audio-chunks', { n: cfAudioChunks, bytes: cfAudioBytes, tag: 'progress' });
+        }
+        if (typeof prevAudio === 'function') try { prevAudio(b64); } catch (e) {}
+      };
+      const prevCreated = cfg.onConversationCreated;
+      cfg.onConversationCreated = (session) => {
+        try { cfBeaconSessionOutput(session, 'created'); } catch (e) {}
+        if (typeof prevCreated === 'function') try { prevCreated(session); } catch (e) {}
+      };
+      if (typeof MutationObserver === 'function' && document.body) {
+        cfAudioObs = new MutationObserver((records) => {
+          records.forEach((rec) => {
+            Array.prototype.forEach.call(rec.addedNodes || [], (node) => {
+              if (!node || node.nodeType !== 1) return;
+              if (node.tagName === 'AUDIO') cfWatchAudioElement(node, 'dom');
+              else if (node.querySelectorAll) node.querySelectorAll('audio').forEach((a) => cfWatchAudioElement(a, 'dom'));
+            });
+          });
+        });
+        cfAudioObs.observe(document.body, { childList: true, subtree: true });
+      }
+      cfOutputTimers.push(setTimeout(() => { if (cfOutputLive) cfSnapshotAudio('3s'); }, 3000));
+      cfOutputTimers.push(setTimeout(() => { if (cfOutputLive) cfSnapshotAudio('8s'); }, 8000));
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!cfOutputLive) return;
+      cfBeacon('audio-vis', { vis: document.visibilityState, chunks: cfAudioChunks, bytes: cfAudioBytes });
+    });
+
     document.addEventListener('elevenlabs-convai:call', (e) => {
       console.log('[MEM-HB] :call handler running — has detail?', !!e.detail, 'has config?', !!e.detail?.config);
       startImagePoller();
@@ -1486,22 +1636,37 @@
         return;
       }
 
-      // ── TRANSPORT: WEBSOCKET, NOT WEBRTC (2026-11-04 night) ──────
-      // The widget's public flow carries a conversationToken, and the
-      // SDK's determineConnectionType (@elevenlabs/client,
-      // ConnectionFactory) maps token sessions to WebRTC unless the
-      // config says otherwise. Inside this app's Android WebView the
-      // WebRTC microphone track comes up silent: ElevenLabs' own call
-      // records show total_audio_input_seconds 0.0 and zero ASR calls
-      // on the dead calls (plus their "non-continuous audio input"
-      // warning), while plain getUserMedia capture on the same phone
-      // succeeds every time (mic-probe-ok) and one lucky WebRTC
-      // negotiation carried 9.44s of user audio. The websocket
-      // transport sends the mic as PCM chunks over the socket — the
-      // plain capture path — so force it here, on the same config
-      // object whose prompt override provably reaches the session.
-      cfg.connectionType = 'websocket';
-      cfBeacon('call-config', { connectionType: 'websocket' });
+      // ── TRANSPORT ─────────────────────────────────────────────────
+      // Stock widget + conversationToken → WebRTC (SDK
+      // determineConnectionType). This page used to force websocket
+      // on every client. That plays Mark through AudioWorklet →
+      // MediaStreamDestination → a hidden <audio>, which stayed
+      // silent in the Android WebView while ASR and server TTS
+      // succeeded (conv_6901…, 2026-11-06). Android WebView and the
+      // Capacitor shell now leave connectionType unset so the hosted
+      // widget uses that stock transport. Browsers/PWA keep the
+      // websocket override (current desktop behavior). Direct-SDK
+      // opt-in still passes websocket itself in startDirectVoice.
+      // bgAudio stays skipped on Android — do not start it here.
+      const cfSurface = {
+        ua: navigator.userAgent,
+        native: !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()),
+      };
+      const cfStockTransport = !cfg.__cfDirectVoice
+        && typeof cfAndroidOrCapacitor === 'function'
+        && cfAndroidOrCapacitor(cfSurface);
+      if (!cfStockTransport) cfg.connectionType = 'websocket';
+      let cfBgSkip = '';
+      try { cfBgSkip = pageBgAudioSkipReason(); } catch (e) {}
+      cfBeacon('call-config', {
+        route: cfg.__cfDirectVoice ? 'direct-sdk' : 'hosted-widget',
+        requested: cfStockTransport ? 'stock' : 'websocket',
+        connectionType: cfStockTransport ? 'stock' : 'websocket',
+        native: cfSurface.native,
+        androidWv: /Android/i.test(cfSurface.ua) && /; wv\)/i.test(cfSurface.ua),
+        bgSkip: cfBgSkip,
+      });
+      if (!cfg.__cfDirectVoice) cfArmOutputBeacons(cfg);
 
       // ── PER-USER ISOLATION ──────────────────────────────────────────────
       // Apply THIS user's prompt (with only THEIR memories) as a per-session
@@ -1641,6 +1806,7 @@
         // extract-memories transcript fetch fails.
         fireMemoryCheckpoint(true);
         fireExtractMemories('disconnect');
+        try { cfFinishOutputBeacons('disconnect'); } catch (e) {}
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-ended'));
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
       };
@@ -1841,6 +2007,7 @@
       // extract — the checkpoint needs nothing from ElevenLabs.
       fireMemoryCheckpoint(true);
       fireExtractMemories('pagehide');
+      try { cfFinishOutputBeacons('pagehide'); } catch (e) {}
     });
 
     // Coming back from the bfcache: restart the media pollers that the freeze
