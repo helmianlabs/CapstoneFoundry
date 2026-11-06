@@ -22,6 +22,8 @@
 export const ROUTE_FUNCTION_CONFIG = {
   'actionable': { api: { bodyParser: { sizeLimit: '25mb' } } },
   'diary': { api: { bodyParser: { sizeLimit: '10mb' } } },
+  'generate-3d': { maxDuration: 180 },
+  'export-document': { maxDuration: 60 },
   'image-flux': { maxDuration: 120 },
   'mcp': { api: { bodyParser: { sizeLimit: '1mb' } } },
   'relay-http': { maxDuration: 15 },
@@ -76,7 +78,9 @@ const routes = {
   'conversation-turn': () => import('../server/handlers/conversation-turn.js'),
   'cron-expire-memories': () => import('../server/handlers/cron-expire-memories.js'),
   'diary': () => import('../server/handlers/diary.js'),
+  'export-document': () => import('../server/handlers/export-document.js'),
   'extract-memories': () => import('../server/handlers/extract-memories.js'),
+  'generate-3d': () => import('../server/handlers/generate-3d.js'),
   'image': () => import('../server/handlers/image.js'),
   'image-flux': () => import('../server/handlers/image-flux.js'),
   'image-gemini': () => import('../server/handlers/image-gemini.js'),

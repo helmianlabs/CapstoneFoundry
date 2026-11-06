@@ -659,6 +659,7 @@
           <option value="all">All</option>
           <option value="image">Images</option>
           <option value="video">Videos</option>
+          <option value="model3d">3D Models</option>
         </select>
         <button class="gallery-close" id="galleryClose">✕ Close</button>
       </div>
@@ -3996,7 +3997,7 @@
         // Badge
         const badge = document.createElement('div');
         badge.className = 'gallery-item-badge';
-        badge.textContent = item.type === 'video' ? '▶ video' : '⬜ image';
+        badge.textContent = item.type === 'video' ? '▶ video' : item.type === 'model3d' ? '🧊 3d' : '⬜ image';
         el.appendChild(badge);
 
         // Thumbnail
@@ -4008,6 +4009,11 @@
           // Pause at first frame as poster substitute
           vid.addEventListener('loadedmetadata', () => { vid.currentTime = 0.1; });
           el.appendChild(vid);
+        } else if (item.type === 'model3d') {
+          const mdiv = document.createElement('div');
+          mdiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#00d4ff;font-size:2.2rem;background:rgba(0,212,255,0.06);';
+          mdiv.innerHTML = '🧊<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#00d4ff;font-weight:600;">3D MODEL</span>';
+          el.appendChild(mdiv);
         } else {
           const img = document.createElement('img');
           img.src = item.blobUrl || '';
@@ -4062,6 +4068,8 @@
         galleryLbVideo.src = item.blobUrl || '';
         galleryLbVideo.style.display = 'block';
         try { galleryLbVideo.play().catch(() => {}); } catch {}
+      } else if (item.type === 'model3d') {
+        galleryLbCaption.innerHTML = (item.caption || '3D Character Model') + '<br><br><a href="' + item.blobUrl + '" target="_blank" download style="display:inline-block;padding:8px 16px;background:#00d4ff;color:#000;font-weight:bold;border-radius:4px;text-decoration:none;">⬇ Download .GLB 3D Model</a>';
       } else {
         galleryLbImg.src = item.blobUrl || '';
         galleryLbImg.alt = item.caption || '';
