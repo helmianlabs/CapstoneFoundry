@@ -1,4 +1,4 @@
-// api/search.js — web search tool endpoint for ThinkinBuddy.
+// api/search.js — web search tool endpoint for Capstone Foundry.
 //
 // Called by the ElevenLabs agent when it needs current information.
 // Uses Claude's built-in web_search tool to fetch and synthesize results.

@@ -1,4 +1,4 @@
-// public/stt.js — ThinkinBuddy on-device speech-to-text (Whisper Bite 1).
+// public/stt.js — Capstone Foundry on-device speech-to-text (Whisper Bite 1).
 //
 // PLAIN ES module, no build step, same pattern as ./alarms.js and
 // ./billing.js. NOTHING in the app imports this yet — Bite 1 ships the

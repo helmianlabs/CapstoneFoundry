@@ -1,4 +1,4 @@
-# ElevenLabs Agent Config — ThinkinBuddy ("Mark")
+# ElevenLabs Agent Config — Capstone Foundry (persona: Mark)
 
 This is a **redacted template**, exported from the live production agent so a
 new user can recreate the same setup in their own ElevenLabs account. The

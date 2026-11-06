@@ -1,21 +1,21 @@
 # Provider test connections — guided setup sheet
 
-**What this is:** the checklist for giving ThinkinBuddy its own separate
+**What this is:** the checklist for giving Capstone Foundry its own separate
 test connection to every provider it calls, in the order the Bite 0
 audit (§4) recommended. Creating the accounts needs Troy — this sheet is
 the sitting guide, not automation. Nothing here is run by end users.
 
 **Rules for every provider below:**
 
-- One connection **per product**, never shared: ThinkinBuddy gets its own
+- One connection **per product**, never shared: Capstone Foundry gets its own
   accounts/keys, the same pattern as Troy's existing separate ElevenLabs
-  connectors for Forge, DairyForge and Helmian. A ThinkinBuddy problem
+  connectors for Forge, DairyForge and Helmian. A Capstone Foundry problem
   (or bill) can then never touch the other products, and vice versa.
 - Keys live in exactly two places: the **Vercel TEST deployment's env
-  vars** for ThinkinBuddy, and (for ElevenLabs) its registered connector.
+  vars** for Capstone Foundry, and (for ElevenLabs) its registered connector.
   Never in the repo, never in a committed `.env`, never in chat.
 - The test deployment is a **separate Vercel project** from Troy's live
-  single-user ThinkinBuddy, so test keys and test traffic can't break
+  single-user Capstone Foundry, so test keys and test traffic can't break
   the app he uses today.
 - Plumbing vars the test deployment needs regardless of provider
   (from `.env.example`): `WEBHOOK_SECRET` (the tool handlers —
@@ -35,7 +35,7 @@ bite 1–2 migrations).
 ## 1. Google AI Studio — the default brain (free)
 
 - **Sign up:** https://aistudio.google.com/app/apikey (a Google account;
-  create a **new Google Cloud project** for ThinkinBuddy test — do not
+  create a **new Google Cloud project** for Capstone Foundry test — do not
   reuse a billed project: enabling billing on a project reportedly ends
   its free tier, and free + billed must stay separate).
 - **Create:** one API key in that project.
@@ -58,7 +58,7 @@ bite 1–2 migrations).
 ## 2. ElevenLabs — voice (separate free test account + agent)
 
 - **Sign up:** https://elevenlabs.io/app/sign-up — a **new account for
-  ThinkinBuddy test**, not any of the existing product accounts.
+  Capstone Foundry test**, not any of the existing product accounts.
 - **Create:** an API key (https://elevenlabs.io/app/settings/api-keys)
   and one Conversational AI agent for testing
   (https://elevenlabs.io/app/agents) — a minimal clone: name, first
@@ -69,7 +69,7 @@ bite 1–2 migrations).
   HMAC secret — set the same value in the agent's webhook config).
 - **Connector:** register this account the same way as the existing
   ElevenLabs connectors (Forge / DairyForge / Helmian) — one registered
-  API connection named for ThinkinBuddy, so Muse's later checks use
+  API connection named for Capstone Foundry, so Muse's later checks use
   the connector, never a pasted key.
 - **Smoke test:** `GET https://api.elevenlabs.io/v1/voices` with the key
   (the app's own `voices` handler does the same), then one `speak` call
@@ -85,7 +85,7 @@ bite 1–2 migrations).
 ## 3. OpenAI — moderation (free), images, embeddings, Whisper
 
 - **Sign up:** https://platform.openai.com — an organization/project
-  for ThinkinBuddy.
+  for Capstone Foundry.
 - **Create:** one API key, restricted to the project
   (https://platform.openai.com/api-keys).
 - **Env vars it fills:** `OPENAI_API_KEY`.
@@ -109,7 +109,7 @@ bite 1–2 migrations).
 
 - **Sign up:** https://console.neon.tech/signup (free plan: 100
   CU-hours/project/month, no card).
-- **Create:** one project named for ThinkinBuddy test, with the
+- **Create:** one project named for Capstone Foundry test, with the
   **pgvector** extension enabled (the memory tables need it).
 - **Env vars it fills:** `DATABASE_URL` and `DATABASE_URL_MEMORY`
   (point both at this one project — the repo's three setup scripts

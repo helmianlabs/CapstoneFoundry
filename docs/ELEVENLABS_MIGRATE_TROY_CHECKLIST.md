@@ -1,5 +1,7 @@
 # Troy hand checklist — ThinkinBuddy ElevenLabs migrate
 
+> Historical checklist. The product is now **Capstone Foundry**. The Vercel project name `thinkbuddy` and the host `thinkbuddy-sandy.vercel.app` in this file are still the live infrastructure names. Do not rename them from this checklist.
+
 Do these by hand. No DNS changes. No merges (draft PR only). Do not delete old agents yet.
 
 ## 1. Fix the OLD API key (optional but needed for a live diff)

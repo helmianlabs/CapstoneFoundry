@@ -1,4 +1,4 @@
-// api/video-runway-veo.js — short video generation for ThinkinBuddy.
+// api/video-runway-veo.js — short video generation for Capstone Foundry.
 //
 // Uses Runway's API (veo3 via /v1/text_to_video — Google Veo 3 hosted on
 // Runway's key and meter). Runway returns a task

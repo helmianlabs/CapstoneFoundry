@@ -1,4 +1,4 @@
-// public/onboarding.js — ThinkinBuddy accounts front end (sign-in,
+// public/onboarding.js — Capstone Foundry accounts front end (sign-in,
 // first-run onboarding, Account & Safety settings).
 //
 // PLAIN ES module, no build step. Loaded by index.html as

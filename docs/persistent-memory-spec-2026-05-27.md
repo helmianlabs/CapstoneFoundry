@@ -1,4 +1,6 @@
 # Thinking Buddy — Persistent Memory Architecture
+
+> Historical spec, written under the old product name. The product is **Capstone Foundry**. Mark is the persona. This file keeps the name it was written under. Do not treat the title as the current product name.
 *Merged spec: ChatGPT proposal + Claude code-review, 2026-05-27*
 
 ## TL;DR

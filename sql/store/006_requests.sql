@@ -1,4 +1,4 @@
--- sql/store/006_requests.sql — ThinkinBuddy store build, unified
+-- sql/store/006_requests.sql — Capstone Foundry store build, unified
 -- requests bite B1: ONE suggestion box for everything a user wishes
 -- the Buddy had — a missing tool/provider AND curriculum (a new
 -- subject, a new level). Design: docs in ~/workspace/thinkinbuddy-launch/

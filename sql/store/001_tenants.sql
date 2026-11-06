@@ -1,4 +1,4 @@
--- sql/store/001_tenants.sql — ThinkinBuddy store build, bite 1: tenant scaffold.
+-- sql/store/001_tenants.sql — Capstone Foundry store build, bite 1: tenant scaffold.
 --
 -- RUN ONCE BY US (Helmian Labs) against the shared hosted Neon database —
 -- the same database the app already uses via DATABASE_URL_MEMORY ||

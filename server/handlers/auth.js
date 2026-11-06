@@ -1,4 +1,4 @@
-// api/auth.js — account signup + login for the hosted ThinkinBuddy
+// api/auth.js — account signup + login for the hosted Capstone Foundry
 // (accounts bite). Routes (the api/[...path].js router dispatches on the
 // first path segment, so this one handler owns /api/auth/*):
 //   POST /api/auth/signup { email, password } -> 201 { token, tenantId }

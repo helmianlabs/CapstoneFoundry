@@ -1,5 +1,5 @@
 // api/relay-pair.js — Helmian Connect computer pairing for the hosted
-// ThinkinBuddy (relay bite). Routes (the api/[...path].js router
+// Capstone Foundry (relay bite). Routes (the api/[...path].js router
 // dispatches on the first path segment, so this handler owns
 // /api/relay/*):
 //   POST /api/relay/pair/create  (tenant session)

@@ -1,5 +1,7 @@
 # Old → new mapping (ThinkinBuddy / Mark)
 
+> Historical migrate record (2026-10-15). The product is now **Capstone Foundry** (persona: Mark). Names, agent ids, and URLs below are what was true that day. Do not use this file to rename the live agent or to change production hosts.
+
 **Migrated:** 2026-10-15T22:05:54.455Z  
 **App base for new tool webhooks:** `https://thinkbuddy-sandy.vercel.app`  
 **Voice:** Brian `nPczCjzI2devNBz1zQrb`

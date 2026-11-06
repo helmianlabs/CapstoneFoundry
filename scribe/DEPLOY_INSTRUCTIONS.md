@@ -1,8 +1,10 @@
 # Deploying "Push to Scribe" — what Claude Code CANNOT do, and what Troy must do
 
+> The product is **Capstone Foundry**. The handler lives at `server/handlers/mcp.js` (`pushToDocs`). Steps below that name the Vercel project `thinkbuddy` are the live project name, not the product name.
+
 ## Why this needs a human (Troy), not Claude Code
 
-`push_to_scribe` (in `thinkinbuddy/api/mcp.js`) POSTs `{ title, content }` to a URL read from
+`push_to_scribe` (in `server/handlers/mcp.js`, function `pushToDocs`) POSTs `{ title, content }` to a URL read from
 `process.env.SCRIBE_WEBHOOK_URL`. That URL has to be a deployed Google Apps Script
 web app, and deploying an Apps Script web app requires interactive Google OAuth
 consent — clicking "Deploy," "Authorize," and "Allow" inside a real, logged-in
@@ -28,7 +30,7 @@ deployed `/exec` URL.
 ## Step 2 — Paste the script
 
 1. Delete the placeholder `function myFunction() {}` code in the editor.
-2. Open `thinkinbuddy/scribe/PushToScribe.gs` from this repo and copy its entire contents.
+2. Open `scribe/PushToScribe.gs` from this repo and copy its entire contents.
 3. Paste it into the Apps Script editor.
 4. Rename the project (top left, "Untitled project") to something recognizable,
    e.g. `PushToScribe`.
@@ -43,7 +45,7 @@ deployed `/exec` URL.
    - **Execute as:** **Me** (troy's own Google account) — this is what lets the
      script create Docs in Troy's Drive without per-caller auth.
    - **Who has access:** **Anyone** — this is required so the Vercel serverless
-     function (`thinkinbuddy/api/mcp.js`) can call it without a Google login of its own.
+     function (`server/handlers/mcp.js`) can call it without a Google login of its own.
      (This does NOT make the Doc contents public — it only means anyone who has
      the secret `/exec` URL can trigger doc creation. Keep that URL private, the
      same way you'd keep an API key private.)
@@ -82,15 +84,15 @@ action from Troy:
 npx vercel env add SCRIBE_WEBHOOK_URL production
 ```
 
-(run from the `thinkinbuddy` project directory, for the `thinkbuddy` Vercel project),
+(run from this repo, for the `thinkbuddy` Vercel project),
 pasting the `/exec` URL when prompted. After that, Claude Code can push the
 branch `feature/push-to-scribe` (created in this session) so the real deploy
 picks up both the new `push_to_scribe` MCP tool and the env var it depends on.
 
 ## What happens if this step is skipped
 
-Without `SCRIBE_WEBHOOK_URL` set, `pushToScribe()` in `thinkinbuddy/api/mcp.js` throws
-`SCRIBE_WEBHOOK_URL env var not set — deploy the Google Apps Script first`
+Without `DOCS_WEBHOOK_URL` or `SCRIBE_WEBHOOK_URL` set, `pushToDocs()` in `server/handlers/mcp.js` throws
+`DOCS_WEBHOOK_URL env var not set — deploy the Google Apps Script first`
 immediately, before attempting any network call. Claude.ai will surface that as
 a tool error, not a silent failure — so this is safe to leave unset until Troy
 completes Steps 1-3; the rest of the MCP server (`search_memory`, `save_to_memory`)

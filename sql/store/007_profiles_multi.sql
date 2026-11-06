@@ -1,4 +1,4 @@
--- sql/store/007_profiles_multi.sql — ThinkinBuddy store build, safety
+-- sql/store/007_profiles_multi.sql — Capstone Foundry store build, safety
 -- wiring bite 9 (safety-gap-map §7): child profiles inside one account.
 --
 -- RUN ONCE BY US (Helmian Labs) against the shared hosted Neon

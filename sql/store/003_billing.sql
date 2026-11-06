@@ -1,4 +1,4 @@
--- sql/store/003_billing.sql — ThinkinBuddy store build, billing bite:
+-- sql/store/003_billing.sql — Capstone Foundry store build, billing bite:
 -- RevenueCat webhook bookkeeping + credit-pack grants.
 --
 -- RUN ONCE BY US (Helmian Labs) against the shared hosted Neon database,

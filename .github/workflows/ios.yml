@@ -1,4 +1,4 @@
-# ThinkinBuddy iOS builds on GitHub Actions.
+# Capstone Foundry iOS builds on GitHub Actions.
 #
 # This repository is PUBLIC, so macOS runner minutes are free — this is
 # the no-Mac route to an iOS build (see
@@ -79,7 +79,7 @@ jobs:
       - name: Upload the simulator .app
         uses: actions/upload-artifact@v4
         with:
-          name: thinkinbuddy-simulator-app
+          name: capstone-foundry-simulator-app
           path: build/DerivedData/Build/Products/Debug-iphonesimulator/App.app
           if-no-files-found: error
 
@@ -166,7 +166,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$PROFILE" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/thinkinbuddy.mobileprovision"
+          echo "$PROFILE" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/capstone-foundry.mobileprovision"
 
       - name: Archive the app
         if: steps.signing.outputs.ready == 'true'
@@ -175,7 +175,7 @@ jobs:
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -archivePath "$RUNNER_TEMP/ThinkinBuddy.xcarchive"
+            -archivePath "$RUNNER_TEMP/CapstoneFoundry.xcarchive"
 
       - name: Export the .ipa
         if: steps.signing.outputs.ready == 'true'
@@ -203,7 +203,7 @@ jobs:
           </plist>
           PLIST
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/ThinkinBuddy.xcarchive" \
+            -archivePath "$RUNNER_TEMP/CapstoneFoundry.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -authenticationKeyID "$ASC_ID" \
@@ -214,6 +214,6 @@ jobs:
         if: steps.signing.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: thinkinbuddy-signed-ipa
+          name: capstone-foundry-signed-ipa
           path: ${{ runner.temp }}/export/*.ipa
           if-no-files-found: error

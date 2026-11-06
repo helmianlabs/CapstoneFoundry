@@ -1,4 +1,4 @@
--- sql/store/002_tenant_columns.sql — ThinkinBuddy store build, bite 1.
+-- sql/store/002_tenant_columns.sql — Capstone Foundry store build, bite 1.
 --
 -- RUN ONCE BY US against the shared hosted Neon database, AFTER
 -- sql/store/001_tenants.sql (the tenant_id columns below reference

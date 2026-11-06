@@ -209,5 +209,5 @@ not. That is a decision to make before building it, not after.
 What this buys and what it does not: it authenticates a **browser that holds a
 token**, not a person. Anyone holding the token is that user. Real improvement
 over "anyone who can type the word troy"; still weaker than an identity
-provider. If ThinkinBuddy is ever going to have more than one real user, do that
+provider. If Capstone Foundry is ever going to have more than one real user, do that
 properly instead of extending this.
