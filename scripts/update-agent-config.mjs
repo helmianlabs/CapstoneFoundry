@@ -121,6 +121,31 @@ export function hasUserIdBinding(toolConfig) {
 }
 
 /**
+ * Set X-Webhook-Secret on a tool config from the server's WEBHOOK_SECRET.
+ * save_memory and recall_memory require this header; a body userId does
+ * not authorize the call. Returns true when the config changed. Never
+ * logs the secret. No-op when `secret` is empty or the header already
+ * matches — an existing header is not cleared.
+ */
+export function ensureWebhookSecretHeader(toolConfig, secret) {
+  if (!secret || typeof secret !== 'string') return false;
+  const api = toolConfig?.api_schema;
+  if (!api || typeof api !== 'object') return false;
+  const headers = (api.request_headers && typeof api.request_headers === 'object' && !Array.isArray(api.request_headers))
+    ? api.request_headers
+    : {};
+  if (headers['X-Webhook-Secret'] === secret) return false;
+  api.request_headers = { ...headers, 'X-Webhook-Secret': secret };
+  return true;
+}
+
+/** True when the tool config already carries this exact webhook secret. */
+export function hasWebhookSecretHeader(toolConfig, secret) {
+  if (!secret || typeof secret !== 'string') return false;
+  return toolConfig?.api_schema?.request_headers?.['X-Webhook-Secret'] === secret;
+}
+
+/**
  * Bring a tool config's request body up to the identity contract:
  * a required `userId` property bound to {{user_id}}. Mutates the given
  * config (callers pass the fetched object they are about to PATCH).
@@ -185,14 +210,31 @@ async function main() {
   }
 
   const targetIds = new Set();
+  const MEMORY_WEBHOOK_TOOLS = new Set(['save_memory', 'recall_memory']);
+  function alignMemoryWebhookHeader(config, toolId) {
+    if (!MEMORY_WEBHOOK_TOOLS.has(config?.name)) return false;
+    const secret = process.env.WEBHOOK_SECRET;
+    if (!secret) {
+      console.log(`      ${config.name} (${toolId}): WEBHOOK_SECRET unset — X-Webhook-Secret not written.`);
+      return false;
+    }
+    if (ensureWebhookSecretHeader(config, secret)) {
+      console.log(`      ${config.name} (${toolId}): X-Webhook-Secret header set.`);
+      return true;
+    }
+    console.log(`      ${config.name} (${toolId}): X-Webhook-Secret header already present.`);
+    return false;
+  }
   async function patchTool(tool) {
     const config = tool.tool_config;
-    if (ensureUserIdBinding(config)) {
+    const userIdChanged = ensureUserIdBinding(config);
+    const headerChanged = alignMemoryWebhookHeader(config, tool.id);
+    if (userIdChanged || headerChanged) {
       await api(`/convai/tools/${tool.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ tool_config: config }),
       });
-      console.log(`      ${config.name} (${tool.id}): userId binding added.`);
+      if (userIdChanged) console.log(`      ${config.name} (${tool.id}): userId binding added.`);
     } else if (hasUserIdBinding(config)) {
       console.log(`      ${config.name} (${tool.id}): userId binding already present.`);
     } else {
@@ -258,6 +300,7 @@ async function main() {
       auth_connection: null,
     },
   };
+  ensureWebhookSecretHeader(recallToolConfig, process.env.WEBHOOK_SECRET);
 
   const referencedRecall = byName('recall_memory', referencedTools);
   let recallToolId;
@@ -308,6 +351,12 @@ async function main() {
       const fetched = await api(`/convai/tools/${id}`);
       checks.push([`${def.name} (${id}): userId bound to {{user_id}}`, hasUserIdBinding(fetched.tool_config)]);
       checks.push([`${def.name} (${id}): referenced by the agent`, verifyIds.has(id)]);
+      if ((def.name === 'save_memory' || def.name === 'recall_memory') && process.env.WEBHOOK_SECRET) {
+        checks.push([
+          `${def.name} (${id}): X-Webhook-Secret header set`,
+          hasWebhookSecretHeader(fetched.tool_config, process.env.WEBHOOK_SECRET),
+        ]);
+      }
     }
   }
 
