@@ -63,16 +63,22 @@
 const TOKEN_KEY = 'tb_token';
 const TENANT_KEY = 'tb_tenant';
 
-const AGE_BAND_OPTIONS = [
+// Historical labels preserved for existing profiles and backwards compatibility
+const ALL_BAND_LABELS = [
   { value: 'child', label: 'Under 6' },
   { value: '6-8', label: '6–8' },
   { value: '9-12', label: '9–12' },
   { value: '13-17', label: '13–17' },
   { value: 'adult', label: 'Adult' },
 ];
-// Bands where safety mode defaults ON in onboarding (mirrors the
-// kid-core semantics server-side: child / 6-8 / 9-12 are minors).
-const MINOR_BANDS = ['child', '6-8', '9-12'];
+
+// Capstone Foundry operates for 13+ only. Onboarding dropdown offers 13-17 and Adult only.
+const AGE_BAND_OPTIONS = [
+  { value: '13-17', label: '13–17' },
+  { value: 'adult', label: 'Adult' },
+];
+// Under 13 is completely removed. Safety defaults off for adults.
+const MINOR_BANDS = [];
 const PIN_COPY = 'This PIN keeps safety settings locked. Only a parent should know it.';
 
 // Small shared inline styles for elements the .onboarding CSS in
@@ -721,7 +727,7 @@ function activeProfileId() {
 window.tbActiveProfileId = () => activeProfileId();
 
 function bandLabel(value) {
-  const found = AGE_BAND_OPTIONS.find((o) => o.value === value);
+  const found = AGE_BAND_OPTIONS.find((o) => o.value === value) || ALL_BAND_LABELS.find((o) => o.value === value);
   return found ? found.label : 'No age band yet';
 }
 
