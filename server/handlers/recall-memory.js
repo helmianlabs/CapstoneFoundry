@@ -32,9 +32,10 @@ export function formatRecallLine(fact) {
   const key = fact && typeof fact.key === 'string' ? fact.key.trim() : '';
   const ts = fact?.createdAt || fact?.updatedAt;
   const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-  const prefix = dateStr ? `[${dateStr}] ` : '';
-  if (key && key !== value) return `${prefix}${key}: ${value}`;
-  return `${prefix}${value}`;
+  const catTag = fact?.category && fact.category !== 'general' ? `[${fact.category.toUpperCase()}] ` : '';
+  const datePrefix = dateStr ? `(${dateStr}) ` : '';
+  if (key && key !== value) return `${datePrefix}${catTag}${key}: ${value}`;
+  return `${datePrefix}${catTag}${value}`;
 }
 
 export function formatRecallSummary(facts) {

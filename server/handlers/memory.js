@@ -250,6 +250,7 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
     value: r.value,
     kind: r.kind || 'fact',
     scope: r.scope || 'semantic',
+    category: r.category || 'general',
     importance: r.importance,
     createdAt: r.created_at?.toISOString?.() || null,
     updatedAt: r.updated_at?.toISOString?.() || null,
@@ -284,6 +285,7 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
                 content AS value,
                 kind,
                 scope,
+                category,
                 importance,
                 created_at,
                 updated_at
@@ -322,6 +324,7 @@ async function runBootQuery(pool, identityCol, identityId, scopes, limit, orderB
             content AS value,
             kind,
             scope,
+            category,
             importance,
             created_at,
             updated_at
