@@ -3971,10 +3971,9 @@
           });
           const data = await res.json();
           if (data.ok) {
-            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Built! Opening ' + (data.url || '/landing.html') + '...';
-            window.open(data.url || '/landing.html', '_blank');
+            window.location.href = data.url || '/landing.html';
           } else {
-            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: ' + (data.error || 'build failed');
+            alert('Helmion Hands: ' + (data.error || 'build failed'));
           }
         } catch (err) {
           if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: ' + err.message;
