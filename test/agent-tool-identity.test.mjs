@@ -29,6 +29,8 @@ const {
   IDENTITY_TOOL_NAMES,
   ensureUserIdBinding,
   hasUserIdBinding,
+  ensureWebhookSecretHeader,
+  hasWebhookSecretHeader,
   userIdParamPatch,
 } = await import('../scripts/update-agent-config.mjs');
 
@@ -125,4 +127,23 @@ test('ensureUserIdBinding establishes the contract and hasUserIdBinding recogniz
   const noSchema = { api_schema: {} };
   assert.equal(ensureUserIdBinding(noSchema), false, 'no request body schema: nothing to bind into');
   assert.equal(hasUserIdBinding(noSchema), false);
+});
+
+test('ensureWebhookSecretHeader sets X-Webhook-Secret and does not clear other headers', () => {
+  const secret = 'test-webhook-secret';
+  const tool = {
+    api_schema: {
+      request_headers: { 'X-Other': 'keep' },
+      request_body_schema: { type: 'object', properties: {} },
+    },
+  };
+  assert.equal(hasWebhookSecretHeader(tool, secret), false);
+  assert.equal(ensureWebhookSecretHeader(tool, ''), false, 'an empty secret writes nothing');
+  assert.equal(tool.api_schema.request_headers['X-Webhook-Secret'], undefined);
+  assert.equal(ensureWebhookSecretHeader(tool, secret), true);
+  assert.equal(hasWebhookSecretHeader(tool, secret), true);
+  assert.equal(tool.api_schema.request_headers['X-Other'], 'keep');
+  assert.equal(ensureWebhookSecretHeader(tool, secret), false, 'the same secret is left alone');
+  assert.equal(ensureWebhookSecretHeader({ api_schema: {} }, secret), true);
+  assert.equal(ensureWebhookSecretHeader({}, secret), false);
 });

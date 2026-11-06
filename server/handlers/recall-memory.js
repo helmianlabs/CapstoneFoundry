@@ -16,8 +16,7 @@
 // the LLM as raw context for it to speak naturally, not parsed structurally.
 
 import { retrieveMemoriesWithMeta } from './memory.js';
-import { requireToolAuth } from '../../lib/security.js';
-import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { authorizeMemoryAccess } from '../../lib/tenant.js';
 
 // Mid-call recall depth. Was hardcoded 5, which — combined with the silent
 // boot fallback — meant the agent only ever saw the same five boot-top
@@ -42,34 +41,24 @@ export function formatRecallSummary(facts) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Two costs on every call: an OpenAI embedding (memory.js:115) and a read of
-  // whatever this userId has stored. The pre-wiring warning that stood here
-  // ("this endpoint would hand a stranger Troy's memories on request") is
-  // addressed by the tenant resolution below IN ENFORCED MODE: with
-  // SESSION_SECRET set, the caller must present a session token or the
-  // tenant id itself as userId (the ElevenLabs `user_id` dynamic variable
-  // carries the tenant id in hosted mode), and retrieveMemories filters
-  // memory_items by that tenant_id — another tenant's rows cannot come
-  // back. In COMPAT mode (no SESSION_SECRET — today's live deployment)
-  // behavior is unchanged: userId keys the lookup exactly as before.
-  //
-  // Tool-auth gate NO-OP UNTIL ENFORCE_TOOL_AUTH is truthy — see
-  // lib/security.js:requireToolAuth. (Independent of tenant enforcement.)
-  if (!requireToolAuth(req, res)) return;
-
+  // Embedding + a read of whatever this userId has stored. A tenant UUID
+  // in the body is not a credential: the signed-in PWA presents its
+  // session (and the same id as the widget user_id), and the
+  // recall_memory tool presents X-Webhook-Secret. The UUID only selects
+  // a tenant the caller is already allowed to read. This does not wait
+  // on ENFORCE_TOOL_AUTH — that flag being unset left this route open.
   const userId = req.body?.userId;
-  const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  if (!query) return res.status(400).json({ error: 'query required' });
-
-  const resolvedTenant = resolveHandlerTenant(req, userId);
-  if (!resolvedTenant.ok) {
-    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
+  const access = authorizeMemoryAccess(req, userId);
+  if (!access.ok) {
+    return res.status(access.status).json({ error: access.error });
   }
+
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+  if (!query) return res.status(400).json({ error: 'query required' });
 
   try {
     // MODE VISIBILITY (memory-fix bite, 2026-11-05): the response carries
@@ -79,7 +68,7 @@ export default async function handler(req, res) {
     // boot-fallback for every query for weeks (OPENAI_API_KEY is set on
     // the Preview target only); the mode makes that state observable in
     // every tool result and log line from now on.
-    const { facts, mode } = await retrieveMemoriesWithMeta(userId, { limit: RECALL_LIMIT, query, tenantId: resolvedTenant.tenantId });
+    const { facts, mode } = await retrieveMemoriesWithMeta(access.userId, { limit: RECALL_LIMIT, query, tenantId: access.tenantId });
     if (!facts.length) {
       return res.status(200).json({ found: false, mode, summary: "I don't have anything saved about that." });
     }

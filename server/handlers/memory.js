@@ -4,7 +4,9 @@
 // Spec: thinkinbuddy/docs/persistent-memory-spec-2026-05-27.md
 //
 // HTTP CONTRACT PRESERVED so the ElevenLabs widget's `save_memory` tool keeps
-// working without dashboard changes:
+// the same body shape. Authorization is separate from that shape: a userId
+// UUID never authorizes the call (authorizeMemoryAccess). Browser callers
+// send a session; the tool sends X-Webhook-Secret.
 //   GET    /api/memory?userId=...                  → { userId, facts: [...] }
 //   POST   /api/memory   body { userId, key, value } → { ok, fact }
 //   DELETE /api/memory?userId=...&key=...           → { ok }
@@ -28,7 +30,7 @@
 
 import { Pool } from 'pg';
 import OpenAI from 'openai';
-import { resolveHandlerTenant } from '../../lib/tenant.js';
+import { authorizeMemoryAccess } from '../../lib/tenant.js';
 
 const DB_URL = process.env.DATABASE_URL_MEMORY || process.env.DATABASE_URL;
 
@@ -791,46 +793,43 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'DELETE') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // A tenant UUID in userId is NOT a credential. Browser calls need a
+  // session for that tenant (the signed-in PWA sends Authorization plus
+  // the same id as the widget's user_id). The save_memory tool has no
+  // session; it needs X-Webhook-Secret, and only then may userId select
+  // the tenant. ENFORCE_TOOL_AUTH does not gate this route — the flag
+  // being absent was the live hole. See authorizeMemoryAccess.
+  const reqUserId = (req.method === 'POST')
+    ? (req.body?.userId || req.query?.userId)
+    : req.query?.userId;
+  const access = authorizeMemoryAccess(req, reqUserId);
+  if (!access.ok) {
+    return res.status(access.status).json({ error: access.error });
+  }
+  const tenantId = access.tenantId;
+  const userId = access.userId;
 
   if (!DB_URL) {
     return res.status(500).json({ error: 'memory store not configured (DATABASE_URL_MEMORY missing)' });
   }
-
-  // Tenant wiring (store build — lib/tenant.js): resolve the scoping
-  // tenant for this request. COMPAT mode (no SESSION_SECRET, today's
-  // live deployment): resolveHandlerTenant reports ok with tenantId
-  // null and every query below runs exactly as before this wiring.
-  // ENFORCED mode: identity comes from a Bearer session token (browser)
-  // or from the userId value itself — the ElevenLabs save_memory tool
-  // sends the session's `user_id` dynamic variable, which in hosted
-  // mode carries the tenant id (set at session start, see
-  // prime-agent.js). Neither resolving is a hard 400: never default to
-  // another tenant's rows.
-  const reqUserId = (req.method === 'POST')
-    ? (req.body?.userId || req.query?.userId)
-    : req.query?.userId;
-  const resolvedTenant = resolveHandlerTenant(req, reqUserId);
-  if (!resolvedTenant.ok) {
-    return res.status(400).json({ error: 'tenant identity required (session token or tenant user_id)' });
-  }
-  const tenantId = resolvedTenant.tenantId;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
 
   try {
     if (req.method === 'GET') {
-      const userId = req.query.userId;
-      if (!userId) return res.status(400).json({ error: 'userId required' });
       const facts = await readFacts(userId, tenantId);
       return res.status(200).json({ userId, facts });
     }
 
     if (req.method === 'POST') {
       const { key, value } = req.body || {};
-      const userId = req.body?.userId || req.query?.userId;
-      if (!userId) return res.status(400).json({ error: 'userId required' });
       if (!key || !value) return res.status(400).json({ error: 'key and value required' });
       // Enforced mode stamps new rows with the tenant identity — the
       // identity retrieval looks for (see retrieveMemories). Compat
-      // mode stamps the caller's userId, exactly as before.
+      // mode stamps the authorized userId, exactly as before.
       const out = await upsertFact(tenantId || userId, key, value, tenantId);
       return res.status(200).json({
         ok: true,
@@ -839,15 +838,10 @@ export default async function handler(req, res) {
       });
     }
 
-    if (req.method === 'DELETE') {
-      const { userId, key } = req.query;
-      if (!userId) return res.status(400).json({ error: 'userId required' });
-      if (!key) return res.status(400).json({ error: 'key required' });
-      await deleteFact(tenantId || userId, key, tenantId);
-      return res.status(200).json({ ok: true });
-    }
-
-    return res.status(405).json({ error: 'Method not allowed' });
+    const { key } = req.query;
+    if (!key) return res.status(400).json({ error: 'key required' });
+    await deleteFact(tenantId || userId, key, tenantId);
+    return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('[memory] handler error:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'memory op failed' });

@@ -4,8 +4,11 @@ Exported from the live agent's Tools tab. Each of these is a "Webhook" type
 custom tool in ElevenLabs pointing at a matching `/api/*.js` route in this
 repo. **Replace `YOUR-DEPLOYMENT-URL` with your own Vercel deployment**, and
 set `WEBHOOK_SECRET` in ElevenLabs' per-tool "Secret" / header config to
-match your `.env`'s `WEBHOOK_SECRET` — see `lib/security.js`
-(`requireWebhookSecret`), which every one of these routes calls first.
+match your `.env`'s `WEBHOOK_SECRET`. Image and video routes call
+`requireWebhookSecret` first (`lib/security.js`). `save_memory` and
+`recall_memory` require the same header through `authorizeMemoryAccess`
+(`lib/tenant.js`) and do not treat `userId` as a credential. Search and
+browse still follow the `ENFORCE_TOOL_AUTH` rollout.
 
 ## Identity binding contract (safety wiring bite 4)
 
@@ -73,11 +76,20 @@ not enabled — turn on whichever your use case needs.
 
 ## Auth model (why two different gates exist)
 
-- **Browser → API** (chat.js, memory reads triggered from the widget):
+- **Browser → API** (chat.js, the signed-in memory briefing):
   CORS allowlist via `ALLOWED_ORIGINS`, enforced by
-  `applyBrowserCors()` in `lib/security.js`.
+  `applyBrowserCors()` in `lib/security.js`, is not authentication.
+  `/api/memory` reads and `/api/recall-memory` from a signed-in client
+  require `Authorization: Bearer <session>` for that tenant
+  (`authorizeMemoryAccess` in `lib/tenant.js`). A `userId` UUID only
+  repeats the session tenant.
 - **ElevenLabs → API** (every tool above): no browser Origin header exists
   server-to-server, so these are gated by a shared-secret header
   (`X-Webhook-Secret` matching `WEBHOOK_SECRET`) via `requireWebhookSecret()`
-  in the same file. Both gates are closed-by-default — a missing env var
-  locks everything out rather than silently opening it.
+  in the same file. `save_memory` and `recall_memory` require that header
+  even when `ENFORCE_TOOL_AUTH` is unset; the body `userId` then selects
+  the tenant and does not authorize the call. Image and video routes
+  already use the same header. Search and browse still follow the
+  `ENFORCE_TOOL_AUTH` rollout in `docs/TOOL_AUTH_ROLLOUT.md`. Both gates
+  are closed-by-default — a missing env var locks the gated route out
+  rather than silently opening it.

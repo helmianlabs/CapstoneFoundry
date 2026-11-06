@@ -1867,6 +1867,10 @@
       // UNVERIFIED (see the TOOL IDENTITY note above). A tool missing the
       // binding fails closed server-side in hosted mode rather than leaking
       // into a default identity.
+      // user_id SELECTS the tenant. It does not authorize the call.
+      // save_memory and recall_memory also require the tool's
+      // X-Webhook-Secret (server WEBHOOK_SECRET). The signed-in briefing
+      // path is the session on /api/prime-agent, sent by tbAuthHeaders.
       // Agent tools declare {{user_id}}; ElevenLabs closes the call (1008
       // "Missing required dynamic variables") if it is absent, so always send one.
       {

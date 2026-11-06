@@ -1,9 +1,36 @@
 # Closing the open spending endpoints — two-step rollout
 
-**Status: STEP 1 NOT DONE. The hole is still open.** The code is in place and
-deployed-safe, but `/api/search`, `/api/browse` and `/api/recall-memory` remain
-callable by anyone until both steps below are finished. Do not record this as
-fixed until step 2.
+## UPDATE 2026-11-06 — `/api/memory` and `/api/recall-memory` are closed in code
+
+Those two routes no longer treat a tenant UUID as a credential, and they do
+not wait on `ENFORCE_TOOL_AUTH`.
+
+- Browser / signed-in PWA: `Authorization: Bearer <session>` for that tenant.
+  A `userId` UUID may only repeat the session tenant. Any other tenant is 403.
+  The briefing path is `POST /api/prime-agent` with that session (unchanged).
+- Agent tools `save_memory` and `recall_memory`: `X-Webhook-Secret` matching
+  `WEBHOOK_SECRET`. The body `userId` (`{{user_id}}`) only selects the tenant
+  after the secret matches.
+- No session and no matching secret is 401, including when `userId` is a UUID
+  and when `ENFORCE_TOOL_AUTH` is unset. A missing `WEBHOOK_SECRET` does not
+  open the route; a signed-in session still works.
+- Voice save/recall keeps working only after those two tools send the header.
+  `scripts/update-agent-config.mjs` writes it for `save_memory` and
+  `recall_memory` when `WEBHOOK_SECRET` is set in the environment the script
+  runs in. That script run is the dashboard step. Do not print the secret.
+
+`/api/search` and `/api/browse` are unchanged by that gate. Their handlers
+already require `userId` in enforced mode (`resolveHandlerTenant`), and
+`scripts/update-agent-config.mjs` plus `docs/elevenlabs-template/tools.md`
+already bind that field to `{{user_id}}`. Putting the binding on the live
+agent is the same dashboard/script run, not a further code change. Until
+`ENFORCE_TOOL_AUTH` is turned on, search and browse still do not require
+`X-Webhook-Secret`.
+
+**Status for search and browse: STEP 1 NOT DONE. That hole is still open.**
+The code below is deployed-safe for those two routes, but `/api/search` and
+`/api/browse` remain callable by anyone until both steps are finished. Do not
+record search/browse as fixed until step 2. Recall is no longer in that set.
 
 ## What was open, and how it was proven
 
@@ -27,16 +54,21 @@ that implements it says so at `lib/security.js:8-13`. A browser honors it;
 
 ## Why this is staged instead of just closed
 
-`/api/search`, `/api/browse` and `/api/recall-memory` are called **only** by the
+`/api/search` and `/api/browse` are called **only** by the
 live ElevenLabs agent's tool webhooks (`agent_5301m50skfnvfza8bpkmjybc18z8`).
+`/api/recall-memory` is now closed in code (see the update above); it is no
+longer waiting on this flag.
 Verified: no other caller exists in the repo, and the agent's registered tools
 point at exactly these URLs.
 
-Those three tools currently send **no headers at all** (verified live — see the
-table below). Hard-gating the endpoints would mean the next deploy silently
-breaks the voice assistant mid-call: `search_web`, `browse_url` and
-`recall_memory` would all start returning 401. So `requireToolAuth`
-(`lib/security.js`) defaults **off**, and closing the hole is step 2.
+As of the 2026-07-30 probe, `search_web`, `browse_url`, and `recall_memory`
+sent no `X-Webhook-Secret` (see the table below). `requireToolAuth`
+(`lib/security.js`) still defaults **off**, so search and browse stay open
+until step 2. `recall_memory` and `save_memory` no longer use that flag:
+after this change they return 401 until their tools send the header. Run
+`scripts/update-agent-config.mjs` with `WEBHOOK_SECRET` set (it is not
+printed) before relying on in-call save/recall. The signed-in PWA briefing
+does not use those tools.
 
 ## STEP 1 — add the header to three tools
 
@@ -54,7 +86,8 @@ the table:
 | `generate_video_runway` | `tool_3901kt61mgjxe0xaeae836s1gxg5` | YES |
 | **`search_web`** | **`tool_7701krkqhd7we908q6kv52mpvv96`** | **no — add it** |
 | **`browse_url`** | **`tool_0601krkqhd7tfe68whs7cjq1nt86`** | **no — add it** |
-| **`recall_memory`** | **`tool_1501ky0a9qqtezfba6d7036bce16`** | **no — add it** |
+| **`recall_memory`** | **`tool_1501ky0a9qqtezfba6d7036bce16`** | **no on 2026-07-30 — required now; add it** |
+| **`save_memory`** | (match the tool id on the agent, not a same-named duplicate) | **required now; add it** |
 
 The field is `tool_config.api_schema.request_headers`, a map of header name to
 value. Set `X-Webhook-Secret` to the same value as the Vercel `WEBHOOK_SECRET`
