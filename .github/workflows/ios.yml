@@ -31,6 +31,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - store/bite1-tenants
     paths:
       - '.github/workflows/ios.yml'
