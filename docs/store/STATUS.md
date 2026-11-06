@@ -1,18 +1,73 @@
 # Capstone Foundry store build — STATUS
 
 The single status page for turning this repo into a hosted, billed
-App Store / Play Store product. Branch: `store/bite1-tenants`.
+App Store / Play Store product. Branch: `store/bite1-tenants` —
+**merged to `main` 2026-11-04 (PR #7); production now tracks `main`.**
 Plan: goal file `thinkinbuddy-store-plan.md`. Audit: goal file
 `thinkinbuddy-bite0-audit.md`. Setup docs live alongside this file in
 `docs/store/`.
 
-Last updated: 2026-10-23 (final sweep, bite 8).
+Last updated: 2026-11-04 (switch-over — see the dated section below).
 
 **Rename note (2026-11-03):** the product was renamed ThinkinBuddy →
 **Capstone Foundry** (bundle/package id `com.capstonefoundry.app`).
 The dated entries below keep the old name and the old ids where they
 record what was true at the time — they are the historical record,
 not current facts.
+
+## 2026-11-04 — switch-over (live)
+
+- **The store build is LIVE on production.** PR #7 merged
+  `store/bite1-tenants` into `main` (merge commit `e1115e7f`, plus a
+  trigger commit `7386e11f`); production serves the merged build at
+  `thinkbuddy-sandy.vercel.app`. Test suite: 571/571.
+- **The Vercel project had silently lost its Git connection** —
+  pushes had stopped deploying entirely. Reconnected to
+  helmianlabs/CapstoneFoundry (production branch `main`); deploys
+  proven firing again (the merge trigger and every later commit went
+  READY).
+- **ElevenLabs move:** the app now points at the NEW Capstone Foundry
+  ElevenLabs account (agent `agent_9101…`, account under
+  support@capstonefoundry.helmian.cloud), cloned from the old agent
+  with byte-identical tools; the production post-call webhook secret
+  was updated to the new account's webhook. Credits decision (Troy,
+  2026-11-04): this one account serves everyone; upgrade on first
+  revenue.
+- **Consent gate (Apple 5.1.2(i)) live:** required first-run checkbox
+  naming OpenAI, Anthropic, Google, and ElevenLabs; recorded as
+  consentAiProcessing + consentAiDate; exercised live in onboarding.
+- **Content reporting live:** "Report this answer" + lightbox
+  "Report this" → `POST /api/safety-report` → `content_reports`
+  (migration `009_content_reports.sql` run on the hosted Neon DB and
+  verified; the probe row from verification was cleaned back out).
+  Signed-in tap-through still UNVERIFIED (verifying browser had no
+  microphone to produce an answer to report).
+- **Signup exercised** on a throwaway preview (account created +
+  login works). Two warts, cause UNVERIFIED: signup showed a generic
+  error although the account was created; the buddy-setup wizard's
+  save failed twice before a reload cleared it. Test tenant deleted
+  afterward.
+- **Slate app icon in the repo** (iOS AppIcon + all Android mipmaps),
+  byte-identical to the masters (md5-checked after upload).
+- **Website complete:** capstonefoundry.helmian.cloud — landing,
+  /support, /privacy (published 2026-11-04, Troy's Shoshone address),
+  /delete-account, and /terms (Terms of Use, added 2026-11-04) all
+  live; support@ mailbox on our own server proven by a delivered
+  test email.
+- **Production accounts flip (2026-11-05):** the password-reset
+  door is built (lib/mailer.js + lib/accounts.js reset tokens +
+  /api/auth/request-reset and /api/auth/confirm-reset +
+  migration 011 on the hosted DB; Resend sending from
+  support@mail.helmian.cloud) and was exercised end to end on a
+  preview deployment — reset email delivered, password changed,
+  old password refused, recorded reviewer password restored by a
+  second cycle. `SESSION_SECRET` was set for Production on
+  2026-11-05; this deploy is the one that turns production
+  accounts ON. Troy's own way in is the forgot-password flow to
+  his email, so the flip cannot lock him out.
+- A throwaway branch `verify/reports-flow` (used for the signup
+  exercise) is still on the remote — self-documented as disposable;
+  delete when the connector offers branch deletion again.
 
 ## Bites 0–8
 
@@ -157,6 +212,9 @@ permission — see item 11).
 2. **Run the DB migrations** `sql/store/001`–`005` against the real
    Neon database in a sitting together — they have NEVER been executed
    against a live Postgres.
+   **[Superseded 2026-11-04: migrations 001–008 were run against the
+   hosted Neon database in earlier sittings, and 009 ran 2026-11-04
+   (see the switch-over section). Nothing outstanding here.]**
 3. **Create the store products and set prices** (RevenueCat + App Store
    Connect + Play Console). Product IDs are fixed in code/docs:
    `tb_buddy_*`, `tb_media_*`, `tb_connect_*`,
@@ -166,6 +224,10 @@ permission — see item 11).
    category + COPPA weight) vs family/13+ with a parent account holder.
    Blocks the listing, the age-rating answers, and how curricula
    age-gating (#9 above) gets built.
+   **[Decided by Troy 2026-10-24: general audience — "it's for
+   everybody." No Kids Category / Families election; the parent-PIN
+   Safety Mode stays as an in-app feature. Curricula age-gating (#9)
+   remains unbuilt and is a product task, not a listing blocker.]**
 5. **Apple app record + signing**: create the App Store Connect app
    record, decide the bundle ID FIRST (the scaffold uses
    `com.helmianlabs.thinkinbuddy`; the no-Mac research recommended
@@ -174,6 +236,10 @@ permission — see item 11).
    banking / tax, enroll in the Small Business Program, and add the
    signing secrets named in `.github/workflows/ios.yml`'s header so
    the archive job can run.
+   **[Bundle ID settled 2026-11-02/03: `com.capstonefoundry.app`.
+   Still Troy's: create the app record, sign the Paid Apps Agreement
+   (still "New"/unsigned at last check — it gates the whole account),
+   EU DSA trader status, and the signing secrets.]**
 6. **First Use build-site answer**: which service built the First Use
    IPA / showed the "30-minute limit" (research verdict: most likely
    Appcircle if it built + published, Appetize.io if it only streamed
@@ -186,6 +252,8 @@ permission — see item 11).
    app + PWA (ElevenLabs voice, Neon/pgvector memory, multi-provider
    image/video generation)"
    (the current text falsely says "React Native").
+   **[Done 2026-11-03: the repo About was set to the product-truth
+   text and read back verbatim.]**
 8. **Purge the old research-log blobs** written before sweep item 6
    (public Blob store, `research/` prefix) — the code no longer writes
    raw transcripts, but the historical objects remain until deleted.
@@ -198,13 +266,29 @@ permission — see item 11).
 
 - **No live deploy of this branch yet** — blocked by the Vercel Hobby
   deployment cap (auto-retry cron is armed; see the goal timeline).
+  **[Superseded 2026-11-04: the branch merged to `main` and the build
+  is live on production — see the switch-over section.]**
 - **No live database** — `sql/store/001`–`005` have never run against a
   real Postgres; all tenant/billing/relay SQL is test-verified only.
+  **[Superseded 2026-11-04: migrations 001–009 have run on the hosted
+  Neon database; the app runs against it in production.]**
 - **Onboarding front end (5b)** was verified statically, never in a
   browser.
+  **[Superseded 2026-11-04: onboarding + consent gate exercised in a
+  real browser during the switch-over verification; signup created a
+  working account on a preview deployment.]**
 - **No iOS build has run** — the CI workflow itself could not be
   pushed (GitHub App lacks the Workflows permission; sweep item 11
   has the two routes to land it, after which its first run is the
   proof).
+  **[Updated 2026-11-04: an iOS simulator build succeeded via GitHub
+  Actions on 2026-10-24. A SIGNED archive still needs the Apple
+  signing secrets, which are not configured.]**
 - **Relay pairing** is coded + unit-tested on the Capstone Foundry
-  side only; no live device pair has happened.
+  side only; no live device pair has happened. **[Still true.]**
+- **[New 2026-11-04] No live voice conversation with the new
+  ElevenLabs agent inside the app yet** — the verifying browser had
+  no microphone (widget permission-denied). Needs a real device.
+- **[New 2026-11-04] The signed-in report tap-through** (file a
+  report while signed in → row lands in content_reports) — every
+  piece proven separately; the chain itself is unexercised.
