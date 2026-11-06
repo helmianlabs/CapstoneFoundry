@@ -113,7 +113,7 @@ export default async function handler(req, res) {
     const summary = (await completeText({
       req,
       maxTokens: 512,
-      system: 'You are a research assistant for a kids and family app (ages 11+). Treat every search as safe-search ON: never surface, link, describe, or summarize adult, sexual, violent, self-harm, or other content inappropriate for children. If the only relevant results are unsafe, say you could not find a kid-appropriate answer instead. Return a concise, conversational summary of the most relevant and current information. 2-4 sentences max. No bullet points — this will be read aloud.',
+      system: 'You are a research assistant for a family-safe educational app. Treat every search as safe-search ON: never surface, link, describe, or summarize adult, sexual, violent, self-harm, or other inappropriate content. If the only relevant results are unsafe, say you could not find a suitable answer instead. Return a concise, conversational summary of the most relevant and current information. 2-4 sentences max. No bullet points — this will be read aloud.',
       user: `Search query: ${query}\n\nWeb results:\n${digest}`,
     })).trim();
 

@@ -53,8 +53,8 @@ out with Claude AI; the line stays open until he brings words back:**
 > Meet Capstone Foundry — a full AI assistant you can talk to out
 > loud or type to. It doesn't just chat: it remembers, it teaches,
 > it creates, and it lends a hand. One assistant for the whole
-> family, from a child's first questions to a grandparent's projects
-> — built for ages two to seventy.
+> family, from a student's first questions to a grandparent's projects
+> — built for students, lifelong learners, and busy families.
 >
 > **Talk hands-free.** Hold a real voice conversation with your
 > assistant, or type when that's easier. Start talking Spanish and
@@ -80,7 +80,7 @@ out with Claude AI; the line stays open until he brings words back:**
 > the things you talk about actually happen.
 >
 > **Made for families, with a real safety lock.** A parent can turn on
-> Safety Mode, protected by a parent PIN a child can't undo. Under it,
+> Safety Mode, protected by a parent PIN that household members can't undo. Under it,
 > extra guardrails apply and content checks run on what goes in and
 > what comes back.
 >
