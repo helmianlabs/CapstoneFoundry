@@ -41,6 +41,12 @@ export class FakeDb {
     // Content reports (sql/store/009): same arrangement as requests.
     this.rows.content_reports = [];
     this.reportSeq = 0;
+    // Password resets (sql/store/011): rows live in
+    // this.rows.password_resets (dedicated branches below — mint /
+    // consume are not generic tenant queries); registering the table
+    // here also lets the generic tenant DELETE in deleteAccount
+    // reach it.
+    this.rows.password_resets = [];
     // Table names whose DELETE should fail with pg 42P01 (undefined
     // table) — tests use this to prove optional-table tolerance.
     this.missingTables = new Set();
@@ -90,6 +96,40 @@ export class FakeDb {
       const row = this.tenants.find((t) => t.id === params[0]);
       if (!row) return { rows: [], rowCount: 0 };
       row.status = params[1];
+      return { rows: [], rowCount: 1 };
+    }
+    if (/^UPDATE tenants SET password_hash/i.test(s)) {
+      const row = this.tenants.find((t) => t.id === params[0]);
+      if (!row) return { rows: [], rowCount: 0 };
+      row.password_hash = params[1];
+      return { rows: [], rowCount: 1 };
+    }
+    // ── password_resets (sql/store/011, lib/accounts.js) ──────────────
+    if (/^UPDATE password_resets SET used_at/i.test(s) && /WHERE tenant_id/i.test(s)) {
+      let n = 0;
+      for (const r of this.rows.password_resets) {
+        if (r.tenant_id === params[0] && r.used_at == null) { r.used_at = params[1]; n += 1; }
+      }
+      return { rows: [], rowCount: n };
+    }
+    if (/^INSERT INTO password_resets/i.test(s)) {
+      const m = s.match(/INSERT INTO password_resets \(([^)]+)\)/i);
+      const cols = m[1].split(',').map((x) => x.trim());
+      const row = { used_at: null, created_at: new Date().toISOString() };
+      cols.forEach((c, i) => { row[c] = params[i]; });
+      this.rows.password_resets.push(row);
+      return { rows: [] };
+    }
+    if (/^SELECT .* FROM password_resets WHERE token_hash/i.test(s)) {
+      const rows = this.rows.password_resets.filter(
+        (r) => r.token_hash === params[0] && r.used_at == null && r.expires_at > params[1],
+      );
+      return { rows: rows.map((r) => ({ ...r })) };
+    }
+    if (/^UPDATE password_resets SET used_at/i.test(s) && /WHERE id/i.test(s)) {
+      const row = this.rows.password_resets.find((r) => r.id === params[0]);
+      if (!row || row.used_at != null) return { rows: [], rowCount: 0 };
+      row.used_at = params[1];
       return { rows: [], rowCount: 1 };
     }
     const del = s.match(/^DELETE FROM (\w+) WHERE tenant_id = \$1/i);

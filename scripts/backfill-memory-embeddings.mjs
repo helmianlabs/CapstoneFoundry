@@ -24,13 +24,40 @@
 // ---------------------------------------------------------------------------
 
 import { Pool } from 'pg';
+import { existsSync, readFileSync } from 'node:fs';
+
+// PC-local env file: keys entered once by Troy through a secure card
+// (never chat) into .env.memory.local at the repo root. Real env wins.
+try {
+  const envPath = new URL('../.env.memory.local', import.meta.url);
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const mm = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.+?)\s*$/);
+      if (mm && !process.env[mm[1]]) process.env[mm[1]] = mm[2];
+    }
+  }
+} catch { /* optional file */ }
+
+// PC road (2026-11-05): with no connection passed, derive it exactly the
+// way scripts/inspect-memory-db.mjs does — the neondb string in Troy's
+// .claude.json, database swapped to thinkinbuddy_memory. The credential
+// never leaves his machine.
+function deriveConnFromClaudeJson() {
+  const path = 'C:/Users/troyh/.claude.json';
+  if (!existsSync(path)) return null;
+  const raw = readFileSync(path, 'utf8');
+  const m = raw.match(/postgres(?:ql)?:\/\/[^\s"']+neon\.tech\/neondb[^\s"']*/);
+  if (!m) return null;
+  const neon = m[0].replace(/\\u0026/g, '&');
+  return neon.replace(/\/neondb(\?|$)/, '/thinkinbuddy_memory$1');
+}
 
 const args = process.argv.slice(2);
 const connArg = args.find((a) => !a.startsWith('--'));
 const onlyUser = (args.find((a) => a.startsWith('--user=')) || '').split('=')[1] || null;
 const dryRun = args.includes('--dry-run');
 
-const conn = connArg || process.env.DATABASE_URL_MEMORY || process.env.DATABASE_URL;
+const conn = connArg || process.env.DATABASE_URL_MEMORY || process.env.DATABASE_URL || deriveConnFromClaudeJson();
 if (!conn || conn.trim().length < 12) {
   console.error('✗ No connection string. Pass it as arg 1 or set DATABASE_URL_MEMORY.');
   process.exit(1);

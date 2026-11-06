@@ -7,6 +7,22 @@
 //   POST /api/auth/delete-account (session token + { password })
 //                                              -> 200 { deleted: true }
 //                                              | 401 { error: 'invalid_credentials' }
+//   POST /api/auth/request-reset { email }  -> 200 { ok: true } ALWAYS
+//   POST /api/auth/confirm-reset { token, newPassword }
+//                                              -> 200 { ok: true }
+//                                              | 400 { error: 'invalid_or_expired_token' }
+//                                              | 400 { error: 'weak_password' }
+//   POST /api/auth/reset (ONE physical shim file, api/auth/reset.js)
+//     dispatches to the two reset routes by body shape — a token or
+//     newPassword field means confirm, anything else means request —
+//     so both reset routes cost a single Vercel function.
+// request-reset is anti-enumeration like login: the response is the
+// identical 200 whether the email has an account or not; when it
+// does, a token is minted (lib/accounts.js) and emailed
+// (lib/mailer.js, fail-soft — the response never reveals whether the
+// mailer is even configured). confirm-reset checks the password
+// policy BEFORE consuming the token, so a weak attempt never burns
+// the one live token.
 //
 // Account deletion (Apple App Store 5.1.1(v) + Play's account-deletion
 // requirement) is deliberately the hardest route here to fire by
@@ -36,8 +52,10 @@
 
 import {
   createAccount, authenticate, findTenantById, verifyPassword,
-  deleteAccount, getAccountsDb,
+  deleteAccount, getAccountsDb, findTenantByEmail, isValidPassword,
+  mintPasswordResetToken, consumePasswordResetToken, updatePassword,
 } from '../../lib/accounts.js';
+import { sendPasswordResetEmail } from '../../lib/mailer.js';
 import { signSession, tenantEnforced, requireTenant } from '../../lib/tenant.js';
 
 function routeOf(req) {
@@ -48,6 +66,9 @@ function routeOf(req) {
     pathname = String(req.url || '');
   }
   if (/\/delete-account\/?$/.test(pathname)) return 'delete-account';
+  if (/\/request-reset\/?$/.test(pathname)) return 'request-reset';
+  if (/\/confirm-reset\/?$/.test(pathname)) return 'confirm-reset';
+  if (/\/reset\/?$/.test(pathname)) return 'reset';
   if (/\/signup\/?$/.test(pathname)) return 'signup';
   if (/\/login\/?$/.test(pathname)) return 'login';
   return null;
@@ -59,13 +80,46 @@ function routeOf(req) {
  * @param {import('pg').Pool | Function} db
  */
 export async function handleAuth(req, res, db) {
-  const route = routeOf(req);
+  let route = routeOf(req);
   if (!route) return res.status(404).json({ error: 'not_found' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
   if (!tenantEnforced()) return res.status(503).json({ error: 'accounts_not_configured' });
 
+  // The single-shim endpoint (api/auth/reset.js): dispatch by body
+  // shape — a confirm attempt always carries a token (and the new
+  // password), a request carries only an email.
+  if (route === 'reset') {
+    const body = req.body || {};
+    route = (body.token || body.newPassword) ? 'confirm-reset' : 'request-reset';
+  }
+
   const { email, password } = req.body || {};
   try {
+    if (route === 'request-reset') {
+      // Anti-enumeration: the identical 200 whatever the email is —
+      // and whatever the mailer does (it never throws and its result
+      // is deliberately ignored here).
+      const tenant = await findTenantByEmail(db, email);
+      if (tenant) {
+        const minted = await mintPasswordResetToken(db, tenant.id);
+        await sendPasswordResetEmail(tenant.email, minted.token);
+      }
+      return res.status(200).json({ ok: true });
+    }
+    if (route === 'confirm-reset') {
+      const { token, newPassword } = req.body || {};
+      // Policy BEFORE consumption: a weak attempt must not burn the
+      // tenant's one live token.
+      if (!isValidPassword(newPassword)) {
+        return res.status(400).json({ error: 'weak_password' });
+      }
+      const tenantId = await consumePasswordResetToken(db, token);
+      if (!tenantId) {
+        return res.status(400).json({ error: 'invalid_or_expired_token' });
+      }
+      await updatePassword(db, tenantId, newPassword);
+      return res.status(200).json({ ok: true });
+    }
     if (route === 'delete-account') {
       // Session first (requireTenant sends the 401 itself when the
       // token is absent/forged), then the current-password check

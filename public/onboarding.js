@@ -47,6 +47,13 @@
 // POST /api/auth/delete-account { password } -> 200 { deleted: true } |
 //                           401 invalid_credentials (session + current
 //                           password both required; erases the tenant)
+// POST /api/auth/request-reset { email } -> 200 { ok: true } ALWAYS
+//                           (anti-enumeration: the same answer for known
+//                           and unknown emails; the one-time link lands
+//                           by email as <base>/#reset=<64-hex token>)
+// POST /api/auth/confirm-reset { token, newPassword } -> 200 { ok: true }
+//                           | 400 invalid_or_expired_token /
+//                           weak_password (server minimum: 10 chars)
 // Every accounts endpoint answers 503 accounts_not_configured in legacy
 // mode. Auth header: Authorization: Bearer <token>.
 //
@@ -274,7 +281,7 @@ function authErrorText(data) {
   }
 }
 
-function showAuth() {
+function showAuth(notice) {
   let mode = 'login'; // | 'signup'
   showOverlay(`
     <h1>CAPSTONE FOUNDRY</h1>
@@ -283,6 +290,7 @@ function showAuth() {
     <input type="password" id="acctPassword" placeholder="Password" autocomplete="current-password" style="margin-top:12px;" />
     <p id="acctAuthError" style="${ERR_STYLE}"></p>
     <button id="acctAuthSubmit">Log in</button>
+    <button type="button" id="acctForgot" style="${LINK_BTN_STYLE}">Forgot password?</button>
     <button type="button" id="acctAuthToggle" style="${LINK_BTN_STYLE}">New here? Create an account</button>
     <p style="${LEGAL_STYLE}">By continuing, you agree to the <a href="https://capstonefoundry.helmian.cloud/terms" target="_blank" rel="noopener" style="${LEGAL_LINK_STYLE}">Terms of Use</a> and the <a href="https://capstonefoundry.helmian.cloud/privacy" target="_blank" rel="noopener" style="${LEGAL_LINK_STYLE}">Privacy Policy</a>.</p>
   `);
@@ -291,11 +299,15 @@ function showAuth() {
   const errorEl = document.getElementById('acctAuthError');
   const submitEl = document.getElementById('acctAuthSubmit');
   const toggleEl = document.getElementById('acctAuthToggle');
+  const forgotEl = document.getElementById('acctForgot');
   const introEl = document.getElementById('acctAuthIntro');
 
   const paint = () => {
     submitEl.textContent = mode === 'signup' ? 'Create account' : 'Log in';
     toggleEl.textContent = mode === 'signup' ? 'Already have an account? Log in' : 'New here? Create an account';
+    // The reset door hangs off the LOGIN form only: a visitor
+    // creating an account has no password to have forgotten yet.
+    forgotEl.style.display = mode === 'login' ? '' : 'none';
     introEl.textContent = mode === 'signup'
       ? 'Create your account — then we set up your buddy together.'
       : 'Welcome back. Log in to your buddy account.';
@@ -306,6 +318,10 @@ function showAuth() {
     mode = mode === 'signup' ? 'login' : 'signup';
     paint();
   });
+  forgotEl.addEventListener('click', () => showResetRequest());
+  // A notice handed in by the reset flow (e.g. the password-changed
+  // line) lands on the form's message line.
+  if (notice) errorEl.textContent = notice;
 
   submitEl.addEventListener('click', async () => {
     const email = emailEl.value.trim();
@@ -478,6 +494,180 @@ function showOnboarding() {
       err.textContent = 'Could not reach the server — please try again.';
     } finally {
       ev.target.disabled = false;
+    }
+  });
+}
+
+// ─── Password reset (the client door) ──────────────────────────────────
+// The server half is the password-reset bite (see the contract block
+// at the top): request-reset ALWAYS answers 200 { ok: true } — known
+// and unknown emails alike — and mails a one-time link shaped
+// <base>/#reset=<64-hex token>; confirm-reset trades
+// { token, newPassword } for 200 { ok: true } or a 400 refusal. The
+// request view carries the server's anti-enumeration rule to the
+// face: ANY answer earns the same confirmation line, and only a
+// network failure (no answer at all) reads differently. A reset link
+// takes over the overlay even over a live session — a locked-out
+// user may still hold an old token — and finishing or cancelling
+// hands back to whatever the boot probe decided (bootRoute below).
+
+export const RESET_REQUEST_SENT_TEXT = 'If that email has an account, a reset link is on its way. Check your inbox.';
+export const RESET_DONE_TEXT = 'Your password is changed. You can sign in now.';
+export const RESET_STALE_TEXT = 'That reset link is old or already used. Request a new one.';
+export const RESET_WEAK_TEXT = 'Please use at least 10 characters.';
+
+/**
+ * The reset token out of a location.hash string ('#reset=<token>',
+ * possibly among other params) — the token itself, or null when the
+ * hash carries no well-formed one. Well-formed is the server's mint
+ * shape: exactly 64 hex chars (lib/accounts.js
+ * mintPasswordResetToken). Pure; pinned by
+ * test/password-reset-client.test.mjs.
+ */
+export function parseResetToken(hashString) {
+  if (typeof hashString !== 'string') return null;
+  const hash = hashString.startsWith('#') ? hashString.slice(1) : hashString;
+  if (!hash) return null;
+  for (const part of hash.split('&')) {
+    const eq = part.indexOf('=');
+    if (eq < 0 || part.slice(0, eq) !== 'reset') continue;
+    const value = part.slice(eq + 1);
+    return /^[0-9a-f]{64}$/i.test(value) ? value : null;
+  }
+  return null;
+}
+
+/**
+ * POST /api/auth/request-reset through the session fetch (the seam
+ * is injectable exactly like public/requests.js's calls, so tests
+ * drive it with a stub). Never throws: { responded: false, status: 0 }
+ * means no answer arrived at all (network); otherwise
+ * { responded: true, status, data } carries whatever the server said.
+ */
+export async function requestPasswordReset(email, { fetchFn = tbFetch } = {}) {
+  let res;
+  try {
+    res = await fetchFn('/api/auth/request-reset', { method: 'POST', body: { email } });
+  } catch {
+    return { responded: false, status: 0, data: null };
+  }
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  return { responded: true, status: res.status, data };
+}
+
+/** POST /api/auth/confirm-reset — same shape and rules as above. */
+export async function confirmPasswordReset(token, newPassword, { fetchFn = tbFetch } = {}) {
+  let res;
+  try {
+    res = await fetchFn('/api/auth/confirm-reset', { method: 'POST', body: { token, newPassword } });
+  } catch {
+    return { responded: false, status: 0, data: null };
+  }
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  return { responded: true, status: res.status, data };
+}
+
+function clearResetHash() {
+  try {
+    history.replaceState(null, '', location.pathname + location.search);
+  } catch { /* no usable history — the next load decides fresh anyway */ }
+}
+
+// Where boot would have landed this load, had no reset link been in
+// the URL — init() sets it before the reset view can open, and the
+// cancel path returns there.
+let bootRoute = 'auth'; // | 'app' | 'onboarding'
+function exitResetFlow() {
+  clearResetHash();
+  if (!accountsMode) { enterLegacyMode(); return; }
+  if (bootRoute === 'app') { hideOverlay(); refreshAccountPane(); return; }
+  if (bootRoute === 'onboarding') { showOnboarding(); return; }
+  showAuth();
+}
+
+function showResetRequest(notice) {
+  showOverlay(`
+    <h1>CAPSTONE FOUNDRY</h1>
+    <p>Forgot your password? Enter your account email and we will send you a reset link.</p>
+    <input type="email" id="acctResetEmail" placeholder="Email" autocomplete="email" />
+    <p id="acctResetLine" style="${ERR_STYLE}"></p>
+    <button id="acctResetSubmit">Email me a reset link</button>
+    <button type="button" id="acctResetBack" style="${LINK_BTN_STYLE}">Back to sign in</button>
+  `);
+  const emailEl = document.getElementById('acctResetEmail');
+  const lineEl = document.getElementById('acctResetLine');
+  const submitEl = document.getElementById('acctResetSubmit');
+  if (notice) lineEl.textContent = notice;
+  document.getElementById('acctResetBack').addEventListener('click', () => showAuth());
+  submitEl.addEventListener('click', async () => {
+    const email = emailEl.value.trim();
+    if (!email) { lineEl.textContent = 'Enter your email.'; return; }
+    submitEl.disabled = true;
+    lineEl.textContent = '';
+    try {
+      const result = await requestPasswordReset(email);
+      if (isAccountsOff(result)) { enterLegacyMode(); return; }
+      lineEl.textContent = result.responded
+        ? RESET_REQUEST_SENT_TEXT
+        : 'Could not reach the server — please try again.';
+    } finally {
+      submitEl.disabled = false;
+    }
+  });
+}
+
+function showResetPassword(token) {
+  showOverlay(`
+    <h1>CAPSTONE FOUNDRY</h1>
+    <p>Choose a new password for your account.</p>
+    <input type="password" id="acctNewPw" placeholder="New password" autocomplete="new-password" />
+    <input type="password" id="acctNewPwAgain" placeholder="New password again" autocomplete="new-password" style="margin-top:12px;" />
+    <p id="acctResetPwLine" style="${ERR_STYLE}"></p>
+    <button id="acctResetPwSubmit">Set new password</button>
+    <button type="button" id="acctResetPwCancel" style="${LINK_BTN_STYLE}">Cancel</button>
+  `);
+  const pwEl = document.getElementById('acctNewPw');
+  const againEl = document.getElementById('acctNewPwAgain');
+  const lineEl = document.getElementById('acctResetPwLine');
+  const submitEl = document.getElementById('acctResetPwSubmit');
+  document.getElementById('acctResetPwCancel').addEventListener('click', () => exitResetFlow());
+  submitEl.addEventListener('click', async () => {
+    const password = pwEl.value;
+    const again = againEl.value;
+    // The server's two refusal faces, checked locally first so a
+    // short or mismatched pair never leaves the device.
+    if (password.length < 10) { lineEl.textContent = RESET_WEAK_TEXT; return; }
+    if (password !== again) { lineEl.textContent = "The two passwords didn't match."; return; }
+    submitEl.disabled = true;
+    lineEl.textContent = '';
+    try {
+      const result = await confirmPasswordReset(token, password);
+      if (isAccountsOff(result)) { enterLegacyMode(); return; }
+      if (!result.responded) {
+        lineEl.textContent = 'Could not reach the server — please try again.';
+        return;
+      }
+      if (result.status === 200 && result.data?.ok) {
+        clearResetHash();
+        showAuth(RESET_DONE_TEXT);
+        return;
+      }
+      if (result.status === 400 && result.data?.error === 'invalid_or_expired_token') {
+        // The link is spent either way — out of the URL, and the
+        // request view (with the reason on its line) is the way on.
+        clearResetHash();
+        showResetRequest(RESET_STALE_TEXT);
+        return;
+      }
+      if (result.status === 400 && result.data?.error === 'weak_password') {
+        lineEl.textContent = RESET_WEAK_TEXT;
+        return;
+      }
+      lineEl.textContent = 'Something went wrong — please try again.';
+    } finally {
+      submitEl.disabled = false;
     }
   });
 }
@@ -1114,9 +1304,16 @@ async function init() {
     return;
   }
   if (isAccountsOff(prof)) { enterLegacyMode(); return; }
+  // A reset link in the URL outranks every other boot decision (the
+  // reset door above): it opens over the sign-in form, over a stale
+  // token the 401 branch clears, and over a live session alike, and
+  // finishing or cancelling hands back to the route recorded here.
+  const resetToken = parseResetToken(location.hash);
   if (prof.status === 401) {
     accountsMode = true;
+    bootRoute = 'auth';
     if (getToken()) clearSession(); // stale/forged token — start clean
+    if (resetToken) { showResetPassword(resetToken); return; }
     showAuth();
     return;
   }
@@ -1128,11 +1325,21 @@ async function init() {
     refreshAccountPane();
     // Same completeness rule as the sign-in path (bite 5): no age
     // band means onboarding is not finished, whatever the name says.
+    bootRoute = (!prof.data?.display_name || !prof.data?.age_band) ? 'onboarding' : 'app';
+    if (resetToken) { showResetPassword(resetToken); return; }
     if (!prof.data?.display_name || !prof.data?.age_band) showOnboarding();
     return;
   }
   // Anything else: degrade quietly to legacy behaviour.
   enterLegacyMode();
 }
+
+// A reset link followed while the app is already open lands here:
+// the hash changes without a reload, and the reset takes the overlay.
+window.addEventListener('hashchange', () => {
+  if (!accountsMode) return;
+  const token = parseResetToken(location.hash);
+  if (token) showResetPassword(token);
+});
 
 init();

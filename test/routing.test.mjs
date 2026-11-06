@@ -44,6 +44,7 @@ import relayPairHandler from '../server/handlers/relay-pair.js';
 import shimAuthSignup from '../api/auth/signup.js';
 import shimAuthLogin from '../api/auth/login.js';
 import shimAuthDeleteAccount from '../api/auth/delete-account.js';
+import shimAuthReset from '../api/auth/reset.js';
 import shimProfilePin from '../api/profile/pin.js';
 import shimProfilePinVerify from '../api/profile/pin/verify.js';
 import shimProfileProfiles from '../api/profile/profiles.js';
@@ -82,6 +83,14 @@ const SURFACE = [
   { path: '/api/auth/signup', shim: shimAuthSignup, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
   { path: '/api/auth/login', shim: shimAuthLogin, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
   { path: '/api/auth/delete-account', shim: shimAuthDeleteAccount, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
+  // Password reset: TWO handler routes behind ONE shim file
+  // (api/auth/reset.js — the function budget allows no second file).
+  // The named routes dispatch through the router + handler suffix;
+  // the shim's own path dispatches by body shape inside the handler.
+  // All three probes stop at the method check, before any db access.
+  { path: '/api/auth/request-reset', shim: shimAuthReset, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
+  { path: '/api/auth/confirm-reset', shim: shimAuthReset, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
+  { path: '/api/auth/reset', shim: shimAuthReset, handler: authHandler, probe: { method: 'GET', status: 405, error: 'method_not_allowed' } },
   { path: '/api/profile/pin', shim: shimProfilePin, handler: profileHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },
   { path: '/api/profile/pin/verify', shim: shimProfilePinVerify, handler: profileHandler, probe: { method: 'POST', status: 401, error: 'Unauthorized' } },
   // Bite 9's household routes (shims landed with the foundation);
