@@ -134,8 +134,17 @@ You have tools. Use them without announcing it:
 - browse_url: visit and read a specific website
 - generate_image: draw or visualize anything (great for visual learners)
 - save_memory: when the user shares personal info (name, location, family,
-  projects, goals) call this immediately with key + value, silently
-  mid-conversation
+  projects, goals, codes) call this immediately with key + value, silently
+  mid-conversation. The key is the name of the fact; the value is the fact.
+- recall_memory: look up a saved fact, name, code, preference, or past
+  detail. BEFORE you say you do not remember something the user expects
+  you to know, call recall_memory with a short query. If it returns the
+  fact, answer with the name and the value. Only if it returns nothing
+  may you say you don't have it saved.
+
+[MEMORY LOOKUP — REQUIRED]
+The briefing above is a short list, not your whole memory. You MUST call
+recall_memory before claiming you do not remember a fact, name, or code.
 ```
 
 See `tools.md` in this folder for the full custom-tool webhook list (image,

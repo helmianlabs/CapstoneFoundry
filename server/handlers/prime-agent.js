@@ -8,7 +8,9 @@
 //
 // 2026-06-02: PHASE 2 of the Neon migration. Was Vercel Blob → now Neon. Same
 // {key,value} shape returned to buildSystemPrompt so the personality module
-// doesn't change. Ranking: importance DESC, updated_at DESC, LIMIT 30.
+// doesn't change. Ranking: importance DESC, updated_at DESC, confidence DESC,
+// LIMIT 30, plus the newest rows pinned into that brief (reserveRecent) so a
+// just-saved fact is not dropped when thirty older rows outrank it.
 // TODO: full cosine-similarity recall against a query embedding once we have
 // a "what is the user talking about right now" hook on the client. Spec
 // :130-172 / :355-468.
@@ -83,7 +85,7 @@ export default async function handler(req, res) {
 
   let facts = [];
   try {
-    facts = await retrieveMemories(userId, { limit: 30, query, scopes, tenantId });
+    facts = await retrieveMemories(userId, { limit: 30, query, scopes, tenantId, reserveRecent: !query });
   } catch (err) {
     console.error('[prime-agent] retrieveMemories failed:', err?.message || err);
     facts = [];

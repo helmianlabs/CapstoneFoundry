@@ -125,10 +125,16 @@ export { getPool, embed, vecLiteral };
 //                     confidence DESC, created_at DESC. Mirrors
 //                     lib/mediaMemory.js:94-116. Rows with no embedding sort last
 //                     (NULL distance) but are still eligible.
-//   - NO query (boot) → importance DESC, confidence DESC, updated_at DESC. This is
-//                     the non-circular boot path the spec describes (:471-498):
-//                     on page load there is no "what are they talking about" hook
-//                     yet, so we pull the highest-value rows.
+//   - NO query (boot) → importance DESC, updated_at DESC, confidence DESC. Recency
+//                     breaks importance ties BEFORE confidence, so a just-saved
+//                     importance-1.0 fact (the canary) is not pushed out of the
+//                     brief by an older row that merely has higher confidence.
+//                     This is the non-circular boot path the spec describes
+//                     (:471-498): on page load there is no "what are they talking
+//                     about" hook yet, so we pull the highest-value rows.
+//                     Callers that pass reserveRecent (prime-agent) also pin the
+//                     newest rows into the brief, so a freshly saved fact at the
+//                     default importance still survives a crowded top-30.
 //
 // SCOPES (spec :141-143): default ['semantic']. Callers may pass
 // ['semantic','project:<slug>','task:<id>'] to widen recall. Filtered with
@@ -155,6 +161,53 @@ export { getPool, embed, vecLiteral };
 // for any query). Callers that face the user/agent (recall-memory.js) must
 // use the WithMeta variant and surface the mode — a dead vector path must
 // never again fail silently.
+// How many of a boot brief's slots are reserved for the newest rows when
+// the caller asks for reserveRecent. The rest stay importance-ranked.
+// A 30-fact prime keeps 8 just-saved facts even when they are not in the
+// importance head. Smaller limits (recall's boot fallback does not use
+// this) stay importance-majority.
+export function recentSlotCount(limit) {
+  const n = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 30;
+  if (n >= 24) return 8;
+  if (n >= 12) return 4;
+  return Math.min(2, n);
+}
+
+// Union of the importance-ranked head and the newest rows, capped at
+// `limit`. Newest rows are placed first so they are never the ones
+// trimmed when the union is longer than the cap. Identity is key+value
+// (the briefing shape); the same fact coming back from both queries
+// appears once.
+export function mergeBootFacts(ranked, recent, limit) {
+  const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 30;
+  const seen = new Set();
+  const out = [];
+  const idOf = (f) => `${f && f.key}\0${f && f.value}`;
+  const push = (f) => {
+    if (!f || out.length >= cap) return;
+    const id = idOf(f);
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(f);
+  };
+  for (const f of recent || []) push(f);
+  for (const f of ranked || []) {
+    if (out.length >= cap) break;
+    push(f);
+  }
+  return out;
+}
+
+// A query that literally names a saved subject or value ("Capstone canary
+// code", "BlueSky42") must outrank a merely nearby embedding. Short or
+// wildcard-only queries skip the pin so a one-letter lookup cannot match
+// every row. `%` and `_` are stripped; the pattern is a bound parameter.
+export function lexicalPinPattern(query) {
+  const cleaned = String(query || '').replace(/[%_\\]/g, '').trim();
+  if (cleaned.length < 3) return null;
+  return `%${cleaned}%`;
+}
+
 export async function retrieveMemories(userId, optsOrLimit = 30) {
   const { facts } = await retrieveMemoriesWithMeta(userId, optsOrLimit);
   return facts;
@@ -213,6 +266,16 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
       const params = [identityId, scopes];
       params.push(vecLiteral(vec)); const vecParam = params.length;
       params.push(limit); const limitParam = params.length;
+      // Literal subject/content hits sort ahead of pure neighbors. The
+      // pattern is bound ($N), never interpolated. FALSE when the query
+      // is too short to pin, so the ORDER BY shape stays one statement
+      // and the cosine rank is unchanged for those queries.
+      const pin = lexicalPinPattern(query);
+      let pinExpr = 'FALSE';
+      if (pin) {
+        params.push(pin);
+        pinExpr = `(subject ILIKE $${params.length} OR content ILIKE $${params.length})`;
+      }
       const { rows } = await pool.query(
         `SELECT subject AS key,
                 content AS value,
@@ -225,7 +288,8 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
             AND scope = ANY($2::text[])
             AND (valid_until IS NULL OR valid_until > now())
             -- liveness gated by valid_until; supersedes is an audit back-pointer, not a hide flag
-          ORDER BY embedding <=> $${vecParam}::vector,
+          ORDER BY CASE WHEN ${pinExpr} THEN 0 ELSE 1 END,
+                   embedding <=> $${vecParam}::vector,
                    importance DESC NULLS LAST,
                    confidence DESC NULLS LAST,
                    created_at DESC
@@ -240,14 +304,15 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
     return { facts: boot, mode: 'boot-fallback', embedError };
   }
 
-  // BOOT path (no query): importance/confidence/recency.
-  const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow);
+  // BOOT path (no query): importance, then recency, then confidence.
+  // reserveRecent (prime-agent) also pins the newest rows into the brief.
+  const reserveRecent = opts.reserveRecent === true;
+  const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow, reserveRecent);
   return { facts: boot, mode: 'boot', embedError: null };
 }
 
-async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow) {
-  const bootParams = [identityId, scopes];
-  bootParams.push(limit); const bootLimitParam = bootParams.length;
+async function runBootQuery(pool, identityCol, identityId, scopes, limit, orderBy) {
+  const bootParams = [identityId, scopes, limit];
   const { rows } = await pool.query(
     `SELECT subject AS key,
             content AS value,
@@ -259,13 +324,28 @@ async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow) {
       WHERE ${identityCol} = $1
         AND scope = ANY($2::text[])
         AND (valid_until IS NULL OR valid_until > now())
-      ORDER BY importance DESC NULLS LAST,
-               confidence DESC NULLS LAST,
-               updated_at DESC
-      LIMIT $${bootLimitParam}`,
+      ORDER BY ${orderBy}
+      LIMIT $3`,
     bootParams
   );
-  return rows.map(mapRow);
+  return rows;
+}
+
+async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow, reserveRecent) {
+  // Recency before confidence: an importance-1.0 canary saved today stays
+  // ahead of an older importance-1.0 row with a slightly higher confidence.
+  const ranked = await runBootQuery(
+    pool, identityCol, identityId, scopes, limit,
+    `importance DESC NULLS LAST,
+               updated_at DESC,
+               confidence DESC NULLS LAST`,
+  );
+  if (!reserveRecent) return ranked.map(mapRow);
+  const recent = await runBootQuery(
+    pool, identityCol, identityId, scopes, recentSlotCount(limit),
+    `updated_at DESC NULLS LAST`,
+  );
+  return mergeBootFacts(ranked.map(mapRow), recent.map(mapRow), limit);
 }
 
 // upsertExtractedFact: write path for extract-memories.js. Same semantics as the
