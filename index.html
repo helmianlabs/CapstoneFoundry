@@ -3953,22 +3953,26 @@
     const handsBuildBtnEl = document.getElementById('handsBuildBtn');
     if (handsBuildBtnEl) {
       handsBuildBtnEl.addEventListener('click', async () => {
+        const defaultPrompt = 'Capstone Foundry landing page';
+        const userPrompt = window.prompt('What would you like Helmion Hands to build?', defaultPrompt);
+        if (!userPrompt || !userPrompt.trim()) return;
+
         handsBuildBtnEl.disabled = true;
         handsBuildBtnEl.textContent = '⏳ Building...';
-        if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Triggering build of Capstone Foundry landing page...';
+        if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Triggering build of ' + userPrompt + '...';
         if (typeof relaySend === 'function') {
-          relaySend('Build Capstone Foundry landing page with live status and store downloads');
+          relaySend('Build ' + userPrompt);
         }
         try {
           const res = await fetch('/api/hands-build', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: 'Build Capstone Foundry landing page', target_path: 'landing.html' }),
+            body: JSON.stringify({ prompt: userPrompt.trim(), target_path: 'landing.html' }),
           });
           const data = await res.json();
           if (data.ok) {
-            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Tangible landing page built! Opening /landing.html...';
-            window.open('/landing.html', '_blank');
+            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Built! Opening ' + (data.url || '/landing.html') + '...';
+            window.open(data.url || '/landing.html', '_blank');
           } else {
             if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: ' + (data.error || 'build failed');
           }
