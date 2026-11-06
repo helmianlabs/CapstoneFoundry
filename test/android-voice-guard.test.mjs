@@ -28,7 +28,7 @@ assert.ok(slice, 'guard slice missing from index.html');
 const context = {};
 vm.createContext(context);
 vm.runInContext(slice[1], context);
-const { cfBgAudioSkipReason, cfShouldHoldMic, cfCreateMicHold } = context;
+const { cfBgAudioSkipReason, cfShouldHoldMic, cfCreateMicHold, cfDirectVoiceWanted } = context;
 
 const WV = 'Mozilla/5.0 (Linux; Android 16; SM-S948U; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36';
 
@@ -119,6 +119,45 @@ test('a failed open can be retried and stopHeld releases the hardware', async ()
   assert.deepEqual(stopped, []);
   hold.stopHeld();
   assert.deepEqual(stopped, ['released']);
+});
+
+test('the hosted widget is the default voice surface, including Android WebView', () => {
+  assert.equal(typeof cfDirectVoiceWanted, 'function');
+  assert.equal(cfDirectVoiceWanted('1'), true);
+  assert.equal(cfDirectVoiceWanted('0'), false);
+  assert.equal(cfDirectVoiceWanted(null), false);
+  assert.equal(cfDirectVoiceWanted(undefined), false);
+  assert.equal(cfDirectVoiceWanted(''), false);
+
+  const fn = html.slice(html.indexOf('function directVoiceWanted()'), html.indexOf('function directCallUi'));
+  assert.match(fn, /cfDirectVoiceWanted\(forced\)/);
+  assert.doesNotMatch(fn, /return[\s\S]*isNativePlatform/);
+  assert.doesNotMatch(fn, /return\s+\/Android/);
+  assert.match(html, /createElement\('elevenlabs-convai'\)/);
+  assert.match(html, /cfg\.connectionType = 'websocket'/);
+  assert.match(html, /user_id: uid/);
+  assert.match(html, /profile_id: pid/);
+  assert.match(html, /https:\/\/elevenlabs\.io\/convai-widget\/index\.js/);
+});
+
+test('a Capacitor Android WebView still mounts the widget unless the flag is 1', () => {
+  const start = html.indexOf('function directVoiceWanted()');
+  const end = html.indexOf('function directCallUi', start);
+  const ctx = {
+    cfDirectVoiceWanted,
+    localStorage: { getItem() { return null; } },
+    navigator: { userAgent: WV },
+    window: { Capacitor: { isNativePlatform() { return true; } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(html.slice(start, end) + '\nthis.wanted = directVoiceWanted();', ctx);
+  assert.equal(ctx.wanted, false);
+  ctx.localStorage = { getItem() { return '1'; } };
+  vm.runInContext('this.optIn = directVoiceWanted();', ctx);
+  assert.equal(ctx.optIn, true);
+  ctx.localStorage = { getItem() { return '0'; } };
+  vm.runInContext('this.optOut = directVoiceWanted();', ctx);
+  assert.equal(ctx.optOut, false);
 });
 
 test('the page skips keepalive at call time and holds the mic around startSession', () => {
