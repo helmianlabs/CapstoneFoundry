@@ -30,7 +30,8 @@ export const RECALL_LIMIT = 8;
 export function formatRecallLine(fact) {
   const value = fact && fact.value != null ? String(fact.value) : '';
   const key = fact && typeof fact.key === 'string' ? fact.key.trim() : '';
-  const dateStr = fact && fact.updatedAt ? new Date(fact.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const ts = fact?.createdAt || fact?.updatedAt;
+  const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   const prefix = dateStr ? `[${dateStr}] ` : '';
   if (key && key !== value) return `${prefix}${key}: ${value}`;
   return `${prefix}${value}`;
