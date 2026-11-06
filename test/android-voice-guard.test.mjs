@@ -28,7 +28,7 @@ assert.ok(slice, 'guard slice missing from index.html');
 const context = {};
 vm.createContext(context);
 vm.runInContext(slice[1], context);
-const { cfBgAudioSkipReason, cfShouldHoldMic, cfCreateMicHold, cfDirectVoiceWanted, cfAndroidOrCapacitor } = context;
+const { cfBgAudioSkipReason, cfShouldHoldMic, cfCreateMicHold, cfDirectVoiceWanted, cfAndroidOrCapacitor, cfStockTransportDebug } = context;
 
 const WV = 'Mozilla/5.0 (Linux; Android 16; SM-S948U; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36';
 
@@ -160,29 +160,35 @@ test('a Capacitor Android WebView still mounts the widget unless the flag is 1',
   assert.equal(ctx.optOut, false);
 });
 
-test('Android WebView and Capacitor leave the hosted widget on stock transport', () => {
-  assert.equal(typeof cfAndroidOrCapacitor, 'function');
+test('hosted widget defaults to websocket, including Android, unless the stock debug flag is set', () => {
+  assert.equal(typeof cfStockTransportDebug, 'function');
+  assert.equal(cfStockTransportDebug({ stockFlag: null, search: '' }), false);
+  assert.equal(cfStockTransportDebug({ stockFlag: '0', search: '' }), false);
+  assert.equal(cfStockTransportDebug({ stockFlag: '1', search: '' }), true);
+  assert.equal(cfStockTransportDebug({ stockFlag: null, search: '?transport=stock' }), true);
+  assert.equal(cfStockTransportDebug({ stockFlag: null, search: '?mode=default&transport=stock' }), true);
+  assert.equal(cfStockTransportDebug({ stockFlag: null, search: '?transport=websocket' }), false);
   assert.equal(cfAndroidOrCapacitor({ ua: WV, native: false }), true);
-  assert.equal(cfAndroidOrCapacitor({ ua: WV, native: true }), true);
-  const chrome = 'Mozilla/5.0 (Linux; Android 16; SM-S948U) AppleWebKit/537.36 Mobile Safari/537.36';
-  assert.equal(cfAndroidOrCapacitor({ ua: chrome, native: false }), false);
-  assert.equal(cfAndroidOrCapacitor({ ua: 'Mozilla/5.0 (Windows NT 10.0)', native: true }), true);
   assert.equal(cfAndroidOrCapacitor({ ua: 'Mozilla/5.0 (Windows NT 10.0)', native: false }), false);
 
   const block = html.slice(html.indexOf('── TRANSPORT'), html.indexOf('PER-USER ISOLATION'));
-  assert.match(block, /cfAndroidOrCapacitor\(cfSurface\)/);
-  assert.match(block, /!cfg\.__cfDirectVoice/);
+  assert.match(block, /cfStockTransportDebug\(/);
   assert.match(block, /if \(!cfStockTransport\) cfg\.connectionType = 'websocket'/);
-  assert.match(block, /requested: cfStockTransport \? 'stock' : 'websocket'/);
-  assert.match(block, /hosted-widget/);
+  assert.match(block, /thinkinbuddy_stock_transport_v1/);
+  assert.doesNotMatch(block, /cfAndroidOrCapacitor\(cfSurface\)/);
+  assert.match(html, /function cfUnlockOutputElement/);
+  assert.match(html, /function cfAndroidOutputUnlock/);
+  assert.match(html, /cfScheduleOutputUnlock\(session\)/);
+  assert.match(html, /el\.muted = false/);
+  assert.match(html, /el\.volume = 1/);
+  assert.match(html, /await el\.play\(\)/);
+  assert.match(html, /cfBeacon\('output-unlock'/);
+  assert.match(html, /cfBeacon\('call-end'/);
+  assert.match(html, /cfNoteHangup\('widget-close'\)/);
+  assert.match(html, /cfNoteHangup\('disconnect'\)/);
+  assert.match(html, /cfNoteHangup\('pagehide'\)/);
   assert.match(html, /cfg\.onAudio = /);
-  assert.match(html, /cfg\.onConversationCreated = /);
-  assert.match(html, /cfBeacon\('audio-chunks'/);
-  assert.match(html, /cfBeacon\('audio-el'/);
-  assert.match(html, /cfBeacon\('audio-snap'/);
-  assert.match(html, /cfBeacon\('audio-vis'/);
   assert.match(html, /const skip = pageBgAudioSkipReason\(\)/);
-  assert.doesNotMatch(block, /cfg\.connectionType = 'websocket';\s*cfBeacon\('call-config', \{ connectionType: 'websocket' \}\)/);
   const direct = html.slice(html.indexOf('directSession = await window.__cfVoice.startSession'), html.indexOf('onConnect: (info) =>'));
   assert.match(direct, /connectionType: 'websocket'/);
 });
