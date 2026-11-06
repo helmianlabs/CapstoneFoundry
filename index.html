@@ -1286,8 +1286,15 @@
     async function primeSessionPrompt() {
       if (!sessionPrimeContext) return;
       const gen = profileChangeGeneration;
-      sessionPromptOverride = null;
-      sessionPromptGeneration = -1;
+      // Do not blank the override here. A profile change already
+      // withholds it: that listener bumps profileChangeGeneration
+      // before this fetch, and currentSessionPrompt() requires the
+      // generations to match. A same-generation refresh (hang up,
+      // then the next call) must KEEP the previous prompt — it
+      // carries the recall_memory rule — until this fetch returns
+      // the brief that includes facts saved on the call that just
+      // ended. Blanking it made the next call fall through to the
+      // agent's base prompt with none of this user's memories.
       try {
         const primeProfileId = sessionProfileId();
         const primeRes = await fetch('/api/prime-agent', {
@@ -1663,6 +1670,14 @@
         conv,
         live: !!cfOutputLive,
       });
+      // Facts saved during this call (save_memory) are already in Neon.
+      // The cached brief was built at page load, so the next call would
+      // still be missing them until we prime again. This is the hang-up
+      // → new-call path on the same page. The in-flight prompt stays
+      // applied (same profile generation) and already requires
+      // recall_memory, so a call that starts before the fetch returns
+      // still looks the fact up.
+      try { reprimeSessionPrompt(); } catch (e) {}
       if (reason === 'widget-close' || reason === 'pagehide') {
         const session = cfCallSession;
         if (session && typeof session.endSession === 'function') {
@@ -1827,7 +1842,10 @@
         cfg.overrides = cfg.overrides || {};
         cfg.overrides.agent = cfg.overrides.agent || {};
         cfg.overrides.agent.prompt = { ...(cfg.overrides.agent.prompt || {}), prompt: promptForCall };
-        console.log('[MEM-HB] applied per-session prompt override — len:', promptForCall.length);
+        console.log('[MEM-HB] applied per-session prompt override — len:', promptForCall.length, 'recall:', promptForCall.includes('recall_memory'));
+        if (!promptForCall.includes('recall_memory')) {
+          console.warn('[MEM-HB] session prompt has no recall_memory rule — a new call will not look saved facts up');
+        }
       } else if (sessionPromptOverride) {
         // Bite 5: the cached prompt was primed before the latest
         // profile change — a stale safety decision. It is withheld,

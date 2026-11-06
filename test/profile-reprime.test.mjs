@@ -139,6 +139,25 @@ test('lifecycle: no publication, no re-prime — a failed write leaves the previ
   assert.equal(h.run('currentSessionPrompt()'), 'PROMPT-KIDCORE');
 });
 
+test('lifecycle: a same-generation re-prime keeps the previous prompt until the new one lands', async () => {
+  const h = makeLifecycleHarness();
+  await h.run('primeSessionPrompt()');
+  assert.equal(h.run('currentSessionPrompt()'), 'PROMPT-KIDCORE');
+  // Hangup refresh: same profile generation, new memories. While the
+  // fetch is in flight the call path must still apply the previous
+  // override (it carries the recall rule), not fall through to the
+  // agent's base prompt.
+  h.server.decision = 'ADULT';
+  let release;
+  h.server.gate = new Promise((r) => { release = r; });
+  const pending = h.run('reprimeSessionPrompt()');
+  assert.equal(h.run('currentSessionPrompt()'), 'PROMPT-KIDCORE', 'same-generation refresh does not blank the override');
+  release();
+  h.server.gate = null;
+  await pending;
+  assert.equal(h.run('currentSessionPrompt()'), 'PROMPT-ADULT');
+});
+
 test('lifecycle: the re-prime operation is exposed and awaitable; concurrent callers share one prime', async () => {
   const h = makeLifecycleHarness();
   await h.run('primeSessionPrompt()');
@@ -229,7 +248,7 @@ test('index.html: the re-prime is exposed, heard, and gated on the call path', (
   assert.ok(callHandler.includes('withheld a stale session prompt override'));
 
   // initApp primes through the same operation the re-prime uses.
-  const initPrime = sliceExclusive(indexHtml, 'sessionPrimeContext = {', '// Create widget after agent is primed');
+  const initPrime = sliceExclusive(indexHtml, 'sessionPrimeContext = {', '// Mount the hosted widget after the agent is primed');
   assert.ok(initPrime.includes('await primeSessionPrompt();'));
   assert.ok(initPrime.includes('userId: user.userId'));
 });

@@ -25,6 +25,20 @@ import { resolveHandlerTenant } from '../../lib/tenant.js';
 // briefing's head without flooding the call's context.
 export const RECALL_LIMIT = 8;
 
+// The model often reads `summary` and skips the facts array. Include the
+// saved name (subject/key) so "BlueSky42" is spoken as the Capstone canary
+// code, not as an unlabeled string.
+export function formatRecallLine(fact) {
+  const value = fact && fact.value != null ? String(fact.value) : '';
+  const key = fact && typeof fact.key === 'string' ? fact.key.trim() : '';
+  if (key && key !== value) return `${key}: ${value}`;
+  return value;
+}
+
+export function formatRecallSummary(facts) {
+  return (Array.isArray(facts) ? facts : []).map(formatRecallLine).filter((line) => line).join('\n');
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -69,7 +83,7 @@ export default async function handler(req, res) {
     if (!facts.length) {
       return res.status(200).json({ found: false, mode, summary: "I don't have anything saved about that." });
     }
-    const summary = facts.map((f) => f.value).join(' ');
+    const summary = formatRecallSummary(facts);
     return res.status(200).json({ found: true, mode, count: facts.length, facts, summary });
   } catch (err) {
     console.error('[recall-memory] failed:', err?.message || err);
