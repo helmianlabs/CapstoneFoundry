@@ -73,8 +73,6 @@ export const userIdParamPatch = {
 // identity exactly like the media tools.
 //
 // Deliberately NOT in this set:
-//   - save_task_for_clyde: its handler stores to a shared, unscoped
-//     task list and consumes no userId.
 //   - generate_image_imagen / generate_video_sora: retired providers;
 //     their handlers are deleted and the routes 404. Do not provision.
 export const IDENTITY_TOOL_DEFINITIONS = [
@@ -92,6 +90,7 @@ export const IDENTITY_TOOL_DEFINITIONS = [
   { name: 'generate_video_higgsfield', endpoint: '/api/video-higgsfield' },
   { name: 'generate_video_heygen', endpoint: '/api/video-heygen' },
   { name: 'set_alarm', endpoint: '/api/alarm' },
+  { name: 'save_task_for_clyde', endpoint: '/api/task' },
 ].map((def) => ({
   ...def,
   identityRequestBodySchema: {
@@ -210,7 +209,9 @@ async function main() {
   }
 
   const targetIds = new Set();
-  const MEMORY_WEBHOOK_TOOLS = new Set(['save_memory', 'recall_memory']);
+  const MEMORY_WEBHOOK_TOOLS = new Set([
+    'save_memory', 'recall_memory', 'set_alarm', 'save_task_for_clyde',
+  ]);
   function alignMemoryWebhookHeader(config, toolId) {
     if (!MEMORY_WEBHOOK_TOOLS.has(config?.name)) return false;
     const secret = process.env.WEBHOOK_SECRET;
@@ -351,7 +352,7 @@ async function main() {
       const fetched = await api(`/convai/tools/${id}`);
       checks.push([`${def.name} (${id}): userId bound to {{user_id}}`, hasUserIdBinding(fetched.tool_config)]);
       checks.push([`${def.name} (${id}): referenced by the agent`, verifyIds.has(id)]);
-      if ((def.name === 'save_memory' || def.name === 'recall_memory') && process.env.WEBHOOK_SECRET) {
+      if (['save_memory', 'recall_memory', 'set_alarm', 'save_task_for_clyde'].includes(def.name) && process.env.WEBHOOK_SECRET) {
         checks.push([
           `${def.name} (${id}): X-Webhook-Secret header set`,
           hasWebhookSecretHeader(fetched.tool_config, process.env.WEBHOOK_SECRET),

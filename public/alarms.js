@@ -10,8 +10,8 @@
 //
 //   POST   /api/alarm                          -> save { id, userId, title,
 //                                                 body, fireAt, pending }
-//   GET    /api/alarm/pending?userId=...       -> entries still pending
-//   GET    /api/alarm/pending?userId=...&all=1 -> every saved entry
+//   GET    /api/alarm?userId=...               -> entries still pending
+//   GET    /api/alarm?userId=...&all=1         -> every saved entry
 //   DELETE /api/alarm?id=...&userId=...        -> mark delivered (pending
 //                                                 = false; NOT a delete)
 //
@@ -232,6 +232,12 @@ async function ensurePermission(plugin) {
 // nowMs }. Defaults resolve from the live page (Capacitor bridge,
 // localStorage tb_tenant / thinkinbuddy_user_id, global fetch).
 
+function sessionHeaders(storage) {
+  let token = null;
+  try { token = storage?.getItem?.('tb_token') || null; } catch { token = null; }
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function runtimeUserId() {
   const storage = defaultStorage();
   return resolveAlarmUserId({
@@ -260,7 +266,9 @@ export async function syncAlarms(deps = {}) {
   let pendingRaw = [];
   let allRaw = null;
   try {
-    const res = await fetchFn(`${base}/api/alarm/pending?userId=${encodeURIComponent(userId)}`);
+    const res = await fetchFn(`${base}/api/alarm?userId=${encodeURIComponent(userId)}`, {
+      headers: sessionHeaders(storage),
+    });
     const data = await res.json().catch(() => null);
     if (!res.ok || !data?.ok) return { ...result, error: 'pending_fetch_failed' };
     pendingRaw = Array.isArray(data.alarms) ? data.alarms : [];
@@ -268,7 +276,9 @@ export async function syncAlarms(deps = {}) {
     return { ...result, error: 'pending_fetch_failed' };
   }
   try {
-    const res = await fetchFn(`${base}/api/alarm/pending?userId=${encodeURIComponent(userId)}&all=1`);
+    const res = await fetchFn(`${base}/api/alarm?userId=${encodeURIComponent(userId)}&all=1`, {
+      headers: sessionHeaders(storage),
+    });
     const data = await res.json().catch(() => null);
     if (res.ok && data?.ok && Array.isArray(data.alarms)) {
       allRaw = data.alarms;
@@ -278,7 +288,10 @@ export async function syncAlarms(deps = {}) {
 
   const markDelivered = async (serverId) => {
     try {
-      await fetchFn(`${base}/api/alarm?id=${encodeURIComponent(serverId)}&userId=${encodeURIComponent(userId)}`, { method: 'DELETE' });
+      await fetchFn(`${base}/api/alarm?id=${encodeURIComponent(serverId)}&userId=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers: sessionHeaders(storage),
+      });
     } catch { /* stays pending; a later sync retries */ }
   };
 
@@ -433,7 +446,10 @@ export async function cancelAlarm(serverId, deps = {}) {
   }
   if (fetchFn) {
     try {
-      await fetchFn(`${base}/api/alarm?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`, { method: 'DELETE' });
+      await fetchFn(`${base}/api/alarm?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers: sessionHeaders(storage),
+      });
     } catch { /* best effort */ }
   }
   return { available: true, ok: true };

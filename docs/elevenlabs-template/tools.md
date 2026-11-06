@@ -35,7 +35,7 @@ and read back under a separate authorization.
 | `generate_image` | `https://YOUR-DEPLOYMENT-URL/api/image` | `api/image.js` (OpenAI gpt-image-2) | **Required** |
 | `browse_url` | `https://YOUR-DEPLOYMENT-URL/api/browse` | `api/browse.js` | **Required** — handler resolves the tenant from this userId and applies the profile safety decision (joined in safety wiring bite 7) |
 | `search_web` | `https://YOUR-DEPLOYMENT-URL/api/search` | `api/search.js` | **Required** — handler resolves the tenant from this userId and applies the profile safety decision (joined in safety wiring bite 7) |
-| `save_task_for_clyde` | `https://YOUR-DEPLOYMENT-URL/api/task` | `api/task.js` | None — handler consumes no `userId` (shared, unscoped task list) |
+| `save_task_for_clyde` | `https://YOUR-DEPLOYMENT-URL/api/task` | `api/task.js` | **Required** — `userId` selects the tenant only after `X-Webhook-Secret` matches; a bare UUID is not a credential |
 | `generate_video_runway` | `https://YOUR-DEPLOYMENT-URL/api/video-runway` | `api/video-runway.js` (Runway gen4_turbo, image→video) | **Required** |
 | `generate_video` | `https://YOUR-DEPLOYMENT-URL/api/video` | `api/video.js` (composite — OpenAI gpt-image-2 start frame → Runway gen4_turbo image→video) | **Required** |
 | `generate_video_veo` | `https://YOUR-DEPLOYMENT-URL/api/video-runway-veo` | `api/video-runway-veo.js` (Runway-hosted Veo 3 — `veo3` text→video on Runway's key and meter) | **Required** |

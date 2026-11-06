@@ -306,6 +306,27 @@ test('syncAlarms without notification permission schedules and marks nothing', a
   assert.equal(fetchFn.calls.del.length, 0); // stays pending for a later sync
 });
 
+test('syncAlarms sends the signed-in session when tb_token is stored', async () => {
+  const a = stored();
+  const storage = fakeStorage();
+  storage.setItem('tb_token', 'session-token');
+  const seen = [];
+  const fetchFn = async (url, opts = {}) => {
+    seen.push({
+      url: String(url),
+      method: opts.method || 'GET',
+      auth: opts.headers?.Authorization || '',
+    });
+    const list = String(url).includes('all=1') ? [a] : [a];
+    return { ok: true, status: 200, json: async () => ({ ok: true, alarms: list }) };
+  };
+  await syncAlarms(deps({ storage, fetchFn }));
+  const gets = seen.filter((c) => c.method === 'GET');
+  assert.ok(gets.length >= 1);
+  assert.ok(gets.every((c) => c.url.includes('/api/alarm?userId=') && !c.url.includes('/pending')));
+  assert.ok(seen.every((c) => c.auth === 'Bearer session-token'));
+});
+
 test('cancelAlarm cancels on-device and marks the save delivered', async () => {
   const a = stored();
   const plugin = fakePlugin();
@@ -327,7 +348,9 @@ test('public/alarms.js parses as a valid ES module (node --check)', () => {
 });
 
 test('alarms.js drives the real server surface and the real plugin', () => {
-  assert.ok(alarmsJs.includes('/api/alarm/pending?userId='));
+  assert.ok(alarmsJs.includes('/api/alarm?userId='));
+  assert.ok(alarmsJs.includes("Authorization"));
+  assert.ok(alarmsJs.includes('tb_token'));
   assert.ok(alarmsJs.includes('all=1'));
   assert.ok(alarmsJs.includes("window.Capacitor?.Plugins?.LocalNotifications"));
   assert.ok(alarmsJs.includes('requestPermissions'));

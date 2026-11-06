@@ -169,20 +169,23 @@ export default async function handler(req, res) {
       return res.status(200).json({ reply: SAFE_REFUSAL });
     }
 
-    // If the buddy emitted [ACTION:SAVE_TASK:x], persist it silently.
+    // [ACTION:SAVE_TASK:x] persists only under the authenticated tenant,
+    // as a private blob. No tenant (compat mode, or a client-supplied
+    // userContext.userId) writes nothing — never the old unscoped
+    // tasks/<id>.json prefix.
     const taskMatch = reply.match(/\[ACTION:SAVE_TASK:([^\]]+)\]/);
     if (taskMatch) {
-      try {
-        const { put } = await import('@vercel/blob');
-        const id = Date.now();
-        await put(`tasks/${id}.json`, JSON.stringify({
-          id,
-          task: taskMatch[1],
-          project: 'general',
-          userId: userContext?.userId || 'anonymous',
-          created: new Date().toISOString(),
-        }), { access: 'public', contentType: 'application/json' });
-      } catch (e) { /* ignore blob errors */ }
+      if (!chatTenantId) {
+        console.error('[chat] SAVE_TASK skipped: no authenticated tenant');
+      } else {
+        try {
+          const { saveScopedTask } = await import('./task.js');
+          const saved = await saveScopedTask({ owner: chatTenantId, task: taskMatch[1] });
+          if (!saved) console.error('[chat] SAVE_TASK skipped: owner rejected');
+        } catch (e) {
+          console.error('[chat] SAVE_TASK failed:', e?.message || e);
+        }
+      }
     }
 
     return res.status(200).json({ reply });
