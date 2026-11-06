@@ -1460,31 +1460,7 @@
           try { cfNoteHangup(evtName === 'elevenlabs-convai:disconnect' ? 'widget-disconnect' : 'widget-ended'); } catch (e) {}
         }
         if (evtName === 'elevenlabs-convai:call') {
-          cfSawCallLife = false;
-          // Probe ONLY a call that never connected (the 0-second death
-          // this beacon was built for). It must NEVER run during a live
-          // call: a second getUserMedia contends for the phone's capture
-          // device mid-conversation. On 2026-11-04 the probe keyed on
-          // DOM events this widget never emits, so it fired 9s into
-          // HEALTHY calls too; call life now also arrives via the
-          // 'thinkinbuddy:call-connected' / 'thinkinbuddy:turn' events
-          // above. The dead-mic-on-a-live-call failure class is read
-          // from the ElevenLabs transcript instead (2026-11-04: a full
-          // two-way call at 22:43 MST, then a greeting-only call 45s
-          // later whose transcript held zero user turns).
-          setTimeout(() => {
-            if (cfSawCallLife) return;
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-              cfBeacon('mic-probe-fail', { name: 'no-mediaDevices' });
-              return;
-            }
-            navigator.mediaDevices.getUserMedia({ audio: true })
-              .then((stream) => {
-                stream.getTracks().forEach(t => t.stop());
-                cfBeacon('mic-probe-ok', {});
-              })
-              .catch((err) => cfBeacon('mic-probe-fail', { name: String(err.name || ''), message: String(err.message || '').slice(0, 200) }));
-          }, 9000);
+          cfSawCallLife = true; // Mark call alive immediately so probe never contends or stops active mic stream
         }
       });
     });
@@ -1796,6 +1772,15 @@
         return;
       }
 
+      // Android: hold mic stream across multiple getUserMedia calls so track.stop does not kill recording
+      if (typeof cfCreateMicHold === 'function' && typeof cfShouldHoldMic === 'function' && cfShouldHoldMic(navigator.userAgent)) {
+        try {
+          if (!window.__cfWidgetMicHold && navigator.mediaDevices) {
+            window.__cfWidgetMicHold = cfCreateMicHold(navigator.mediaDevices);
+          }
+        } catch (e) {}
+      }
+
       // ── TRANSPORT ─────────────────────────────────────────────────
       // Websocket is the default again, including Android. PR #13 left
       // the WebView on the stock token transport (WebRTC). The next
@@ -1945,20 +1930,18 @@
           // itself. Fire and forget: relaySend never throws and
           // surfaces its own failures, so a dead relay can never
           // break turn capture.
-          if (turnRole === 'user') {
-            relaySend(turnContent);
-            if (/\b(?:build|create|spin up|generate)\b.{0,30}\b(?:landing page|landing\.html|landing|website)\b/i.test(turnContent)) {
-              if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Building Capstone Foundry landing page at /landing.html...';
-              fetch('/api/hands-build', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: turnContent, target_path: 'landing.html' }),
-              }).then(r => r.json()).then(data => {
-                if (data.ok && transcriptEl) {
-                  transcriptEl.textContent = 'Helmion Hands: Tangible landing page ready at /landing.html';
-                }
-              }).catch(() => {});
-            }
+          if (turnRole === 'user') relaySend(turnContent);
+          if (turnRole === 'user' && /\b(?:build|create|spin up|generate)\b.{0,30}\b(?:landing page|landing\.html|landing|website)\b/i.test(turnContent)) {
+            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Building Capstone Foundry landing page at /landing.html...';
+            fetch('/api/hands-build', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: turnContent, target_path: 'landing.html' }),
+            }).then(r => r.json()).then(data => {
+              if (data.ok && transcriptEl) {
+                transcriptEl.textContent = 'Helmion Hands: Tangible landing page ready at /landing.html';
+              }
+            }).catch(() => {});
           }
         }
         if (idleTimer) clearTimeout(idleTimer);
@@ -1988,6 +1971,11 @@
         fireMemoryCheckpoint(true);
         fireExtractMemories('disconnect');
         try { cfNoteHangup('disconnect'); } catch (e) {}
+        if (window.__cfWidgetMicHold) {
+          try { window.__cfWidgetMicHold.stopHeld(); } catch (e) {}
+          try { window.__cfWidgetMicHold.release(); } catch (e) {}
+          window.__cfWidgetMicHold = null;
+        }
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-ended'));
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
       };

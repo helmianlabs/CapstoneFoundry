@@ -24,10 +24,10 @@ export default async function handleHandsBuild(req, res) {
       const { default: pool } = await import('../../lib/db.js').catch(() => ({ default: null }));
       if (pool) {
         await pool.query(
-          `INSERT INTO helmion_relay (channel, role, body, at)
-           VALUES ('pilot', 'phone', $1, NOW())`,
+          `INSERT INTO helmion_relay (channel, sender, body)
+           VALUES ('pilot', 'phone', $1)`,
           [`[HANDS ACTION] Build artifact: ${artifactType} (${prompt}) -> ${targetPath}`]
-        ).catch(() => {});
+        ).catch((e) => { console.error('[hands-build] relay insert error:', e.message); });
       }
     } catch {
       // Best-effort relay forward
