@@ -277,7 +277,7 @@ function authErrorText(data) {
     case 'email_taken': return 'That email already has an account — log in instead.';
     case 'invalid_email': return "That email doesn't look right.";
     case 'weak_password': return 'Password needs at least 10 characters.';
-    default: return 'Something went wrong — please try again.';
+    default: return 'Sign-in failed. Please retry.';
   }
 }
 
@@ -287,7 +287,10 @@ function showAuth(notice) {
     <h1>CAPSTONE FOUNDRY</h1>
     <p id="acctAuthIntro">Welcome back. Log in to your buddy account.</p>
     <input type="email" id="acctEmail" placeholder="Email" autocomplete="email" />
-    <input type="password" id="acctPassword" placeholder="Password" autocomplete="current-password" style="margin-top:12px;" />
+    <div style="position:relative;width:280px;max-width:90vw;margin:12px auto 0;">
+      <input type="password" id="acctPassword" placeholder="Password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding-right:44px;margin-top:0;" />
+      <button type="button" id="acctPasswordToggle" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#7dd3fc;font-size:1.2rem;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;z-index:2;line-height:1;" title="Show/hide password" aria-label="Toggle password visibility">👁️</button>
+    </div>
     <p id="acctAuthError" style="${ERR_STYLE}"></p>
     <button id="acctAuthSubmit">Log in</button>
     <button type="button" id="acctForgot" style="${LINK_BTN_STYLE}">Forgot password?</button>
@@ -301,6 +304,15 @@ function showAuth(notice) {
   const toggleEl = document.getElementById('acctAuthToggle');
   const forgotEl = document.getElementById('acctForgot');
   const introEl = document.getElementById('acctAuthIntro');
+  const pwToggleEl = document.getElementById('acctPasswordToggle');
+  if (pwToggleEl && passwordEl) {
+    pwToggleEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      const isPass = passwordEl.type === 'password';
+      passwordEl.type = isPass ? 'text' : 'password';
+      pwToggleEl.textContent = isPass ? '🙈' : '👁️';
+    });
+  }
 
   const paint = () => {
     submitEl.textContent = mode === 'signup' ? 'Create account' : 'Log in';
