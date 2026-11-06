@@ -1,3 +1,4 @@
+import { inspectTextSecurity } from '../../lib/injectionDefense.js';
 // api/memory.js — per-user persistent memory store for ThinkinBuddy.
 //
 // 2026-06-02: REWRITTEN from Vercel Blob → Neon Postgres + pgvector.
@@ -866,6 +867,13 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { key, value } = req.body || {};
       if (!key || !value) return res.status(400).json({ error: 'key and value required' });
+
+      // Anti-Poisoning & Adversarial Injection Defense
+      const injectionCheck = inspectTextSecurity(`${key}: ${value}`);
+      if (!injectionCheck.safe) {
+        console.warn('[memory] rejected memory poisoning attempt:', injectionCheck.reason);
+        return res.status(400).json({ error: 'Security violation: memory content disallowed' });
+      }
       // Enforced mode stamps new rows with the tenant identity — the
       // identity retrieval looks for (see retrieveMemories). Compat
       // mode stamps the authorized userId, exactly as before.

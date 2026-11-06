@@ -1,3 +1,4 @@
+import { applySwarmGate, detectSuspiciousBotSwarm } from '../lib/swarmDefense.js';
 // Single router for the Thinkinbuddy API so the app fits Vercel Hobby's 12-function limit.
 // /api/<name>[/sub/path] -> server/handlers/<name>.js (same URLs as before).
 // api/conversation-webhook.js stays its own function because it needs the raw body (bodyParser: false).
@@ -116,6 +117,22 @@ const routes = {
 };
 
 export default async function handler(req, res) {
+  // AI Swarm & DDoS Defense: gate automated flooding & scraping tools
+  if (req.method !== 'OPTIONS') {
+    const hasWebhookAuth = Boolean(req.headers?.['x-webhook-secret'] || req.headers?.['x-elevenlabs-secret']);
+    if (!hasWebhookAuth) {
+      const botCheck = detectSuspiciousBotSwarm(req);
+      if (botCheck.isBot) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: 'Access denied: automated script detected', reason: botCheck.reason }));
+      }
+    }
+    if (!applySwarmGate(req, res, { maxRequests: 120, burstLimit: 25 })) {
+      return;
+    }
+  }
+
   const pathname = new URL(req.url, 'http://local').pathname;
   const name = pathname.replace(/^\/api\/?/, '').split('/')[0];
   const load = routes[name];
