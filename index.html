@@ -1052,16 +1052,29 @@
     function cfDirectVoiceWanted(forced) {
       return forced === '1';
     }
-    // Hosted-widget transport. Android WebView ("; wv)") and the Capacitor
-    // shell leave connectionType unset so the widget keeps its stock token
-    // session (WebRTC). Browsers keep the websocket override this page
-    // already applies. Native is passed in because Capacitor can inject
-    // after parse; the UA check covers a WebView whose bridge never arrives.
+    // Android WebView ("; wv)") or the Capacitor shell. Used to unlock
+    // the websocket output element only — transport itself is websocket
+    // on every client unless the stock-transport debug flag is set.
     function cfAndroidOrCapacitor(env) {
       env = env || {};
       var ua = String(env.ua || '');
       if (/Android/i.test(ua) && /; wv\)/i.test(ua)) return true;
       return !!env.native;
+    }
+    // PR #13 left Android on the widget's stock transport (WebRTC). That
+    // call connected, produced 1.36s of TTS, 0s of ASR, then hung. Default
+    // is websocket again everywhere. Stock remains available for a retest:
+    // localStorage thinkinbuddy_stock_transport_v1=1 or ?transport=stock.
+    function cfStockTransportDebug(env) {
+      env = env || {};
+      if (env.stockFlag === '1') return true;
+      var q = String(env.search || '');
+      if (q.charAt(0) === '?') q = q.slice(1);
+      var parts = q.split('&');
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i] === 'transport=stock') return true;
+      }
+      return false;
     }
     // cf-android-voice-guard:end
   </script>
@@ -1436,6 +1449,9 @@
         });
         small.keys = Object.keys(d).slice(0, 12);
         cfBeacon('widget-event', { event: evtName, ...small });
+        if (evtName === 'elevenlabs-convai:disconnect' || evtName === 'elevenlabs-convai:call-ended') {
+          try { cfNoteHangup(evtName === 'elevenlabs-convai:disconnect' ? 'widget-disconnect' : 'widget-ended'); } catch (e) {}
+        }
         if (evtName === 'elevenlabs-convai:call') {
           cfSawCallLife = false;
           // Probe ONLY a call that never connected (the 0-second death
@@ -1562,6 +1578,119 @@
       try { cfSnapshotAudio(tag || 'end'); } catch (e) {}
     }
 
+    let cfCallSession = null;
+    let cfHangupNoted = false;
+
+    function cfAndroidOutputUnlock() {
+      if (typeof cfAndroidOrCapacitor !== 'function') return false;
+      return cfAndroidOrCapacitor({
+        ua: navigator.userAgent,
+        native: !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()),
+      });
+    }
+
+    function cfSdkAudioElements(session) {
+      const found = [];
+      const primary = session && session.output && session.output.audioElement;
+      if (primary) found.push(primary);
+      const extras = session && session.connection && session.connection.audioElements;
+      if (Array.isArray(extras)) {
+        extras.forEach((el) => { if (el && found.indexOf(el) < 0) found.push(el); });
+      }
+      if (!found.length && document.querySelectorAll) {
+        document.querySelectorAll('audio').forEach((el) => {
+          if (el && el.srcObject && found.indexOf(el) < 0) found.push(el);
+        });
+      }
+      return found;
+    }
+
+    // Websocket playback is AudioWorklet → MediaStreamDestination →
+    // a hidden <audio> the SDK creates outside the tap gesture. On
+    // Android, resume that context and start that element. No second
+    // AudioContext and no looping keepalive — those steal the mic.
+    async function cfUnlockOutputElement(session, tag) {
+      const els = cfSdkAudioElements(session);
+      const el = els[0] || null;
+      const before = cfAudioElState(el);
+      const out = session && session.output;
+      const context = out && out.context;
+      let resumed = false;
+      if (context && context.state !== 'running' && typeof context.resume === 'function') {
+        try { await context.resume(); resumed = true; } catch (e) { resumed = false; }
+      }
+      if (el) {
+        el.muted = false;
+        try { el.volume = 1; } catch (e) {}
+      }
+      if (session && typeof session.setVolume === 'function') {
+        try { session.setVolume({ volume: 1 }); } catch (e) {}
+      }
+      let play = 'skip';
+      if (el && typeof el.play === 'function') {
+        try { await el.play(); play = 'ok'; }
+        catch (err) { play = String((err && err.name) || 'reject').slice(0, 40); }
+      }
+      const after = cfAudioElState(el);
+      const ctx = context && typeof context.state === 'string' ? context.state : '';
+      cfBeacon('output-unlock', {
+        tag, play, ctx, resumed,
+        paused: after.paused, muted: after.muted, volume: after.volume,
+        t: after.t, ready: after.ready, live: after.live,
+        wasPaused: before.paused, chunks: cfAudioChunks,
+      });
+    }
+
+    function cfScheduleOutputUnlock(session) {
+      if (!cfAndroidOutputUnlock()) return;
+      const run = (tag) => {
+        if (!cfOutputLive) return;
+        cfUnlockOutputElement(session, tag).catch(() => {});
+      };
+      run('created');
+      cfOutputTimers.push(setTimeout(() => run('retry'), 600));
+    }
+
+    function cfNoteHangup(reason) {
+      if (cfHangupNoted) return;
+      cfHangupNoted = true;
+      let conv = '';
+      try { conv = lastConversationId ? String(lastConversationId).slice(0, 48) : ''; } catch (e) {}
+      cfBeacon('call-end', {
+        reason: String(reason || 'end').slice(0, 40),
+        chunks: cfAudioChunks,
+        bytes: cfAudioBytes,
+        conv,
+        live: !!cfOutputLive,
+      });
+      if (reason === 'widget-close' || reason === 'pagehide') {
+        const session = cfCallSession;
+        if (session && typeof session.endSession === 'function') {
+          Promise.resolve(session.endSession()).catch(() => {});
+        }
+      }
+      cfCallSession = null;
+      try { cfFinishOutputBeacons(reason); } catch (e) {}
+    }
+
+    function cfWidgetEndClick(e) {
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      let inWidget = false;
+      let endish = false;
+      for (let i = 0; i < path.length; i++) {
+        const node = path[i];
+        if (!node || node.nodeType !== 1) continue;
+        const tag = String(node.tagName || '').toLowerCase();
+        if (tag === 'elevenlabs-convai' || node.id === 'convai-widget' || node.id === 'widget-mount') inWidget = true;
+        if (tag === 'elevenlabs-convai') break;
+        const aria = node.getAttribute ? (node.getAttribute('aria-label') || '') : '';
+        const text = node.childElementCount === 0 ? String(node.textContent || '').trim() : '';
+        const label = (aria || text).slice(0, 24);
+        if (/^(close|end|end call|dismiss)$/i.test(label)) endish = true;
+      }
+      return inWidget && endish;
+    }
+
     function cfArmOutputBeacons(cfg) {
       cfAudioChunks = 0;
       cfAudioBytes = 0;
@@ -1581,8 +1710,16 @@
       };
       const prevCreated = cfg.onConversationCreated;
       cfg.onConversationCreated = (session) => {
+        cfCallSession = session;
         try { cfBeaconSessionOutput(session, 'created'); } catch (e) {}
+        try { cfScheduleOutputUnlock(session); } catch (e) {}
         if (typeof prevCreated === 'function') try { prevCreated(session); } catch (e) {}
+      };
+      const prevError = cfg.onError;
+      cfg.onError = (message, err) => {
+        const text = String((message && message.message) || message || (err && err.message) || err || '').slice(0, 180);
+        cfBeacon('call-error', { message: text, chunks: cfAudioChunks });
+        if (typeof prevError === 'function') try { prevError(message, err); } catch (e) {}
       };
       if (typeof MutationObserver === 'function' && document.body) {
         cfAudioObs = new MutationObserver((records) => {
@@ -1605,6 +1742,12 @@
       cfBeacon('audio-vis', { vis: document.visibilityState, chunks: cfAudioChunks, bytes: cfAudioBytes });
     });
 
+    document.addEventListener('click', (e) => {
+      if (!cfOutputLive || cfHangupNoted) return;
+      if (!cfWidgetEndClick(e)) return;
+      cfNoteHangup('widget-close');
+    }, true);
+
     document.addEventListener('elevenlabs-convai:call', (e) => {
       console.log('[MEM-HB] :call handler running — has detail?', !!e.detail, 'has config?', !!e.detail?.config);
       startImagePoller();
@@ -1618,6 +1761,8 @@
       liveSessionId = crypto.randomUUID();
       liveTurnIndex = 0;
       lastCheckpointTurn = 0;
+      cfHangupNoted = false;
+      cfCallSession = null;
       startCheckpointTimer();
       console.log('[CONV-LOG] new live session:', liveSessionId);
       const cfg = e.detail?.config;
@@ -1637,24 +1782,24 @@
       }
 
       // ── TRANSPORT ─────────────────────────────────────────────────
-      // Stock widget + conversationToken → WebRTC (SDK
-      // determineConnectionType). This page used to force websocket
-      // on every client. That plays Mark through AudioWorklet →
-      // MediaStreamDestination → a hidden <audio>, which stayed
-      // silent in the Android WebView while ASR and server TTS
-      // succeeded (conv_6901…, 2026-11-06). Android WebView and the
-      // Capacitor shell now leave connectionType unset so the hosted
-      // widget uses that stock transport. Browsers/PWA keep the
-      // websocket override (current desktop behavior). Direct-SDK
-      // opt-in still passes websocket itself in startDirectVoice.
-      // bgAudio stays skipped on Android — do not start it here.
+      // Websocket is the default again, including Android. PR #13 left
+      // the WebView on the stock token transport (WebRTC). The next
+      // call (conv_4201…) connected, spoke 1.36s of TTS, recorded 0s
+      // of ASR, then sat open for ~54 minutes. The earlier websocket
+      // call (conv_6901…) had a working mic and server TTS, with the
+      // silence on the SDK's hidden <audio>. That element is unlocked
+      // below on Android only. Stock transport is a debug opt-in:
+      // localStorage thinkinbuddy_stock_transport_v1=1 or
+      // ?transport=stock. bgAudio stays skipped on Android.
       const cfSurface = {
         ua: navigator.userAgent,
         native: !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()),
       };
+      let cfStockFlag = null;
+      try { cfStockFlag = localStorage.getItem('thinkinbuddy_stock_transport_v1'); } catch (e) {}
       const cfStockTransport = !cfg.__cfDirectVoice
-        && typeof cfAndroidOrCapacitor === 'function'
-        && cfAndroidOrCapacitor(cfSurface);
+        && typeof cfStockTransportDebug === 'function'
+        && cfStockTransportDebug({ stockFlag: cfStockFlag, search: location.search || '' });
       if (!cfStockTransport) cfg.connectionType = 'websocket';
       let cfBgSkip = '';
       try { cfBgSkip = pageBgAudioSkipReason(); } catch (e) {}
@@ -1806,7 +1951,7 @@
         // extract-memories transcript fetch fails.
         fireMemoryCheckpoint(true);
         fireExtractMemories('disconnect');
-        try { cfFinishOutputBeacons('disconnect'); } catch (e) {}
+        try { cfNoteHangup('disconnect'); } catch (e) {}
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-ended'));
         if (typeof userOnDisconnect === 'function') try { userOnDisconnect(info); } catch {}
       };
@@ -2007,7 +2152,7 @@
       // extract — the checkpoint needs nothing from ElevenLabs.
       fireMemoryCheckpoint(true);
       fireExtractMemories('pagehide');
-      try { cfFinishOutputBeacons('pagehide'); } catch (e) {}
+      try { cfNoteHangup('pagehide'); } catch (e) {}
     });
 
     // Coming back from the bfcache: restart the media pollers that the freeze
