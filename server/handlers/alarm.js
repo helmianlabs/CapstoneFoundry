@@ -25,6 +25,7 @@
 // has no access to that bridge.
 
 import { authorizeMemoryAccess } from '../../lib/tenant.js';
+import { putPrivateJson, readPrivateJson } from '../../lib/privateBlob.js';
 
 function safeSegment(value) {
   const s = typeof value === 'string' ? value.trim() : '';
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
   const userId = safeSegment(access.userId);
   if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
 
-  const { put, list } = await import('@vercel/blob');
+  const { list } = await import('@vercel/blob');
 
   // ── POST /api/alarm — agent calls this to schedule a reminder ─────────────
   if (req.method === 'POST') {
@@ -107,10 +108,7 @@ export default async function handler(req, res) {
     };
 
     try {
-      await put(`alarms/${userId}/${id}.json`, JSON.stringify(entry), {
-        access: 'public',
-        contentType: 'application/json',
-      });
+      await putPrivateJson(`alarms/${userId}/${id}.json`, entry);
     } catch (e) {
       console.error('[alarm] blob write failed:', e?.message || e);
       return res.status(500).json({ ok: false, error: 'Could not save alarm' });
@@ -151,7 +149,7 @@ export default async function handler(req, res) {
     try {
       const { blobs } = await list({ prefix: `alarms/${userId}/` });
       const entries = await Promise.all(
-        blobs.map(b => fetch(b.url).then(r => r.json()).catch(() => null))
+        blobs.map((b) => readPrivateJson(b.pathname).catch(() => null))
       );
       pending = entries
         .filter(e => e && (!e.userId || e.userId === userId) && (wantAll || e.pending === true))
@@ -177,12 +175,11 @@ export default async function handler(req, res) {
         // @vercel/blob v2.x rejects put() to an existing pathname unless
         // allowOverwrite is set — without it the DELETE/mark-delivered call
         // throws "blob already exists" and the alarm would re-fire forever.
-        const original = await fetch(exact.url).then(r => r.json()).catch(() => ({}));
-        await put(exact.pathname, JSON.stringify({ ...original, pending: false, userId }), {
-          access: 'public',
-          contentType: 'application/json',
-          allowOverwrite: true,
-        });
+        const original = await readPrivateJson(exact.pathname);
+        if (!original) {
+          return res.status(500).json({ ok: false, error: 'Could not mark alarm as delivered' });
+        }
+        await putPrivateJson(exact.pathname, { ...original, pending: false, userId }, { allowOverwrite: true });
       }
     } catch (e) {
       console.error('[alarm] delete/patch failed:', e?.message || e);

@@ -15,10 +15,27 @@ const store = new Map();
 
 mock.module('@vercel/blob', {
   namedExports: {
-    put: async (path, body) => {
-      calls.push({ op: 'put', path });
+    put: async (path, body, opts = {}) => {
+      calls.push({
+        op: 'put',
+        path,
+        access: opts.access || null,
+        allowOverwrite: opts.allowOverwrite === true,
+      });
       store.set(path, typeof body === 'string' ? body : JSON.stringify(body));
       return { pathname: path, url: `https://blob.test/${path}` };
+    },
+    get: async (path, opts = {}) => {
+      calls.push({ op: 'get', path, access: opts.access || null });
+      const body = store.get(path);
+      if (!body) return null;
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(body));
+          controller.close();
+        },
+      });
+      return { statusCode: 200, stream };
     },
     list: async ({ prefix }) => {
       calls.push({ op: 'list', prefix });
@@ -34,13 +51,13 @@ mock.module('@vercel/blob', {
   },
 });
 
-globalThis.fetch = async (url) => {
-  const path = String(url).replace('https://blob.test/', '');
-  const body = store.get(path);
-  return { ok: Boolean(body), json: async () => (body ? JSON.parse(body) : null) };
+globalThis.fetch = async () => {
+  throw new Error('public blob URL fetch is not allowed');
 };
 
-const taskHandler = (await import('../../server/handlers/task.js')).default;
+const taskMod = await import('../../server/handlers/task.js');
+const taskHandler = taskMod.default;
+const { saveScopedTask } = taskMod;
 const alarmHandler = (await import('../../server/handlers/alarm.js')).default;
 
 function fakeRes() {
@@ -120,10 +137,27 @@ out.alarmDeleteCross = await call(alarmHandler, {
   query: { userId: TENANT_A, id: betaId },
 });
 
+out.alarmDeliver = await call(alarmHandler, {
+  method: 'DELETE',
+  headers: hook,
+  query: { userId: TENANT_B, id: betaId },
+});
+
+const putsBeforeChat = calls.length;
+out.chatSkip = await saveScopedTask({ owner: '', task: 'should-not-save' });
+out.chatBad = await saveScopedTask({ owner: '../etc', task: 'should-not-save' });
+out.chatSave = await saveScopedTask({ owner: TENANT_A, task: 'from-chat' });
+out.chatPuts = calls.slice(putsBeforeChat).filter((c) => c.op === 'put');
+
 out.paths = {
   taskPuts: calls.filter((c) => c.op === 'put' && String(c.path).startsWith('tasks/')).map((c) => c.path),
   alarmPuts: calls.filter((c) => c.op === 'put' && String(c.path).startsWith('alarms/')).map((c) => c.path),
   storeKeys: [...store.keys()],
+  writes: calls.filter((c) => c.op === 'put' || c.op === 'get').map((c) => ({
+    op: c.op,
+    access: c.access,
+    path: c.path,
+  })),
 };
 
 console.log(JSON.stringify(out));

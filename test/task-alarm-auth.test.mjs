@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
@@ -55,6 +56,32 @@ test('a session cannot read another tenant\'s tasks or alarms', () => {
   assert.deepEqual(http.alarmCross.body, { error: 'Forbidden' });
   assert.deepEqual(http.alarmCross.touched, []);
   assert.equal(JSON.stringify(http.alarmCross.body).includes('beta-alarm'), false);
+});
+
+test('new task and alarm blobs are private and are not read by public URL', () => {
+  assert.ok(http.paths.writes.length > 0);
+  for (const write of http.paths.writes) {
+    assert.equal(write.access, 'private', `${write.op} ${write.path}`);
+  }
+  assert.equal(http.paths.writes.some((w) => w.access === 'public'), false);
+  assert.equal(http.alarmDeliver.code, 200);
+  assert.equal(http.alarmDeliver.body.ok, true);
+  assert.ok(http.paths.storeKeys.some((k) => k.startsWith(`alarms/${TENANT_B}/`)));
+});
+
+test('chat action-tag saves only under an authenticated tenant prefix', () => {
+  assert.equal(http.chatSkip, null);
+  assert.equal(http.chatBad, null);
+  assert.equal(http.chatPuts.length, 1);
+  assert.equal(http.chatPuts[0].access, 'private');
+  assert.ok(http.chatPuts[0].path.startsWith(`tasks/${TENANT_A}/`));
+  assert.equal(http.chatPuts[0].path.startsWith('tasks/' + TENANT_A + '/') && !/^tasks\/\d+\.json$/.test(http.chatPuts[0].path), true);
+
+  const chat = readFileSync(new URL('../server/handlers/chat.js', import.meta.url), 'utf8');
+  assert.equal(chat.includes('tasks/${id}.json'), false);
+  assert.equal(chat.includes("access: 'public'"), false);
+  assert.ok(chat.includes('saveScopedTask'));
+  assert.ok(chat.includes('no authenticated tenant'));
 });
 
 test('webhook secret selects the alarm tenant and cannot be used to delete it from another session', () => {

@@ -9,15 +9,34 @@
 // may userId ({{user_id}}) select the tenant. Same rule as memory
 // (authorizeMemoryAccess). ENFORCE_TOOL_AUTH is not the gate.
 //
-// Older blobs at tasks/<id>.json have no tenant. They are not listed
-// and not migrated.
+// Older blobs at tasks/<id>.json have no tenant. They are not listed,
+// copied, or deleted. New blobs are private (lib/privateBlob.js).
 
 import { authorizeMemoryAccess } from '../../lib/tenant.js';
+import { putPrivateJson, readPrivateJson } from '../../lib/privateBlob.js';
 
 function safeSegment(value) {
   const s = typeof value === 'string' ? value.trim() : '';
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(s)) return null;
   return s;
+}
+
+// Chat action-tags and POST /api/task share this write. A missing or
+// unsafe owner writes nothing (no unscoped tasks/<id>.json path).
+export async function saveScopedTask({ owner, task, project = 'general' }) {
+  const safe = safeSegment(owner);
+  const text = typeof task === 'string' ? task.trim() : '';
+  if (!safe || !text) return null;
+  const id = Date.now();
+  const entry = {
+    id,
+    task: text.slice(0, 500),
+    project: typeof project === 'string' && project.trim() ? project.trim().slice(0, 80) : 'general',
+    userId: safe,
+    created: new Date().toISOString(),
+  };
+  await putPrivateJson(`tasks/${safe}/${id}.json`, entry);
+  return entry;
 }
 
 export default async function handler(req, res) {
@@ -37,25 +56,14 @@ export default async function handler(req, res) {
   const owner = safeSegment(access.userId);
   if (!owner) return res.status(400).json({ error: 'userId required' });
 
-  const { put, list, del } = await import('@vercel/blob');
+  const { list, del } = await import('@vercel/blob');
   const prefix = `tasks/${owner}/`;
 
   if (req.method === 'POST') {
     const { task, project } = req.body || {};
     if (!task) return res.status(400).json({ error: 'task is required' });
-    const id = Date.now();
-    const entry = {
-      id,
-      task,
-      project: project || 'general',
-      userId: owner,
-      created: new Date().toISOString(),
-    };
     try {
-      await put(`${prefix}${id}.json`, JSON.stringify(entry), {
-        access: 'public',
-        contentType: 'application/json',
-      });
+      await saveScopedTask({ owner, task, project });
     } catch (e) {
       console.error('[task] blob write failed:', e?.message || e);
       return res.status(500).json({ error: 'Could not save task' });
@@ -67,7 +75,7 @@ export default async function handler(req, res) {
     try {
       const { blobs } = await list({ prefix });
       const tasks = await Promise.all(
-        blobs.map(b => fetch(b.url).then(r => r.json()).catch(() => null))
+        blobs.map((b) => readPrivateJson(b.pathname).catch(() => null))
       );
       const own = tasks.filter((t) => t && (!t.userId || safeSegment(String(t.userId)) === owner));
       return res.status(200).json(own.sort((a, b) => a.id - b.id));
