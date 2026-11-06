@@ -1383,6 +1383,18 @@
       const cfg = e.detail?.config;
       if (!cfg) { console.warn('[MEM-HB] BAIL — no e.detail.config, cannot inject onConnect'); return; }
 
+      // Some Android WebViews do not expose Capacitor here. If they mounted
+      // the hosted widget, catch its call before its dead audio transport
+      // starts and run the same session through the app-owned SDK instead.
+      if (directVoiceWanted() && !cfg.__cfDirectVoice) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        cfg.__cfDirectVoice = true;
+        cfBeacon('direct-voice-route', { source: 'widget-intercept' });
+        void startDirectVoice(cfg);
+        return;
+      }
+
       // ── TRANSPORT: WEBSOCKET, NOT WEBRTC (2026-11-04 night) ──────
       // The widget's public flow carries a conversationToken, and the
       // SDK's determineConnectionType (@elevenlabs/client,
@@ -1569,7 +1581,11 @@
         if (forced === '1') return true;
         if (forced === '0') return false;
       } catch (e) { /* storage unavailable — fall through to platform */ }
-      return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+      if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
+      // The Capacitor bridge injection is not reliable on every Android
+      // launch. Native WebView UA detection keeps the known-broken hosted
+      // widget off this device even when that bridge is missing.
+      return /Android/i.test(navigator.userAgent) && /; wv\)/i.test(navigator.userAgent);
     }
 
     function directCallUi(state, text) {
@@ -1612,7 +1628,7 @@
       if (directLevelsTimer) { clearInterval(directLevelsTimer); directLevelsTimer = null; }
     }
 
-    async function startDirectVoice() {
+    async function startDirectVoice(preparedConfig) {
       if (directSession) {
         try { await directSession.endSession(); } catch (e) { /* already closed */ }
         return;
@@ -1624,8 +1640,12 @@
       directCallUi('connecting');
       // Build the config through the widget's own call handler (above)
       // so a direct call is configured exactly like a widget call.
-      const cfg = {};
-      document.dispatchEvent(new CustomEvent('elevenlabs-convai:call', { detail: { config: cfg } }));
+      const cfg = preparedConfig || {};
+      if (!preparedConfig) {
+        cfg.__cfDirectVoice = true;
+        cfBeacon('direct-voice-route', { source: 'call-button' });
+        document.dispatchEvent(new CustomEvent('elevenlabs-convai:call', { detail: { config: cfg } }));
+      }
       try {
         directSession = await window.__cfVoice.startSession({
           agentId: DIRECT_VOICE_AGENT_ID,
