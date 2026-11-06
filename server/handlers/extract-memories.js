@@ -139,6 +139,7 @@ export async function extractCandidates(transcript, conversationId, req) {
     out.push({
       scope: 'semantic',                       // spec :329 — dedup/save can promote scope
       kind: typeof c.kind === 'string' && c.kind ? c.kind : 'fact',
+      category: typeof c.category === 'string' && c.category ? c.category.trim() : undefined,
       subject: subject.slice(0, 120),          // spec :331
       content,                                 // already <= MAX_CONTENT_LEN
       confidence: clamp01(c.confidence ?? 0.7),// spec :333

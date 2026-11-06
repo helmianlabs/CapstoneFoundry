@@ -115,6 +115,27 @@ function vecLiteral(vec) {
   return `[${vec.join(',')}]`;
 }
 
+
+export function classifyMemoryCategory(subject = '', content = '') {
+  const text = `${subject} ${content}`.toLowerCase();
+  if (/\b(code|api|github|git|bug|endpoint|build|deploy|vercel|database|postgres|neon|sql|schema|migration|relay|spoke|helmian|software|npm|package|frontend|backend|app)\b/.test(text)) {
+    return 'build';
+  }
+  if (/\b(dfa|truck|trucking|hauler|hauling|dairyforge|dispatch|customer|client|sales|pricing|bid|contract|tms|business|company|carrier)\b/.test(text)) {
+    return 'business';
+  }
+  if (/\b(spanish|language|tutor|curriculum|feynman|lesson|learn|study|homework|school|math|grade)\b/.test(text)) {
+    return 'learning';
+  }
+  if (/\b(money|finance|credit|loan|interest|mortgage|bank|revenue|expense|bill|cost|dollar|price|fee)\b/.test(text)) {
+    return 'finance';
+  }
+  if (/\b(family|friend|wife|son|daughter|dad|brother|sister|neighbor|luis|arturo|derek|home|idaho|burley|shoshone|chisone|health|doctor|dog)\b/.test(text)) {
+    return 'personal';
+  }
+  return 'general';
+}
+
 // Shared helpers for other API routes (prime-agent.js, extract-memories.js).
 // Keep these exports stable — phase 2 of the Neon migration depends on them.
 export { getPool, embed, vecLiteral };
@@ -414,7 +435,8 @@ async function upsertFactInternal(userId, key, value, opts = {}) {
     return { id, subject, content, action: 'updated' };
   }
 
-  const insCols = ['user_id', 'scope', 'kind', 'subject', 'content', 'embedding', 'confidence', 'importance', 'source_session'];
+  const category = classifyMemoryCategory(subject, content);
+  const insCols = ['user_id', 'scope', 'kind', 'subject', 'content', 'embedding', 'confidence', 'importance', 'source_session', 'category'];
   const insParams = [userId, subject, content];
   const insVals = ['$1', `'semantic'`, `'fact'`, '$2', '$3'];
   if (vec) { insParams.push(vecLiteral(vec)); insVals.push(`$${insParams.length}::vector`); }
@@ -422,6 +444,7 @@ async function upsertFactInternal(userId, key, value, opts = {}) {
   insVals.push('0.7');
   insParams.push(importance); insVals.push(`$${insParams.length}`);
   insParams.push(sourceSession); insVals.push(`$${insParams.length}`);
+  insParams.push(category); insVals.push(`$${insParams.length}`);
   if (tenantId) { insCols.push('tenant_id'); insParams.push(tenantId); insVals.push(`$${insParams.length}`); }
   const insert = await pool.query(
     `INSERT INTO memory_items (${insCols.join(', ')})
@@ -581,8 +604,9 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
     catch (e) { console.error('[memory] candidate embed failed (inserting without vector):', e?.message || e); }
 
     if (!vec) {
+      const cat = c.category || classifyMemoryCategory(c.subject, c.content);
       const nvParams = [user_id, c.scope, c.kind, c.subject, c.content,
-        c.confidence, c.importance, c.valid_until, c.source_session];
+        c.confidence, c.importance, c.valid_until, c.source_session, cat];
       let nvTenantCol = '', nvTenantVal = '';
       if (tenantId) { nvParams.push(tenantId); nvTenantCol = ', tenant_id'; nvTenantVal = `, $${nvParams.length}`; }
       let nvSpanVal = 'NULL';
@@ -590,8 +614,8 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
       await pool.query(
         `INSERT INTO memory_items
            (user_id, scope, kind, subject, content,
-            confidence, importance, valid_until, source_session, source_span${nvTenantCol})
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,${nvSpanVal}${nvTenantVal})`,
+            confidence, importance, valid_until, source_session, category, source_span${nvTenantCol})
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,${nvSpanVal}${nvTenantVal})`,
         nvParams
       );
       inserted++;
@@ -671,8 +695,8 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
             `INSERT INTO memory_items
                (user_id, scope, kind, subject, content, embedding,
                 confidence, importance, valid_until, supersedes,
-                source_session, source_span${ssTenantCol})
-             VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,${ssSpanVal}${ssTenantVal})`,
+                source_session, category, source_span${ssTenantCol})
+             VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,$12,${ssSpanVal}${ssTenantVal})`,
             ssParams
           );
           await client.query('COMMIT');
@@ -689,8 +713,9 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
     }
 
     // FRESH INSERT (spec :440-451).
+    const cat = c.category || classifyMemoryCategory(c.subject, c.content);
     const fiParams = [user_id, c.scope, c.kind, c.subject, c.content, vlit,
-      c.confidence, c.importance, c.valid_until, c.source_session];
+      c.confidence, c.importance, c.valid_until, c.source_session, cat];
     let fiTenantCol = '', fiTenantVal = '';
     if (tenantId) { fiParams.push(tenantId); fiTenantCol = ', tenant_id'; fiTenantVal = `, $${fiParams.length}`; }
     let fiSpanVal = 'NULL';
@@ -698,8 +723,8 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
     await pool.query(
       `INSERT INTO memory_items
          (user_id, scope, kind, subject, content, embedding,
-          confidence, importance, valid_until, source_session, source_span${fiTenantCol})
-       VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,${fiSpanVal}${fiTenantVal})`,
+          confidence, importance, valid_until, source_session, category, source_span${fiTenantCol})
+       VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,${fiSpanVal}${fiTenantVal})`,
       fiParams
     );
     inserted++;
@@ -772,14 +797,22 @@ async function upsertFact(userId, key, value, tenantId = null) {
     return { id, subject, content, action: 'updated' };
   }
 
+  const category = classifyMemoryCategory(subject, content);
   const insert = await pool.query(
     `INSERT INTO memory_items
-       (user_id, scope, kind, subject, content, embedding, confidence, importance${tenantId ? ', tenant_id' : ''})
-     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, 0.5${tenantId ? `, $${vec ? 5 : 4}` : ''})
+       (user_id, scope, kind, subject, content, embedding, confidence, importance, category${tenantId ? ', tenant_id' : ''})
+     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, 0.5, $${vec ? 5 : 4}${tenantId ? `, $${vec ? 6 : 5}` : ''})
      RETURNING id`,
-    vec ? [userId, subject, content, vecLiteral(vec), ...(tenantId ? [tenantId] : [])]
-        : [userId, subject, content, ...(tenantId ? [tenantId] : [])]
+    vec ? [userId, subject, content, vecLiteral(vec), category, ...(tenantId ? [tenantId] : [])]
+        : [userId, subject, content, category, ...(tenantId ? [tenantId] : [])]
   );
+  try {
+    await pool.query(
+      `INSERT INTO memory_filings (tenant_id, memory_id, category, rule_key, explanation)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [tenantId, String(insert.rows[0].id), category, `librarian.${category}`, `Librarian filed under ${category}`]
+    );
+  } catch (e) { /* ignore filing logging failure */ }
   return { id: insert.rows[0].id, subject, content, action: 'inserted' };
 }
 
