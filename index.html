@@ -964,6 +964,82 @@
   <div id="directCallStatus" style="display:none;"></div>
   <button id="directCallBtn" type="button" style="display:none;">🎙 Talk</button>
   <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
+  <script>
+    // cf-android-voice-guard:start
+    // Android WebView mic guards. Kept in this no-cache document so the
+    // remote shell picks them up without a new APK.
+    function cfBgAudioSkipReason(env) {
+      env = env || {};
+      if (env.ios) return 'ios';
+      var ua = String(env.ua || '');
+      // Same "; wv)" token directVoiceWanted uses. Checked at call time,
+      // not at page load: Capacitor often injects late or not at all.
+      if (/Android/i.test(ua) && /; wv\)/i.test(ua)) return 'android-webview';
+      if (env.native) return 'native-app';
+      if (env.directVoice) return 'direct-voice';
+      return '';
+    }
+    function cfShouldHoldMic(ua) {
+      return /Android/i.test(String(ua || ''));
+    }
+    // VoiceConversation.startSession opens getUserMedia, then
+    // MediaDeviceInput.create opens a SECOND getUserMedia (voiceIsolation
+    // plus processing) and the session then stops the first tracks. On
+    // this WebView that leaves the live capture track silent while the
+    // socket and TTS still come up. Serve the first plain {audio:true}
+    // stream — the capture mic-probe already proved — to every audio
+    // open, and ignore track.stop() until the session is holding it.
+    function cfCreateMicHold(mediaDevices) {
+      var orig = mediaDevices.getUserMedia.bind(mediaDevices);
+      var pending = null;
+      var held = null;
+      var swallowed = new Set();
+      mediaDevices.getUserMedia = function (constraints) {
+        var c = constraints || {};
+        if (!c.audio || c.video) return orig(constraints);
+        if (!pending) {
+          pending = Promise.resolve().then(function () {
+            return orig({ audio: true });
+          }).then(function (stream) {
+            held = stream;
+            var tracks = stream.getAudioTracks ? stream.getAudioTracks() : [];
+            for (var i = 0; i < tracks.length; i++) {
+              (function (track) {
+                if (!track || typeof track.stop !== 'function') return;
+                var nativeStop = track.stop.bind(track);
+                track.stop = function () {
+                  if (swallowed.has(track)) return;
+                  nativeStop();
+                };
+                swallowed.add(track);
+              })(tracks[i]);
+            }
+            return stream;
+          }, function (err) {
+            pending = null;
+            throw err;
+          });
+        }
+        return pending;
+      };
+      return {
+        release: function () {
+          mediaDevices.getUserMedia = orig;
+          swallowed.clear();
+        },
+        stopHeld: function () {
+          swallowed.clear();
+          if (!held || !held.getAudioTracks) return;
+          var tracks = held.getAudioTracks();
+          for (var i = 0; i < tracks.length; i++) {
+            try { tracks[i].stop(); } catch (e) {}
+          }
+          held = null;
+        },
+      };
+    }
+    // cf-android-voice-guard:end
+  </script>
 
   <script>
     // ── Store session identity (hosted mode) ─────────────────────────
@@ -1646,7 +1722,20 @@
         cfBeacon('direct-voice-route', { source: 'call-button' });
         document.dispatchEvent(new CustomEvent('elevenlabs-convai:call', { detail: { config: cfg } }));
       }
+      // Installed before startSession so both of the SDK's getUserMedia
+      // calls (preliminary unlock, then MediaDeviceInput) share one track.
+      const micHold = (typeof cfCreateMicHold === 'function'
+        && typeof cfShouldHoldMic === 'function'
+        && cfShouldHoldMic(navigator.userAgent)
+        && navigator.mediaDevices)
+        ? cfCreateMicHold(navigator.mediaDevices)
+        : { release() {}, stopHeld() {} };
+      // No extra AudioContext and no silent <audio> here. Either one
+      // switches the Android audio session and the capture track goes
+      // silent while TTS still plays. wakeVoiceContexts() resumes the
+      // SDK's own contexts after the socket is up.
       try {
+        cfBeacon('voice-build', { fix: 'bg-audio-skip+single-mic' });
         directSession = await window.__cfVoice.startSession({
           agentId: DIRECT_VOICE_AGENT_ID,
           connectionType: 'websocket',
@@ -1674,12 +1763,42 @@
             directCallUi('live', mode === 'speaking' ? 'Mark is talking…' : 'Listening…');
           },
         });
+        const probe = await wakeVoiceContexts(directSession);
+        const micLive = probe.ready === 'live' && !probe.muted && probe.enabled && probe.inCtx === 'running';
+        cfBeacon(micLive ? 'mic-probe-ok' : 'mic-probe-fail', probe);
         startDirectLevels();
       } catch (err) {
         directSession = null;
+        try { micHold.stopHeld(); } catch (e) {}
         cfBeacon('direct-voice-error', { message: String((err && err.message) || err || '').slice(0, 200) });
         directCallUi('error', 'Could not start the call — ' + String((err && err.message) || 'unknown error').slice(0, 120));
+      } finally {
+        try { micHold.release(); } catch (e) {}
       }
+    }
+
+    async function wakeVoiceContexts(session) {
+      const probe = { inCtx: 'missing', outCtx: 'missing', ready: 'none', muted: false, enabled: false };
+      async function wake(node, key) {
+        const ctx = node && node.context;
+        if (!ctx) return;
+        if (ctx.state !== 'running') {
+          try { await ctx.resume(); } catch (e) {}
+        }
+        probe[key] = ctx.state || 'unknown';
+      }
+      await wake(session && session.input, 'inCtx');
+      await wake(session && session.output, 'outCtx');
+      const tracks = session && session.input && session.input.inputStream && typeof session.input.inputStream.getAudioTracks === 'function'
+        ? session.input.inputStream.getAudioTracks()
+        : [];
+      const track = tracks[0];
+      if (track) {
+        probe.ready = track.readyState || 'unknown';
+        probe.muted = !!track.muted;
+        probe.enabled = track.enabled !== false;
+      }
+      return probe;
     }
 
     const directBtnEl = document.getElementById('directCallBtn');
@@ -2181,25 +2300,47 @@
 
     const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const IS_NATIVE_APP = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+    function pageBgAudioSkipReason() {
+      let direct = false;
+      try { direct = typeof directVoiceWanted === 'function' && directVoiceWanted(); } catch (e) {}
+      if (typeof cfBgAudioSkipReason === 'function') {
+        return cfBgAudioSkipReason({
+          ua: navigator.userAgent,
+          ios: IS_IOS,
+          // Live check. A const snapped at parse time stays false when the
+          // Capacitor bridge is missing or arrives after this script.
+          native: !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()),
+          directVoice: direct,
+        });
+      }
+      if (IS_IOS) return 'ios';
+      const ua = navigator.userAgent || '';
+      if (/Android/i.test(ua) && /; wv\)/i.test(ua)) return 'android-webview';
+      return '';
+    }
     const bgAudio = {
       el: null, url: null, wakeLock: null, active: false, lastError: null,
 
       async start() {
-        // iOS WebKit: starting another <audio> while the ElevenLabs widget holds
-        // the mic switches the audio session and silently stops mic capture
-        // (Mark greets, then hears nothing). Skip the keepalive on iOS.
-        if (IS_IOS) { this.note('skipped on iOS (keeps mic alive)'); console.log('[BG-AUDIO] skipped on iOS'); return; }
-        // The same audio-session switch bites inside the native app's web
-        // view on Android: the night of 2026-11-04 every in-app call greeted
-        // and then heard nothing (ElevenLabs recorded 0.0s of user audio;
-        // the app's own input meter read zero at the source), across the
-        // widget and the direct SDK surface and both transports, while plain
-        // page-level mic capture on the same phone worked. The keepalive is
-        // a browser pocket-mode aid; the native app does not need it. Skip.
-        if (IS_NATIVE_APP) { this.note('skipped in app (keeps mic alive)'); console.log('[BG-AUDIO] skipped in native app'); return; }
+        // A silent looping <audio> steals the Android audio session and
+        // the mic meter drops to zero while the agent greeting still
+        // plays (proven 2026-11-04). PR #10 routed WebViews without
+        // Capacitor onto the direct SDK, but this skip still required
+        // Capacitor.isNativePlatform() at page load, so the keepalive
+        // started anyway. Decide again on every call.
+        const skip = pageBgAudioSkipReason();
+        if (skip) {
+          this.note('skipped (' + skip + ')');
+          console.log('[BG-AUDIO] skipped', skip);
+          try { cfBeacon('bg-audio-skip', { reason: skip }); } catch (e) {}
+          return;
+        }
         if (this.active) return;
-        if (!bgAudioPrefs().background) { this.note('disabled in settings'); return; }
+        if (!bgAudioPrefs().background) {
+          this.note('disabled in settings');
+          try { cfBeacon('bg-audio-skip', { reason: 'disabled' }); } catch (e) {}
+          return;
+        }
         try {
           if (!this.el) {
             this.url = silentWavUrl();
@@ -2214,12 +2355,14 @@
           this.publishMetadata();
           await this.acquireWakeLock();
           this.note('running');
+          try { cfBeacon('bg-audio-start', { reason: 'playing' }); } catch (e) {}
         } catch (err) {
           // Autoplay policy can reject this if we ever get here without a
           // user gesture. Report it rather than pretending it worked.
           this.lastError = err?.message || String(err);
           this.active = false;
           this.note('failed');
+          try { cfBeacon('bg-audio-skip', { reason: 'play-failed' }); } catch (e) {}
         }
         refreshBgAudioStatus();
       },

@@ -1,0 +1,132 @@
+// The Android WebView mic dies in two places the page can fix without
+// a new APK:
+//
+//   1. bgAudio.start() used to skip the silent looping <audio> only when
+//      Capacitor.isNativePlatform() was already true at page load. On a
+//      WebView where the bridge never arrives, that <audio> still starts
+//      on elevenlabs-convai:call and the capture meter stays at 0 while
+//      the greeting plays.
+//   2. @elevenlabs/client VoiceConversation.startSession opens
+//      getUserMedia, then MediaDeviceInput.create opens a second one and
+//      the session stops the first tracks. The second open (or the stop)
+//      leaves the live track silent. The hold serves one {audio:true}
+//      stream to every audio open and swallows track.stop() until the
+//      session owns the track.
+//
+// The functions live in the no-cache index.html document. This file
+// evaluates that slice so the test cannot drift from the page.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const slice = html.match(/\/\/ cf-android-voice-guard:start([\s\S]*?)\/\/ cf-android-voice-guard:end/);
+assert.ok(slice, 'guard slice missing from index.html');
+
+const context = {};
+vm.createContext(context);
+vm.runInContext(slice[1], context);
+const { cfBgAudioSkipReason, cfShouldHoldMic, cfCreateMicHold } = context;
+
+const WV = 'Mozilla/5.0 (Linux; Android 16; SM-S948U; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36';
+
+test('Android WebView skips keepalive even when Capacitor is absent', () => {
+  assert.equal(cfBgAudioSkipReason({ ua: WV, ios: false, native: false, directVoice: true }), 'android-webview');
+  assert.equal(cfBgAudioSkipReason({ ua: WV, ios: false, native: false, directVoice: false }), 'android-webview');
+});
+
+test('native app and direct voice skip when the UA is not a WebView', () => {
+  const chrome = 'Mozilla/5.0 (Linux; Android 16; SM-S948U) AppleWebKit/537.36 Mobile Safari/537.36';
+  assert.equal(cfBgAudioSkipReason({ ua: chrome, ios: false, native: true, directVoice: false }), 'native-app');
+  assert.equal(cfBgAudioSkipReason({ ua: chrome, ios: false, native: false, directVoice: true }), 'direct-voice');
+  assert.equal(cfBgAudioSkipReason({ ua: chrome, ios: false, native: false, directVoice: false }), '');
+});
+
+test('iOS skips ahead of the Android checks', () => {
+  assert.equal(cfBgAudioSkipReason({ ua: WV, ios: true, native: true, directVoice: true }), 'ios');
+});
+
+test('mic hold is Android-only', () => {
+  assert.equal(cfShouldHoldMic(WV), true);
+  assert.equal(cfShouldHoldMic('Mozilla/5.0 (Windows NT 10.0)'), false);
+});
+
+test('a second audio getUserMedia reuses the first stream and preliminary stop is a no-op', async () => {
+  const stopped = [];
+  let calls = 0;
+  function streamFor(tag) {
+    const track = { tag, stop() { stopped.push(tag); } };
+    return { tag, getAudioTracks: () => [track], getTracks: () => [track] };
+  }
+  const mediaDevices = {
+    getUserMedia(constraints) {
+      calls += 1;
+      return Promise.resolve(streamFor('open-' + calls + '-' + JSON.stringify(constraints)));
+    },
+  };
+  const hold = cfCreateMicHold(mediaDevices);
+  const first = await mediaDevices.getUserMedia({ audio: true });
+  const second = await mediaDevices.getUserMedia({
+    audio: { voiceIsolation: true, echoCancellation: true, noiseSuppression: true },
+  });
+  assert.equal(calls, 1);
+  assert.equal(first, second);
+  assert.equal(first.tag, 'open-1-{"audio":true}');
+  first.getTracks()[0].stop();
+  assert.deepEqual(stopped, []);
+  hold.release();
+  first.getTracks()[0].stop();
+  assert.deepEqual(stopped, ['open-1-{"audio":true}']);
+  await mediaDevices.getUserMedia({ audio: true });
+  assert.equal(calls, 2);
+});
+
+test('video capture is not folded into the shared mic', async () => {
+  const kinds = [];
+  const mediaDevices = {
+    getUserMedia(constraints) {
+      kinds.push(constraints);
+      return Promise.resolve({ getAudioTracks: () => [] });
+    },
+  };
+  const hold = cfCreateMicHold(mediaDevices);
+  await mediaDevices.getUserMedia({ audio: true, video: true });
+  await mediaDevices.getUserMedia({ audio: true });
+  hold.release();
+  assert.equal(kinds.length, 2);
+  assert.equal(JSON.stringify(kinds[0]), JSON.stringify({ audio: true, video: true }));
+  assert.equal(JSON.stringify(kinds[1]), JSON.stringify({ audio: true }));
+});
+
+test('a failed open can be retried and stopHeld releases the hardware', async () => {
+  let calls = 0;
+  const stopped = [];
+  const mediaDevices = {
+    getUserMedia() {
+      calls += 1;
+      if (calls === 1) return Promise.reject(new Error('busy'));
+      const track = { stop() { stopped.push('released'); } };
+      return Promise.resolve({ getAudioTracks: () => [track] });
+    },
+  };
+  const hold = cfCreateMicHold(mediaDevices);
+  await assert.rejects(() => mediaDevices.getUserMedia({ audio: true }), /busy/);
+  const stream = await mediaDevices.getUserMedia({ audio: true });
+  assert.equal(calls, 2);
+  stream.getAudioTracks()[0].stop();
+  assert.deepEqual(stopped, []);
+  hold.stopHeld();
+  assert.deepEqual(stopped, ['released']);
+});
+
+test('the page skips keepalive at call time and holds the mic around startSession', () => {
+  assert.equal(html.includes('const IS_NATIVE_APP'), false);
+  assert.match(html, /const skip = pageBgAudioSkipReason\(\)/);
+  assert.match(html, /cfBeacon\('bg-audio-skip'/);
+  assert.match(html, /cfBeacon\('bg-audio-start'/);
+  assert.match(html, /cfCreateMicHold\(navigator\.mediaDevices\)/);
+  assert.match(html, /cfBeacon\('voice-build', \{ fix: 'bg-audio-skip\+single-mic' \}\)/);
+  assert.match(html, /cfBeacon\(micLive \? 'mic-probe-ok' : 'mic-probe-fail', probe\)/);
+});
