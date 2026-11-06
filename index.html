@@ -647,6 +647,7 @@
     </div>
     <button id="handsBuildBtn" title="Trigger Helmion Hands to build Capstone Foundry Landing Page">🛠 Hands Build</button>
     <button id="galleryBtn" title="View all generated images and videos">◫ Gallery</button>
+    <button id="reloadBtn" title="Reload app to get latest updates">🔄 Reload</button>
     <button id="resetBtn" title="Sign out / new user">⟲ Reset</button>
   </div>
 
@@ -2535,6 +2536,14 @@
         alert('Could not copy — try the Markdown or Text download instead.');
       }
     });
+
+    // ─── Reload app ───────────────────────────────────────────────────
+    const reloadBtnEl = document.getElementById('reloadBtn');
+    if (reloadBtnEl) {
+      reloadBtnEl.addEventListener('click', () => {
+        window.location.reload();
+      });
+    }
 
     // ─── Reset (sign out / new user) ──────────────────────────────────
     document.getElementById('resetBtn').addEventListener('click', () => {
