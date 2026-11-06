@@ -4142,12 +4142,7 @@
 
     // ── Fetch + render ─────────────────────────────────────────────
     async function loadGallery(query) {
-      const userId = currentUser?.userId;
-      if (!userId) {
-        galleryEmptyEl.style.display = 'block';
-        galleryEmptyEl.textContent = 'Sign in first to see your gallery.';
-        return;
-      }
+      const userId = currentUser?.userId || (typeof tbCallUserId === 'function' && tbCallUserId()) || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
 
       const type    = galleryFilterEl.value || 'all';
       const limit   = 60;
