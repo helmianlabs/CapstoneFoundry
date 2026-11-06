@@ -179,26 +179,104 @@
     .onboarding-consent input { width: auto; padding: 0; margin-top: 3px; flex-shrink: 0; }
     .onboarding-consent label { cursor: pointer; }
 
-    /* ─── Top-right action buttons ─────────────────────────────────── */
+    /* ─── Top-right action buttons / Dropdown Menu ─────────────────── */
     .actions {
-      position: fixed; top: 70px; right: 20px;
-      display: flex; flex-direction: column; gap: 8px;
-      z-index: 5;
+      position: fixed; top: 18px; right: 20px;
+      z-index: 55;
     }
-    .actions button {
-      background: rgba(0,212,255,0.05);
-      border: 1px solid rgba(0,212,255,0.25);
-      color: #a0aec0;
-      padding: 8px 14px;
+    .app-menu-wrapper {
+      position: relative;
+    }
+    .menu-trigger {
+      background: rgba(10, 16, 26, 0.85);
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      color: #00d4ff;
+      padding: 9px 15px;
       font-family: 'Courier New', monospace;
-      font-size: 0.65rem;
+      font-size: 0.75rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
+      font-weight: bold;
+      border-radius: 6px;
       cursor: pointer;
-      border-radius: 3px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
       transition: all 0.2s ease;
     }
-    .actions button:hover { color: #00d4ff; border-color: rgba(0,212,255,0.5); background: rgba(0,212,255,0.1); }
+    .menu-trigger:hover {
+      background: rgba(0, 212, 255, 0.15);
+      border-color: #00d4ff;
+    }
+    .app-menu-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 220px;
+      background: rgba(7, 11, 20, 0.96);
+      border: 1px solid rgba(0, 212, 255, 0.35);
+      border-radius: 8px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 212, 255, 0.15);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 60;
+    }
+    .app-menu-dropdown.hidden {
+      display: none !important;
+    }
+    .app-menu-dropdown button {
+      width: 100%;
+      text-align: left;
+      padding: 10px 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      color: #e2e8f0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .app-menu-dropdown button:hover {
+      background: rgba(0, 212, 255, 0.1);
+      border-color: rgba(0, 212, 255, 0.3);
+      color: #00d4ff;
+    }
+    .app-menu-dropdown button.danger {
+      color: #f87171;
+    }
+    .app-menu-dropdown button.danger:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .menu-divider {
+      height: 1px;
+      background: rgba(0, 212, 255, 0.15);
+      margin: 4px 0;
+    }
+    .gallery-back-btn {
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      color: #00d4ff;
+      padding: 8px 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .gallery-back-btn:hover {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: #00d4ff;
+    }
 
     /* ─── Settings panel (voice picker) ─────────────────────────────── */
     .settings-panel {
@@ -631,39 +709,49 @@
     <div id="mediaCaption" style="color:#6b7280; font-size:0.7rem; text-align:center; margin-top:8px; font-family:monospace;"></div>
   </div>
 
-  <!-- Top-right actions -->
+  <!-- Top-right compact menu -->
   <div class="actions">
-    <!-- Settings moved to the #settingsPill (bottom-left), off the widget. -->
-    <!-- Export button + dropdown wrapper -->
-    <div id="exportWrapper">
-      <button id="exportBtn" title="Export or share this conversation">↑ Export</button>
-      <div class="export-menu hidden" id="exportMenu">
-        <button id="exportShareBtn">📤 Share…</button>
-        <button id="exportPdfBtn">🖨 PDF / Print</button>
-        <button id="exportMdBtn">↓ Markdown (.md)</button>
-        <button id="exportTxtBtn">↓ Plain text (.txt)</button>
-        <button id="exportCopyBtn">⎘ Copy to clipboard</button>
+    <div class="app-menu-wrapper">
+      <button id="appMenuBtn" class="menu-trigger" title="Open Menu" aria-label="Open Menu">☰ Menu</button>
+      <div class="app-menu-dropdown hidden" id="appMenuDropdown">
+        <button id="handsBuildBtn" class="menu-action-btn" title="Trigger Helmion Hands">🛠 Hands Build</button>
+        <button id="galleryBtn" class="menu-action-btn" title="View media & artifacts">◫ Gallery & Files</button>
+        <div class="menu-divider"></div>
+        <div id="exportWrapper">
+          <button id="exportBtn" class="menu-action-btn" title="Export conversation">↑ Export Chat…</button>
+          <div class="export-menu hidden" id="exportMenu">
+            <button id="exportPdfBtn">🖨 PDF / Print</button>
+            <button id="exportMdBtn">↓ Markdown (.md)</button>
+            <button id="exportTxtBtn">↓ Plain text (.txt)</button>
+            <button id="exportCopyBtn">⎘ Copy to clipboard</button>
+            <button id="exportShareBtn">📤 Share…</button>
+          </div>
+        </div>
+        <div class="menu-divider"></div>
+        <button id="reloadBtn" class="menu-action-btn" title="Reload app">🔄 Reload</button>
+        <button id="resetBtn" class="menu-action-btn danger" title="Sign out / reset">⟲ Reset</button>
       </div>
     </div>
-    <button id="handsBuildBtn" title="Trigger Helmion Hands to build Capstone Foundry Landing Page">🛠 Hands Build</button>
-    <button id="galleryBtn" title="View all generated images and videos">◫ Gallery</button>
-    <button id="reloadBtn" title="Reload app to get latest updates">🔄 Reload</button>
-    <button id="resetBtn" title="Sign out / new user">⟲ Reset</button>
   </div>
 
   <!-- ─── Media Gallery Panel ────────────────────────────────────────── -->
   <div class="gallery-panel hidden" id="galleryPanel">
     <div class="gallery-header">
-      <h2>Media Gallery</h2>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="gallery-back-btn" id="galleryBackBtn" title="Back to Voice Agent">← Back</button>
+        <h2>Gallery & Files</h2>
+      </div>
       <div class="gallery-header-right">
         <input class="gallery-search" id="gallerySearch" type="search" placeholder="Search by prompt…" autocomplete="off" />
         <select class="gallery-filter" id="galleryFilter">
-          <option value="all">All</option>
+          <option value="all">All Media & Files</option>
+          <option value="artifact">Websites & Apps</option>
+          <option value="document">PDF & Markdown</option>
           <option value="image">Images</option>
           <option value="video">Videos</option>
           <option value="model3d">3D Models</option>
         </select>
-        <button class="gallery-close" id="galleryClose">✕ Close</button>
+        <button class="gallery-close" id="galleryClose" title="Close Gallery">✕</button>
       </div>
     </div>
     <div class="gallery-grid" id="galleryGrid">
@@ -3950,14 +4038,38 @@
     // ── Open / close gallery panel ─────────────────────────────────
     function openGallery() {
       galleryPanelEl.classList.remove('hidden');
+      try { history.pushState({ gallery: true }, ''); } catch (e) {}
       loadGallery();
     }
     function closeGallery() {
       galleryPanelEl.classList.add('hidden');
     }
 
+    window.addEventListener('popstate', (e) => {
+      if (!galleryPanelEl.classList.contains('hidden')) {
+        closeGallery();
+      }
+    });
+
+    const galleryBackBtnEl = document.getElementById('galleryBackBtn');
+    if (galleryBackBtnEl) galleryBackBtnEl.addEventListener('click', closeGallery);
     galleryBtnEl.addEventListener('click', openGallery);
     galleryCloseEl.addEventListener('click', closeGallery);
+
+    // App menu dropdown toggle
+    const appMenuBtnEl = document.getElementById('appMenuBtn');
+    const appMenuDropdownEl = document.getElementById('appMenuDropdown');
+    if (appMenuBtnEl && appMenuDropdownEl) {
+      appMenuBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        appMenuDropdownEl.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (!appMenuDropdownEl.contains(e.target) && e.target !== appMenuBtnEl) {
+          appMenuDropdownEl.classList.add('hidden');
+        }
+      });
+    }
 
     const handsBuildBtnEl = document.getElementById('handsBuildBtn');
     if (handsBuildBtnEl) {
@@ -4043,7 +4155,7 @@
         // Badge
         const badge = document.createElement('div');
         badge.className = 'gallery-item-badge';
-        badge.textContent = item.type === 'video' ? '▶ video' : item.type === 'model3d' ? '🧊 3d' : '⬜ image';
+        badge.textContent = item.type === 'video' ? '▶ video' : item.type === 'model3d' ? '🧊 3d' : item.type === 'artifact' ? '🌐 web' : item.type === 'document' ? '📄 doc' : '⬜ image';
         el.appendChild(badge);
 
         // Thumbnail
@@ -4060,6 +4172,16 @@
           mdiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#00d4ff;font-size:2.2rem;background:rgba(0,212,255,0.06);';
           mdiv.innerHTML = '🧊<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#00d4ff;font-weight:600;">3D MODEL</span>';
           el.appendChild(mdiv);
+        } else if (item.type === 'artifact') {
+          const adiv = document.createElement('div');
+          adiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#00e5ff;font-size:2.2rem;background:rgba(0,229,255,0.06);padding:10px;text-align:center;';
+          adiv.innerHTML = '🌐<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#00e5ff;font-weight:600;">WEBSITE / APP</span>';
+          el.appendChild(adiv);
+        } else if (item.type === 'document') {
+          const ddiv = document.createElement('div');
+          ddiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#a78bfa;font-size:2.2rem;background:rgba(167,139,250,0.06);padding:10px;text-align:center;';
+          ddiv.innerHTML = '📄<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#a78bfa;font-weight:600;">DOCUMENT</span>';
+          el.appendChild(ddiv);
         } else {
           const img = document.createElement('img');
           img.src = item.blobUrl || '';
@@ -4074,7 +4196,13 @@
         cap.textContent = item.caption || '';
         el.appendChild(cap);
 
-        el.addEventListener('click', () => openLightbox(item));
+        el.addEventListener('click', () => {
+          if (item.type === 'artifact' || item.type === 'document') {
+            window.location.href = item.blobUrl;
+          } else {
+            openLightbox(item);
+          }
+        });
 
         galleryGridEl.appendChild(el);
       }

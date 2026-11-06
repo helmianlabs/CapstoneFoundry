@@ -33,7 +33,7 @@ export default async function handler(req, res) {
 
   const query     = (req.query?.query    || '').trim() || null;
   const limit     = Math.min(Number(req.query?.limit || 30), 100);
-  const mediaType = ['image', 'video', 'model3d'].includes(req.query?.type) ? req.query.type : 'all';
+  const mediaType = ['image', 'video', 'model3d', 'artifact', 'document'].includes(req.query?.type) ? req.query.type : 'all';
 
   try {
     const items = await retrieveMedia({ userId, query, limit, mediaType, tenantId: scoped.tenantId });
