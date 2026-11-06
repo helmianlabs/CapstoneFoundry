@@ -3,22 +3,34 @@
 // Mark (ThinkinBuddy) calls this when the user says "remind me", "set an alarm",
 // "wake me up", "alert me when", etc.  The endpoint persists the alarm to Vercel
 // Blob and returns a JSON payload.  The CLIENT (public/alarms.js, loaded by
-// public/onboarding.js) polls /api/alarm/pending and schedules each alarm
+// public/onboarding.js) polls /api/alarm and schedules each alarm
 // on-device through the Capacitor LocalNotifications bridge — because
 // ElevenLabs tools run server-side and can't touch the native APK layer
 // directly.  Two-step handshake:
 //
 //   1. Agent tool call  →  POST /api/alarm  (server saves)
-//   2. Client sync      →  GET  /api/alarm/pending?userId=...  (pending only)
-//                          GET  /api/alarm/pending?userId=...&all=1  (every
+//   2. Client sync      →  GET  /api/alarm?userId=...  (pending only)
+//                          GET  /api/alarm?userId=...&all=1  (every
 //                          saved entry; the client uses it to notice an
 //                          entry deleted server-side and cancel it
 //                          on-device)
+//
+// The path is /api/alarm, not /api/alarm/pending. The platform router
+// only matches one segment, so a second path segment never reaches
+// this handler. pending vs all is the ?all=1 query.
 //
 // Why this split: The Capacitor LocalNotifications.schedule() call must happen
 // in the WebView JS context so it can cross the Capacitor Bridge into the native
 // Java layer (TimedNotificationPublisher / AlarmManager).  A server-side webhook
 // has no access to that bridge.
+
+import { authorizeMemoryAccess } from '../../lib/tenant.js';
+
+function safeSegment(value) {
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(s)) return null;
+  return s;
+}
 
 export default async function handler(req, res) {
   // Allow the ElevenLabs agent (different origin) to POST here, plus the
@@ -28,11 +40,26 @@ export default async function handler(req, res) {
   // platform, so wildcard is the correct, low-risk choice for this endpoint.
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   // Preflight: return 204 No Content with the CORS headers already set above.
   if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'DELETE') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-  const { put, list, del } = await import('@vercel/blob');
+  // A userId UUID is not a credential, and a missing userId must not
+  // fall through to the 'troy' bucket. Session (signed-in PWA) or
+  // X-Webhook-Secret (set_alarm) first; the authorized id is the only
+  // blob prefix. ENFORCE_TOOL_AUTH does not gate this route.
+  const candidate = req.method === 'POST'
+    ? (req.body?.userId || req.query?.userId)
+    : req.query?.userId;
+  const access = authorizeMemoryAccess(req, candidate);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+  const userId = safeSegment(access.userId);
+  if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
+
+  const { put, list } = await import('@vercel/blob');
 
   // ── POST /api/alarm — agent calls this to schedule a reminder ─────────────
   if (req.method === 'POST') {
@@ -42,11 +69,9 @@ export default async function handler(req, res) {
     // body       — longer note         (optional)
     // schedule   — ISO-8601 datetime or "+Nm" relative offset string
     //              Examples: "2026-06-17T07:30:00", "+30m", "+2h", "+1d"
-    // userId     — canonical user id   (defaults to 'troy')
     const title    = (body.title    || body.label || 'Reminder').slice(0, 100);
     const noteText = (body.body     || body.note  || '').slice(0, 500);
     const schedule = body.schedule  || body.at    || body.time || '';
-    const userId   = (typeof body.userId === 'string' && body.userId) ? body.userId : 'troy';
 
     if (!schedule) {
       return res.status(400).json({ ok: false, error: 'schedule is required (ISO-8601 or "+Nm"/"+Nh")' });
@@ -120,8 +145,6 @@ export default async function handler(req, res) {
   // on-device record against this list to cancel alarms that were deleted
   // server-side. Response shape is the same either way.
   if (req.method === 'GET') {
-    const userId = (typeof req.query?.userId === 'string' && req.query.userId)
-      ? req.query.userId : 'troy';
     const wantAll = req.query?.all === '1' || req.query?.all === 'true';
 
     let pending = [];
@@ -131,7 +154,7 @@ export default async function handler(req, res) {
         blobs.map(b => fetch(b.url).then(r => r.json()).catch(() => null))
       );
       pending = entries
-        .filter(e => e && (wantAll || e.pending === true))
+        .filter(e => e && (!e.userId || e.userId === userId) && (wantAll || e.pending === true))
         .sort((a, b) => a.id - b.id);
     } catch (e) {
       console.error('[alarm] list failed:', e?.message || e);
@@ -143,21 +166,19 @@ export default async function handler(req, res) {
 
   // ── DELETE /api/alarm?id=...&userId=... — mark alarm as delivered ─────────
   if (req.method === 'DELETE') {
-    const id     = req.query?.id;
-    const userId = (typeof req.query?.userId === 'string' && req.query.userId)
-      ? req.query.userId : 'troy';
-
+    const id = safeSegment(req.query?.id == null ? '' : String(req.query.id));
     if (!id) return res.status(400).json({ ok: false, error: 'id required' });
 
     try {
       const { blobs } = await list({ prefix: `alarms/${userId}/${id}` });
-      if (blobs.length) {
+      const exact = blobs.find((b) => b.pathname === `alarms/${userId}/${id}.json`);
+      if (exact) {
         // Overwrite with pending=false so we don't reschedule on next poll.
         // @vercel/blob v2.x rejects put() to an existing pathname unless
         // allowOverwrite is set — without it the DELETE/mark-delivered call
         // throws "blob already exists" and the alarm would re-fire forever.
-        const original = await fetch(blobs[0].url).then(r => r.json()).catch(() => ({}));
-        await put(blobs[0].pathname, JSON.stringify({ ...original, pending: false }), {
+        const original = await fetch(exact.url).then(r => r.json()).catch(() => ({}));
+        await put(exact.pathname, JSON.stringify({ ...original, pending: false, userId }), {
           access: 'public',
           contentType: 'application/json',
           allowOverwrite: true,
