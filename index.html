@@ -4151,7 +4151,8 @@
 
       let items = [];
       try {
-        const res = await fetch(`/api/media-gallery?${params}`);
+        const headers = typeof tbAuthHeaders === 'function' ? tbAuthHeaders() : {};
+        const res = await fetch(`/api/media-gallery?${params}`, { headers });
         const data = await res.json();
         items = data?.items || [];
       } catch (e) {
