@@ -462,7 +462,7 @@
       <div class="telemetry-card" id="telemetry">
         <div class="tele-item">
           <div class="tele-label">Active Spoke</div>
-          <div class="tele-val"><span class="badge-green">●</span> pc-troy (Online)</div>
+          <div class="tele-val"><span class="badge-green">●</span> workstation-secure (Online)</div>
         </div>
         <div class="tele-item">
           <div class="tele-label">PostgreSQL Memory</div>
@@ -603,6 +603,15 @@
   </div>
 
   <!-- ── DOCKED FLOATING COMPANION (Taller, Narrower, Bottom-Right) ── -->
+  
+    <!-- Preloaded Studio ElevenLabs Audio (Sarah & Brian) -->
+    <audio id="audioF1" src="/audio/demo/demo1_founder.mp3" preload="auto"></audio>
+    <audio id="audioM1" src="/audio/demo/demo1_mark.mp3" preload="auto"></audio>
+    <audio id="audioF2" src="/audio/demo/demo2_founder.mp3" preload="auto"></audio>
+    <audio id="audioM2" src="/audio/demo/demo2_mark.mp3" preload="auto"></audio>
+    <audio id="audioF3" src="/audio/demo/demo3_founder.mp3" preload="auto"></audio>
+    <audio id="audioM3" src="/audio/demo/demo3_mark.mp3" preload="auto"></audio>
+
   <aside id="mark-companion" aria-label="Mark Executive Pair Programmer Demo">
     <!-- Header -->
     <div class="comp-header" id="compToggleHeader" title="Click to minimize/expand">
@@ -632,12 +641,12 @@
       <!-- Dialogue History -->
       <div class="comp-dialog-box" id="compDialogBox">
         <div class="dialog-msg interviewer" id="msgInterviewer">
-          <span class="dialog-speaker interviewer">Executive / Founder:</span>
-          <span class="dialog-text" id="txtInterviewer">"Hey Mark, can you check our server telemetry and run the morning health audit?"</span>
+          <span class="dialog-speaker interviewer">Founder:</span>
+          <span class="dialog-text" id="txtInterviewer">"Mark, I want to launch a mobile equipment detailing business next week. What do I actually need to do first?"</span>
         </div>
         <div class="dialog-msg mark" id="msgMark">
-          <span class="dialog-speaker mark">Mark (Executive Pair Programmer):</span>
-          <span class="dialog-text" id="txtMark">"Spoke connected to pc-troy. Telemetry is green — 49,388 memories indexed, latency is 280 milliseconds, and Helmian Guard is active."</span>
+          <span class="dialog-speaker mark">Mark (Executive AI):</span>
+          <span class="dialog-text" id="txtMark">"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer."</span>
         </div>
       </div>
 
@@ -675,50 +684,113 @@
   </aside>
 
   <!-- Companion Logic with Real-time Lip-Sync & Helmian Guard -->
+  
   <script type="module">
-    import { HolographicAvatarEngine } from '/avatar-engine.js';
-
-    // 1. Initialize Avatar Engine inside the docked companion
-    const canvas = document.getElementById('compAvatarCanvas');
-    let avatarEngine = null;
-    if (canvas) {
-      avatarEngine = new HolographicAvatarEngine(canvas);
-      // Real high-definition photo for Mark
-      avatarEngine.loadPhoto('/mark-avatar.jpg');
-    }
-
-    // 2. Real ElevenLabs Studio Audio for Mark & Founder
+    // Direct DOM Audio Scenario Controller
     const scenarios = {
       1: {
+        fId: 'audioF1',
+        mId: 'audioM1',
         targetId: 'features',
         q: '"Mark, I want to launch a mobile equipment detailing business next week. What do I actually need to do first?"',
-        a: '"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer."',
-        founderAudio: '/audio/demo/demo1_founder.mp3',
-        markAudio: '/audio/demo/demo1_mark.mp3'
+        a: '"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer."'
       },
       2: {
+        fId: 'audioF2',
+        mId: 'audioM2',
         targetId: 'hands',
         q: '"Mark, pull our unpaid invoices from last month and draft follow-up reminders."',
-        a: '"Done. Found four overdue accounts totaling twelve thousand four hundred dollars. Drafted the follow-ups with invoice attachments; check your queue for approval."',
-        founderAudio: '/audio/demo/demo2_founder.mp3',
-        markAudio: '/audio/demo/demo2_mark.mp3'
+        a: '"Done. Found four overdue accounts totaling twelve thousand four hundred dollars. Drafted the follow-ups with invoice attachments; check your queue for approval."'
       },
       3: {
+        fId: 'audioF3',
+        mId: 'audioM3',
         targetId: 'feat-memory',
         q: '"Mark, what did we agree on with the supplier pricing when we talked two weeks ago?"',
-        a: '"We agreed on a fifteen percent volume discount if we hit five hundred units a month, with thirty-day payment terms locked in through December."',
-        founderAudio: '/audio/demo/demo3_founder.mp3',
-        markAudio: '/audio/demo/demo3_mark.mp3'
+        a: '"We agreed on a fifteen percent volume discount if we hit five hundred units a month, with thirty-day payment terms locked in through December."'
       }
     };
 
     let activeScenario = 1;
-    let currentAudio = null;
+    let currentlyPlaying = null;
 
-    function applyScenario(id, autoPlay = true) {
+    function stopAllAudio() {
+      ['audioF1', 'audioM1', 'audioF2', 'audioM2', 'audioF3', 'audioM3'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.pause();
+          el.currentTime = 0;
+        }
+      });
+      const avatarBox = document.querySelector('.comp-avatar-mini');
+      if (avatarBox) avatarBox.classList.remove('speaking');
+      const statusText = document.getElementById('compStatusText');
+      if (statusText) statusText.textContent = 'Live Interactive Demo';
+      const playBtn = document.getElementById('compPlayBtn');
+      if (playBtn) playBtn.innerHTML = '▶ Play Studio Voice Dialogue';
+      currentlyPlaying = null;
+    }
+
+    function playScenarioAudio(id) {
+      stopAllAudio();
+      const sc = scenarios[id];
+      if (!sc) return;
+
+      const fEl = document.getElementById(sc.fId);
+      const mEl = document.getElementById(sc.mId);
+      const statusText = document.getElementById('compStatusText');
+      const playBtn = document.getElementById('compPlayBtn');
+      const avatarBox = document.querySelector('.comp-avatar-mini');
+
+      if (!fEl || !mEl) {
+        console.error('Audio elements missing');
+        return;
+      }
+
+      currentlyPlaying = fEl;
+      if (statusText) statusText.textContent = 'Speaking: Founder';
+      if (playBtn) playBtn.innerHTML = '🔊 Founder Speaking...';
+
+      fEl.onended = () => {
+        currentlyPlaying = mEl;
+        if (statusText) statusText.textContent = 'Mark Speaking...';
+        if (playBtn) playBtn.innerHTML = '🎙️ Mark Speaking...';
+        if (avatarBox) avatarBox.classList.add('speaking');
+
+        mEl.onended = () => {
+          stopAllAudio();
+        };
+        mEl.onerror = () => {
+          stopAllAudio();
+        };
+
+        const mPromise = mEl.play();
+        if (mPromise !== undefined) {
+          mPromise.catch(e => {
+            console.error('Mark audio play error:', e);
+            stopAllAudio();
+          });
+        }
+      };
+
+      fEl.onerror = () => {
+        console.error('Founder audio error');
+        stopAllAudio();
+      };
+
+      const fPromise = fEl.play();
+      if (fPromise !== undefined) {
+        fPromise.catch(e => {
+          console.error('Founder audio play error:', e);
+          stopAllAudio();
+        });
+      }
+    }
+
+    function setScenario(id, autoPlay = true) {
       activeScenario = id;
-      const data = scenarios[id];
-      if (!data) return;
+      const sc = scenarios[id];
+      if (!sc) return;
 
       // Update pills UI
       [1, 2, 3].forEach(n => {
@@ -726,90 +798,54 @@
         if (btn) btn.classList.toggle('active', n === id);
       });
 
-      // Update Dialog text
+      // Update dialog text
       const txtQ = document.getElementById('txtInterviewer');
       const txtA = document.getElementById('txtMark');
-      if (txtQ) txtQ.textContent = data.q;
-      if (txtA) txtA.textContent = data.a;
+      if (txtQ) txtQ.textContent = sc.q;
+      if (txtA) txtA.textContent = sc.a;
 
       // Hands Navigation: Smooth scroll to target and pulse highlight
-      if (data.targetId) {
-        const targetEl = document.getElementById(data.targetId);
+      if (sc.targetId) {
+        const targetEl = document.getElementById(sc.targetId);
         if (targetEl) {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
           targetEl.classList.remove('mark-highlight');
-          void targetEl.offsetWidth; // trigger reflow
+          void targetEl.offsetWidth;
           targetEl.classList.add('mark-highlight');
           setTimeout(() => targetEl.classList.remove('mark-highlight'), 3600);
         }
       }
 
       if (autoPlay) {
-        playStudioDialogue(data);
+        playScenarioAudio(id);
       }
     }
 
-    // Studio ElevenLabs Audio Player (Real Voices, Zero Robotic TTS)
-    const playDialogue = function(d) { playStudioDialogue(d); };
-    function playStudioDialogue(data) {
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-      }
-      if (avatarEngine) avatarEngine.stopLipSync();
-
-      const statusText = document.getElementById('compStatusText');
-      if (statusText) statusText.textContent = 'Speaking: Founder';
-
-      // Step 1: Founder Audio
-      const audioFounder = new Audio(data.founderAudio);
-      currentAudio = audioFounder;
-
-      audioFounder.onended = () => {
-        if (statusText) statusText.textContent = 'Mark Speaking...';
-        // Step 2: Mark (Brian ElevenLabs) Audio
-        const audioMark = new Audio(data.markAudio);
-        currentAudio = audioMark;
-
-        const avatarBox = document.querySelector('.comp-avatar-mini');
-        audioMark.onplay = () => {
-          if (avatarBox) avatarBox.classList.add('speaking');
-          if (avatarEngine) avatarEngine.startLipSync(32);
-        };
-        audioMark.onended = () => {
-          if (avatarBox) avatarBox.classList.remove('speaking');
-          if (statusText) statusText.textContent = 'Live Interactive Demo';
-          if (avatarEngine) avatarEngine.stopLipSync();
-        };
-        audioMark.onerror = () => {
-          if (avatarBox) avatarBox.classList.remove('speaking');
-          if (statusText) statusText.textContent = 'Live Interactive Demo';
-          if (avatarEngine) avatarEngine.stopLipSync();
-        };
-        audioMark.play().catch(e => console.warn('Autoplay blocked:', e));
-      };
-
-      audioFounder.play().catch(e => console.warn('Autoplay blocked:', e));
-    }
-
-    // Wire Scenario Pills
+    // Attach pill click events
     [1, 2, 3].forEach(id => {
       const btn = document.getElementById('pill' + id);
       if (btn) {
-        btn.addEventListener('click', () => applyScenario(id, true));
+        btn.onclick = (e) => {
+          e.preventDefault();
+          setScenario(id, true);
+        };
       }
     });
 
-    // Wire Play Button
+    // Attach play button
     const playBtn = document.getElementById('compPlayBtn');
     if (playBtn) {
-      playBtn.addEventListener('click', () => {
-        const sc = scenarios[activeScenario];
-        if (sc) playStudioDialogue(sc);
-      });
+      playBtn.onclick = (e) => {
+        e.preventDefault();
+        if (currentlyPlaying) {
+          stopAllAudio();
+        } else {
+          playScenarioAudio(activeScenario);
+        }
+      };
     }
 
-    // Wire Minimize / Expand
+    // Minimize / Expand
     const compPanel = document.getElementById('mark-companion');
     const compToggle = document.getElementById('compToggleHeader');
     const compMinBtn = document.getElementById('compMinBtn');
@@ -818,14 +854,14 @@
       compPanel.classList.toggle('minimized');
       compMinBtn.textContent = compPanel.classList.contains('minimized') ? '▲' : '▼';
     }
-    if (compToggle) compToggle.addEventListener('click', toggleMin);
-    if (compMinBtn) compMinBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleMin(e); });
+    if (compToggle) compToggle.onclick = toggleMin;
+    if (compMinBtn) compMinBtn.onclick = (e) => { e.stopPropagation(); toggleMin(e); };
 
-    // 3. Helmian Guard Prompt Injection Shield for Custom Input
+    // Helmian Guard Input Shield
     const chatForm = document.getElementById('compChatForm');
     const chatInput = document.getElementById('compInput');
     if (chatForm && chatInput) {
-      chatForm.addEventListener('submit', async (e) => {
+      chatForm.onsubmit = async (e) => {
         e.preventDefault();
         const query = chatInput.value.trim();
         if (!query) return;
@@ -838,7 +874,6 @@
         if (txtQ) txtQ.textContent = '"' + query + '"';
         if (statusText) statusText.textContent = 'Guard Screening...';
 
-        // Screen query with Helmian Guard if available
         let proceed = true;
         let blockReason = '';
         if (window.HelmianGuard && typeof window.HelmianGuard.screen === 'function') {
@@ -859,19 +894,13 @@
           return;
         }
 
-        // Clean conversational mock reply
-        const reply = "I received your command. In full session mode, this query dispatches directly to pc-troy with PostgreSQL memory retrieval.";
+        const reply = "I received your command. In full session mode, this query dispatches directly to your desktop spoke with PostgreSQL memory retrieval.";
         if (txtA) txtA.textContent = '"' + reply + '"';
-
-        playDialogue({
-          q: query,
-          a: reply,
-          qPitch: 1.1,
-          aPitch: 0.88
-        });
-      });
+        if (statusText) statusText.textContent = 'Live Interactive Demo';
+      };
     }
   </script>
+
 
   <script>
     function handleBackToApp() {
