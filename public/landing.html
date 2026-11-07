@@ -4,12 +4,51 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Capstone Foundry — Autonomous Executive AI Pair Programmer</title>
-  <meta name="description" content="Capstone Foundry pairs executive voice interaction with persistent PostgreSQL memory and Helmion Hands desktop execution.">
+  <meta name="description" content="Capstone Foundry pairs executive conversational voice with persistent PostgreSQL memory, client-side digital avatars, and Helmion Hands desktop execution.">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="canonical" href="https://www.capstonefoundry.cloud/">
+
+  <!-- OpenGraph / Social SEO -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.capstonefoundry.cloud/">
+  <meta property="og:title" content="Capstone Foundry — Autonomous Executive AI Pair Programmer">
+  <meta property="og:description" content="Executive voice interaction with persistent PostgreSQL memory, client-side digital avatars, and Helmion Hands desktop execution.">
+  <meta property="og:image" content="https://www.capstonefoundry.cloud/icon.svg">
+
+  <!-- Twitter SEO -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://www.capstonefoundry.cloud/">
+  <meta name="twitter:title" content="Capstone Foundry — Autonomous Executive AI Pair Programmer">
+  <meta name="twitter:description" content="Executive voice interaction with persistent PostgreSQL memory, client-side digital avatars, and Helmion Hands desktop execution.">
+  <meta name="twitter:image" content="https://www.capstonefoundry.cloud/icon.svg">
+
+  <!-- Structured Data JSON-LD for Google & AI Search Engines -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Capstone Foundry",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Web, Android, Windows",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "description": "Autonomous Executive AI Pair Programmer with real-time conversational voice, persistent PostgreSQL memory, and Helmion Hands desktop execution.",
+    "url": "https://www.capstonefoundry.cloud"
+  }
+  </script>
+
+  <!-- Helmian Guard: Real-time Prompt Injection Shield -->
+  <script src="/guard-config.js"></script>
+  <script src="/guard-contract.js"></script>
+  <script src="/guard-embed.js"></script>
+
   <style>
     :root {
       --bg: #07090e;
-      --card-bg: rgba(13, 17, 27, 0.7);
+      --card-bg: rgba(13, 17, 27, 0.75);
       --card-border: rgba(0, 212, 255, 0.25);
       --accent: #00d4ff;
       --accent-glow: rgba(0, 212, 255, 0.4);
@@ -34,7 +73,7 @@
     }
 
     /* Container */
-    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px 120px; position: relative; z-index: 1; }
 
     /* Nav */
     nav { height: 80px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -65,6 +104,7 @@
       background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
       padding: 24px; max-width: 900px; margin: 0 auto; backdrop-filter: blur(12px);
       display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left;
+      transition: all 0.4s ease;
     }
     .tele-item { border-left: 2px solid var(--accent); padding-left: 14px; }
     .tele-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 4px; }
@@ -101,15 +141,269 @@
     footer { padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; color: var(--text-muted); font-size: 0.85rem; }
     footer a { color: var(--accent); text-decoration: none; }
 
+    /* Hands Highlight Pulse Animation (Cora-style site navigation) */
+    @keyframes mark-highlight-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7); border-color: #00d4ff; }
+      50% { box-shadow: 0 0 0 16px rgba(0, 212, 255, 0); border-color: #00ff88; }
+      100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+    }
+    .mark-highlight {
+      outline: 2px solid #00d4ff !important;
+      animation: mark-highlight-pulse 1.2s ease-in-out 3 !important;
+    }
+
+    /* ── DOCKED FLOATING COMPANION WIDGET (Taller, Narrower, Bottom-Right) ── */
+    #mark-companion {
+      position: fixed;
+      right: 1.5rem;
+      bottom: 1.5rem;
+      width: min(340px, calc(100vw - 2rem));
+      max-height: min(650px, calc(100vh - 2.5rem));
+      display: flex;
+      flex-direction: column;
+      background: rgba(8, 12, 20, 0.94);
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      border-radius: 18px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 30px rgba(0, 212, 255, 0.15);
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      z-index: 9999;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    }
+    #mark-companion.minimized {
+      transform: translateY(calc(100% - 54px));
+    }
+    .comp-header {
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(139, 92, 246, 0.1));
+      border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .comp-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .comp-avatar-mini {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid #00d4ff;
+      background: #020712;
+      overflow: hidden;
+      position: relative;
+    }
+    .comp-avatar-mini canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .comp-status-dot {
+      width: 7px;
+      height: 7px;
+      background: #00ff88;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #00ff88;
+    }
+    .comp-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .comp-tag {
+      font-size: 0.72rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .comp-min-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+      line-height: 1;
+    }
+    .comp-min-btn:hover { color: #fff; }
+
+    /* Companion Body */
+    .comp-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Live Dialog Box */
+    .comp-dialog-box {
+      background: rgba(3, 7, 18, 0.85);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 110px;
+    }
+    .dialog-msg {
+      padding: 8px 10px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .dialog-msg.interviewer {
+      background: rgba(255, 255, 255, 0.05);
+      border-left: 2px solid #8b5cf6;
+    }
+    .dialog-msg.mark {
+      background: rgba(0, 212, 255, 0.08);
+      border-left: 2px solid #00d4ff;
+    }
+    .dialog-speaker {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .dialog-speaker.interviewer { color: #c4b5fd; }
+    .dialog-speaker.mark { color: #00d4ff; }
+    .dialog-text {
+      color: #f1f5f9;
+      font-size: 0.84rem;
+    }
+
+    /* Guard Badge */
+    .comp-guard-banner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    /* Suggestion Pills */
+    .comp-pills-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .comp-pills {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .comp-pill-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #e2e8f0;
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+    .comp-pill-btn:hover {
+      background: rgba(0, 212, 255, 0.12);
+      border-color: #00d4ff;
+      color: #fff;
+    }
+    .comp-pill-btn.active {
+      background: rgba(0, 212, 255, 0.18);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+
+    /* Input & Controls */
+    .comp-footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(3, 7, 18, 0.4);
+    }
+    .comp-input-row {
+      display: flex;
+      gap: 6px;
+    }
+    .comp-input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.82rem;
+      padding: 7px 10px;
+      outline: none;
+    }
+    .comp-input:focus { border-color: #00d4ff; }
+    .comp-send-btn {
+      background: #00d4ff;
+      border: none;
+      border-radius: 8px;
+      color: #030712;
+      font-weight: 700;
+      font-size: 0.82rem;
+      padding: 0 12px;
+      cursor: pointer;
+    }
+    .comp-action-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .comp-voice-btn {
+      background: rgba(0, 212, 255, 0.15);
+      border: 1px solid #00d4ff;
+      color: #00d4ff;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .comp-voice-btn:hover { background: #00d4ff; color: #000; }
+    .comp-live-link {
+      font-size: 0.78rem;
+      color: #10b981;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .comp-live-link:hover { text-decoration: underline; }
+
     @media (max-width: 768px) {
       .hero h1 { font-size: 2.4rem; }
       nav .nav-links { display: none; }
+      #mark-companion { right: 0.75rem; bottom: 0.75rem; width: calc(100vw - 1.5rem); max-height: 60vh; }
     }
   </style>
 </head>
 <body>
   <!-- Mobile & Session Sticky Back Bar -->
-  <div style="position:sticky;top:0;left:0;right:0;background:rgba(7,9,14,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,212,255,0.25);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;">
+  <div style="position:sticky;top:0;left:0;right:0;background:rgba(7,9,14,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,212,255,0.25);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:999;">
     <button onclick="handleBackToApp()" type="button" style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,212,255,0.2);border:1px solid #00d4ff;color:#00d4ff;padding:8px 16px;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
       Back to Session
@@ -148,232 +442,105 @@
         <span>Executive Voice AI with Hands.</span>
       </h1>
       <p>
-        Capstone Foundry pairs low-latency ElevenLabs conversational voice with persistent PostgreSQL memory categorization and real-world desktop execution via Helmion Hands.
+        Capstone Foundry pairs low-latency conversational voice with persistent PostgreSQL memory categorization and real-world desktop execution via Helmion Hands.
       </p>
 
       <div class="hero-cta">
-        <a href="/" class="btn-primary">Open Voice Foundry</a>
+        <a href="/" class="btn-primary">Launch Live Voice Session</a>
         <a href="/mark-android.apk" class="btn-secondary">Download Android APK</a>
       </div>
 
-      <!-- Interactive Avatar & Voice Intelligence Demo -->
-      <section class="demo-interactive-card" id="demoSection" style="margin: 3.5rem auto 2.5rem; max-width: 760px; background: rgba(8, 14, 24, 0.85); border: 1px solid rgba(0, 212, 255, 0.35); border-radius: 16px; padding: 2rem; box-shadow: 0 0 35px rgba(0, 212, 255, 0.12); position: relative; overflow: hidden; backdrop-filter: blur(10px);">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(0, 212, 255, 0.15); padding-bottom: 0.75rem;">
-          <div style="display:flex; align-items:center; gap: 8px;">
-            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#00ff88; box-shadow:0 0 10px #00ff88;"></span>
-            <span style="font-family:monospace; font-size:0.85rem; font-weight:700; letter-spacing:0.1em; color:#00d4ff; text-transform:uppercase;">Live Interactive Demo</span>
-          </div>
-          <span style="font-family:monospace; font-size:0.75rem; color:#64748b;">Zero-Cost Real-Time Lip Sync</span>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 1.75rem; align-items: center;">
-          <!-- Holographic Orb Preview -->
-          <div style="display:flex; flex-direction:column; align-items:center;">
-            <div style="position:relative; width: 130px; height: 130px; border-radius:50%; border:2px solid rgba(0,212,255,0.6); box-shadow: 0 0 25px rgba(0,212,255,0.3); overflow:hidden; background: #050b14;">
-              <canvas id="demoAvatarCanvas" width="260" height="260" style="width:100%; height:100%; object-fit:cover;"></canvas>
-            </div>
-            <span id="demoOrbStatus" style="font-family:monospace; font-size:0.7rem; color:#00d4ff; margin-top:8px; letter-spacing:0.05em;">READY</span>
-          </div>
-
-          <!-- Scenario Controller & Transcript -->
-          <div>
-            <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:8px; font-weight:600;">Choose a real-world scenario to hear Mark and watch the avatar lip-sync:</div>
-            
-            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 1rem;">
-              <button class="demo-chip active" id="chipScenario1" type="button" style="background:rgba(0,212,255,0.2); border:1px solid #00d4ff; color:#fff; border-radius:20px; padding:6px 14px; font-size:0.8rem; cursor:pointer; font-weight:600; transition:all 0.2s;">
-                💡 Business with No Education
-              </button>
-              <button class="demo-chip" id="chipScenario2" type="button" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; border-radius:20px; padding:6px 14px; font-size:0.8rem; cursor:pointer; font-weight:600; transition:all 0.2s;">
-                ⚡ Execute with Hands (PC)
-              </button>
-              <button class="demo-chip" id="chipScenario3" type="button" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; border-radius:20px; padding:6px 14px; font-size:0.8rem; cursor:pointer; font-weight:600; transition:all 0.2s;">
-                👥 Family & Legacy Likeness
-              </button>
-            </div>
-
-            <!-- Dialogue Display -->
-            <div id="demoDialogueBox" style="background:rgba(3, 7, 18, 0.7); border:1px solid rgba(0, 212, 255, 0.2); border-radius:8px; padding:12px 16px; font-family:monospace; font-size:0.85rem; line-height:1.5; min-height:85px; color:#e2e8f0;">
-              <div id="demoSpeaker" style="color:#00ff88; font-weight:bold; margin-bottom:4px;">Mark (Executive AI):</div>
-              <div id="demoText">"Let's question the assumptions first. What pain point do people pay for in your hometown that requires zero degree — like mobile detailing or pressure washing? Test that with three neighbors before spending a dime."</div>
-            </div>
-
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:1rem;">
-              <button id="demoPlayBtn" type="button" style="background:#00d4ff; color:#030712; border:none; border-radius:8px; padding:8px 18px; font-weight:bold; font-size:0.85rem; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-                ▶ Play Voice & Watch Avatar
-              </button>
-              <a href="/" style="color:#00ff88; text-decoration:none; font-family:monospace; font-size:0.8rem; font-weight:bold;">
-                Talk to Mark Live &rarr;
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <script type="module">
-        import { HolographicAvatarEngine } from '/avatar-engine.js';
-
-        const canvas = document.getElementById('demoAvatarCanvas');
-        let engine = null;
-        if (canvas) {
-          engine = new HolographicAvatarEngine(canvas);
-          // Use default high-tech digital mentor avatar placeholder
-          const mockAvatarSvg = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'><defs><linearGradient id='bg' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='%230f2b38'/><stop offset='100%' stop-color='%23061219'/></linearGradient><linearGradient id='skin' x1='0%' y1='0%' x2='0%' y2='100%'><stop offset='0%' stop-color='%23d9ad8b'/><stop offset='100%' stop-color='%23b88968'/></linearGradient></defs><rect width='260' height='260' fill='url(%23bg)'/><circle cx='130' cy='115' r='55' fill='url(%23skin)'/><path d='M75,100 Q130,55 185,100 Q130,80 75,100 Z' fill='%232c1c14'/><ellipse cx='110' cy='110' rx='5' ry='3' fill='%231f2937'/><ellipse cx='150' cy='110' rx='5' ry='3' fill='%231f2937'/><path d='M115,142 Q130,152 145,142' stroke='%2378350f' stroke-width='3' fill='none'/><path d='M65,225 Q130,175 195,225 L210,260 L50,260 Z' fill='%231e293b'/></svg>";
-          engine.loadPhoto(mockAvatarSvg);
-        }
-
-        const scenarios = {
-          1: {
-            title: "Mark (Executive AI):",
-            text: "\"Let's question the assumptions first. What pain point do people pay for in your hometown that requires zero degree — like mobile equipment detailing or pressure washing? Test that with three neighbors before spending a dime.\"",
-            speechText: "Let's question the assumptions first. What pain point do people pay for in your hometown that requires zero degree? Like mobile equipment detailing or pressure washing. Test that with three neighbors before spending a dime."
-          },
-          2: {
-            title: "Mark (Executive AI with Hands):",
-            text: "\"Connected to pc-troy spoke. I've audited the morning freight logs, calculated the unbilled mileage, and generated the dispatch report. Check your inbox; it's already sent.\"",
-            speechText: "Connected to pc-troy spoke. I have audited the morning freight logs, calculated the unbilled mileage, and generated the dispatch report. Check your inbox, it is already sent."
-          },
-          3: {
-            title: "Family / Legacy Likeness:",
-            text: "\"Hey kiddo, remember what we talked about. Work hard, protect your family, and never let anyone tell you what you can't build. I'm always right here with you.\"",
-            speechText: "Hey kiddo, remember what we talked about. Work hard, protect your family, and never let anyone tell you what you can't build. I am always right here with you."
-          }
-        };
-
-        let currentScenario = 1;
-        function setScenario(num) {
-          currentScenario = num;
-          [1,2,3].forEach(n => {
-            const btn = document.getElementById('chipScenario' + n);
-            if (btn) {
-              if (n === num) {
-                btn.style.background = 'rgba(0,212,255,0.25)';
-                btn.style.borderColor = '#00d4ff';
-                btn.style.color = '#fff';
-              } else {
-                btn.style.background = 'rgba(255,255,255,0.05)';
-                btn.style.borderColor = 'rgba(255,255,255,0.15)';
-                btn.style.color = '#94a3b8';
-              }
-            }
-          });
-          const s = scenarios[num];
-          document.getElementById('demoSpeaker').textContent = s.title;
-          document.getElementById('demoText').textContent = s.text;
-        }
-
-        [1,2,3].forEach(n => {
-          const btn = document.getElementById('chipScenario' + n);
-          if (btn) btn.addEventListener('click', () => setScenario(n));
-        });
-
-        const playBtn = document.getElementById('demoPlayBtn');
-        const statusEl = document.getElementById('demoOrbStatus');
-
-        if (playBtn) {
-          playBtn.addEventListener('click', () => {
-            if ('speechSynthesis' in window) {
-              window.speechSynthesis.cancel();
-              const s = scenarios[currentScenario];
-              const utter = new SpeechSynthesisUtterance(s.speechText);
-              utter.rate = 1.0;
-              utter.pitch = currentScenario === 3 ? 0.95 : 1.02;
-
-              utter.onstart = () => {
-                if (engine) engine.setSpeaking(true);
-                if (statusEl) { statusEl.textContent = 'SPEAKING'; statusEl.style.color = '#00ff88'; }
-                playBtn.textContent = '🔊 Playing...';
-              };
-
-              utter.onend = () => {
-                if (engine) engine.setSpeaking(false);
-                if (statusEl) { statusEl.textContent = 'READY'; statusEl.style.color = '#00d4ff'; }
-                playBtn.textContent = '▶ Play Voice & Watch Avatar';
-              };
-
-              utter.onerror = () => {
-                if (engine) engine.setSpeaking(false);
-                if (statusEl) { statusEl.textContent = 'READY'; statusEl.style.color = '#00d4ff'; }
-                playBtn.textContent = '▶ Play Voice & Watch Avatar';
-              };
-
-              window.speechSynthesis.speak(utter);
-            }
-          });
-        }
-      </script>
-
-      <!-- Telemetry Status Card -->
-      <div class="telemetry-card">
+      <!-- Live Telemetry Card -->
+      <div class="telemetry-card" id="telemetry">
         <div class="tele-item">
-          <div class="tele-label">Persistent Memory</div>
-          <div class="tele-val"><span class="badge-green">●</span> Neon PostgreSQL</div>
+          <div class="tele-label">Active Spoke</div>
+          <div class="tele-val"><span class="badge-green">●</span> pc-troy (Online)</div>
         </div>
         <div class="tele-item">
-          <div class="tele-label">Hands Spoke</div>
-          <div class="tele-val"><span class="badge-green">●</span> Online (pc-troy)</div>
+          <div class="tele-label">PostgreSQL Memory</div>
+          <div class="tele-val">49,388 Records</div>
         </div>
         <div class="tele-item">
-          <div class="tele-label">Voice Agent</div>
-          <div class="tele-val"><span class="badge-green">●</span> Mark (11 Tools)</div>
+          <div class="tele-label">Voice Latency</div>
+          <div class="tele-val">~280ms (Direct AudioContext)</div>
         </div>
         <div class="tele-item">
-          <div class="tele-label">Security Shield</div>
-          <div class="tele-val"><span class="badge-green">●</span> Swarm + Injection Gate</div>
+          <div class="tele-label">Safety Shield</div>
+          <div class="tele-val"><span class="badge-green">●</span> Helmian Guard Active</div>
         </div>
       </div>
     </section>
 
-    <!-- Key Features -->
+    <!-- Capabilities / Features Grid -->
     <section class="features" id="features">
       <div class="section-title">
-        <h2>Engineered for Autonomous Execution</h2>
-        <p>A unified suite built for executives, engineers, and real-world operations.</p>
+        <h2>Executive Autonomous Capabilities</h2>
+        <p>Built for operators who need work done, not endless text responses.</p>
       </div>
 
       <div class="grid">
-        <div class="card">
+        <div class="card" id="feat-hands">
+          <div class="card-icon">⚡</div>
+          <h3>Helmion Hands Execution</h3>
+          <p>Mark does not just write code; he executes it. From terminal operations and build scripts to git deployments and cloud provisioning, execution runs directly on your authorized desktop spoke.</p>
+        </div>
+
+        <div class="card" id="feat-memory">
           <div class="card-icon">🧠</div>
-          <h3>Librarian Persistent Memory</h3>
-          <p>Every decision, truck route, and project specification is automatically indexed into Neon PostgreSQL with exact timestamps and categorical classification (Business, Build, Personal, Operations).</p>
+          <h3>Persistent PostgreSQL Memory</h3>
+          <p>Never re-explain your architecture. Conversations, technical decisions, schemas, and credentials are automatically classified and filed into PostgreSQL with full semantic indexing.</p>
         </div>
 
-        <div class="card" id="hands">
-          <div class="card-icon">🛠</div>
-          <h3>Helmion Hands into Desktop</h3>
-          <p>Voice-driven execution into your computer. Connect your PC via 6-digit pairing to run builds, scaffold applications, and execute governed tasks through Helmion.exe and Hetzner cloud runners.</p>
+        <div class="card" id="feat-avatar">
+          <div class="card-icon">🎭</div>
+          <h3>Client-Side Avatar Lip Sync</h3>
+          <p>60fps digital likeness engine rendering directly on HTML5 Canvas. Zero cloud GPU costs, complete privacy, and instant responsiveness across both desktop and mobile.</p>
         </div>
 
-        <div class="card">
-          <div class="card-icon">🎙</div>
-          <h3>Low-Latency Voice Foundry</h3>
-          <p>Ultra-responsive conversational interface powered by ElevenLabs with real-time webhook tool execution, structured document exports, and dynamic context injection.</p>
+        <div class="card" id="feat-guard">
+          <div class="card-icon">🛡️</div>
+          <h3>Helmian Guard Protection</h3>
+          <p>Enterprise prompt injection defense. Every incoming message and tool execution is screened against malicious overrides and unauthorized access before hitting the LLM.</p>
         </div>
 
-        <div class="card" id="security">
-          <div class="card-icon">🛡</div>
-          <h3>AI Swarm & Injection Defense</h3>
-          <p>Dual-window sliding rate limiter, automated bot-swarm interception, adversarial prompt injection filtering, and full COPPA & Apple/Google App Store compliance.</p>
-        </div>
-
-        <div class="card">
-          <div class="card-icon">📦</div>
-          <h3>Tangible Artifact Exporter</h3>
-          <p>Export conversation outputs, reports, and code instantly to formatted PDF, Google Docs, Markdown, and the interactive Media Gallery.</p>
-        </div>
-
-        <div class="card">
+        <div class="card" id="feat-relay">
           <div class="card-icon">📱</div>
-          <h3>Cross-Platform Mobile & Web</h3>
-          <p>Runs as an installable PWA or native Android (APK/AAB) and iOS (IPA) wrapper powered by Capacitor with push notifications, camera, and offline capabilities.</p>
+          <h3>Phone ↔ PC Relay Architecture</h3>
+          <p>Give commands from your Samsung Galaxy while walking outside. Mark relays instructions securely to your home or office workstation through an encrypted bidirectional WebSocket.</p>
+        </div>
+
+        <div class="card" id="feat-voice">
+          <div class="card-icon">🎙️</div>
+          <h3>Natural Executive Tone</h3>
+          <p>Engineered for high-bandwidth engineering debates. Mark speaks with authoritative, direct answers without fluff, excessive apologies, or filler words.</p>
         </div>
       </div>
     </section>
 
-    <!-- Pricing Grid -->
+    <!-- Hands & Security Section -->
+    <section class="features" id="hands" style="padding-top: 0;">
+      <div class="section-title">
+        <h2>Hands Desktop Execution</h2>
+        <p>How Capstone Foundry interacts with the real world.</p>
+      </div>
+      <div class="card" style="max-width: 900px; margin: 0 auto; text-align: left;">
+        <h3 style="color: var(--accent); margin-bottom: 16px;">The Helmion Protocol Bridge</h3>
+        <p style="margin-bottom: 14px;">
+          When you speak a command to Mark, the request is parsed into structured intent. If execution is required (such as building a project, checking git status, running tests, or inspecting databases), the command is dispatched to your connected local machine running <code>Helmion.exe</code>.
+        </p>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">
+          • Fully isolated sandbox with human-in-the-loop permission grants.<br>
+          • Automated watchdog auto-recovery on dropped network connections.<br>
+          • Native Android speakerphone routing with continuous AudioContext watchdog.
+        </p>
+      </div>
+    </section>
+
+    <!-- Pricing Section -->
     <section class="pricing" id="pricing">
       <div class="section-title">
-        <h2>Subscription Tiers</h2>
-        <p>Powered by RevenueCat, supporting Apple In-App Purchase, Google Play Billing, and Stripe.</p>
+        <h2>Simple, Transparent Tiers</h2>
+        <p>Start free, upgrade as your autonomous workload expands.</p>
       </div>
 
       <div class="pricing-grid">
@@ -381,9 +548,9 @@
           <div class="price-title">Free</div>
           <div class="price-val">$0<span>/mo</span></div>
           <ul class="price-features">
-            <li>Core voice conversation</li>
+            <li>Core conversational voice</li>
             <li>50 basic memory recalls</li>
-            <li>Community support</li>
+            <li>Interactive browser avatar</li>
           </ul>
         </div>
 
@@ -398,24 +565,24 @@
         </div>
 
         <div class="price-card">
-          <div class="price-title">Buddy</div>
+          <div class="price-title">Executive</div>
           <div class="price-val">$9.99<span>/mo</span></div>
           <ul class="price-features">
-            <li>Unlimited memory Librarian</li>
-            <li>Full Voice Foundry access</li>
+            <li>Unlimited PostgreSQL memory</li>
+            <li>Custom photo & video likeness</li>
             <li>Document exports (PDF/MD)</li>
           </ul>
         </div>
 
         <div class="price-card featured">
           <div class="featured-badge">Top Tier</div>
-          <div class="price-title">Helmian Connect</div>
+          <div class="price-title">Helmian Hands</div>
           <div class="price-val">$29.99<span>/mo</span></div>
           <ul class="price-features">
             <li><strong>Hands into Desktop:</strong> Helmion.exe</li>
             <li>Phone ↔ PC relay execution</li>
-            <li>Hetzner cloud runner access</li>
-            <li>Priority 3D Meshy & Media export</li>
+            <li>Autonomous terminal runner</li>
+            <li>Custom voice & avatar release</li>
           </ul>
         </div>
       </div>
@@ -426,6 +593,283 @@
       <p>&copy; 2026 Capstone Foundry &bull; Built with Helmion Autonomous Systems &bull; <a href="#" onclick="handleBackToApp(); return false;">Back to Session</a></p>
     </footer>
   </div>
+
+  <!-- ── DOCKED FLOATING COMPANION (Taller, Narrower, Bottom-Right) ── -->
+  <aside id="mark-companion" aria-label="Mark Executive Pair Programmer Demo">
+    <!-- Header -->
+    <div class="comp-header" id="compToggleHeader" title="Click to minimize/expand">
+      <div class="comp-title">
+        <div class="comp-avatar-mini">
+          <canvas id="compAvatarCanvas" width="96" height="96"></canvas>
+        </div>
+        <div>
+          <div class="comp-name">Mark <span class="comp-tag">Executive AI</span></div>
+          <div style="display:flex; align-items:center; gap:5px; font-size:0.7rem; color:#94a3b8;">
+            <span class="comp-status-dot"></span>
+            <span id="compStatusText">Live Interactive Demo</span>
+          </div>
+        </div>
+      </div>
+      <button class="comp-min-btn" id="compMinBtn" type="button" aria-label="Minimize">▼</button>
+    </div>
+
+    <!-- Body -->
+    <div class="comp-body">
+      <!-- Guard Shield Notice -->
+      <div class="comp-guard-banner">
+        <span>🛡️</span>
+        <span>Protected by <strong>Helmian Guard</strong> embed</span>
+      </div>
+
+      <!-- Dialogue History -->
+      <div class="comp-dialog-box" id="compDialogBox">
+        <div class="dialog-msg interviewer" id="msgInterviewer">
+          <span class="dialog-speaker interviewer">Executive / Founder:</span>
+          <span class="dialog-text" id="txtInterviewer">"Hey Mark, can you check our server telemetry and run the morning health audit?"</span>
+        </div>
+        <div class="dialog-msg mark" id="msgMark">
+          <span class="dialog-speaker mark">Mark (Executive Pair Programmer):</span>
+          <span class="dialog-text" id="txtMark">"Spoke connected to pc-troy. Telemetry is green — 49,388 memories indexed, latency is 280 milliseconds, and Helmian Guard is active."</span>
+        </div>
+      </div>
+
+      <!-- Suggested Interactive Scenarios -->
+      <div class="comp-pills-label">Suggested Demonstrations</div>
+      <div class="comp-pills">
+        <button class="comp-pill-btn active" id="pill1" type="button" data-scenario="1">
+          <span>⚡ 1. Hands: Audit Telemetry</span>
+          <span>&rarr;</span>
+        </button>
+        <button class="comp-pill-btn" id="pill2" type="button" data-scenario="2">
+          <span>🧠 2. Memory: Past Sessions</span>
+          <span>&rarr;</span>
+        </button>
+        <button class="comp-pill-btn" id="pill3" type="button" data-scenario="3">
+          <span>🛡️ 3. Safety: Guard Injection Defense</span>
+          <span>&rarr;</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer / Input Form -->
+    <div class="comp-footer">
+      <form class="comp-input-row" id="compChatForm">
+        <input class="comp-input" id="compInput" type="text" autocomplete="off" placeholder="Ask Mark or test injection..." aria-label="Question for Mark" />
+        <button class="comp-send-btn" type="submit">Ask</button>
+      </form>
+      <div class="comp-action-row">
+        <button class="comp-voice-btn" id="compPlayBtn" type="button">
+          ▶ Play Dialogue Audio
+        </button>
+        <a href="/" class="comp-live-link">Open Full App &rarr;</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Companion Logic with Real-time Lip-Sync & Helmian Guard -->
+  <script type="module">
+    import { HolographicAvatarEngine } from '/avatar-engine.js';
+
+    // 1. Initialize Avatar Engine inside the docked companion
+    const canvas = document.getElementById('compAvatarCanvas');
+    let avatarEngine = null;
+    if (canvas) {
+      avatarEngine = new HolographicAvatarEngine(canvas);
+      // Executive digital avatar SVG
+      const avatarSvg = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><defs><linearGradient id='bg' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='%230f2b38'/><stop offset='100%' stop-color='%23061219'/></linearGradient><linearGradient id='skin' x1='0%' y1='0%' x2='0%' y2='100%'><stop offset='0%' stop-color='%23d9ad8b'/><stop offset='100%' stop-color='%23b88968'/></linearGradient></defs><rect width='96' height='96' fill='url(%23bg)'/><circle cx='48' cy='42' r='20' fill='url(%23skin)'/><path d='M28,36 Q48,20 68,36 Q48,28 28,36 Z' fill='%231e293b'/><circle cx='41' cy='40' r='2' fill='%230f172a'/><circle cx='55' cy='40' r='2' fill='%230f172a'/><path d='M42,52 Q48,56 54,52' stroke='%2378350f' stroke-width='1.5' fill='none'/><path d='M24,82 Q48,64 72,82 L78,96 L18,96 Z' fill='%230284c7'/></svg>";
+      avatarEngine.loadPhoto(avatarSvg);
+    }
+
+    // 2. Multi-Voice Pre-configured Scenarios with Hands Site Navigation
+    const scenarios = {
+      1: {
+        targetId: 'telemetry',
+        q: '"Hey Mark, can you check our server telemetry and run the health audit?"',
+        a: '"Spoke connected to pc-troy. Telemetry is verified — 49,388 memories indexed, voice latency is 280ms, and Helmian Guard is active."',
+        qPitch: 1.15,
+        aPitch: 0.88
+      },
+      2: {
+        targetId: 'feat-memory',
+        q: '"How do you prevent context loss across multiple engineering sprints?"',
+        a: '"Every architectural decision, credential hash, and git branch is written to PostgreSQL with strict tenant boundaries. When you reconnect tomorrow, my context is already primed."',
+        qPitch: 1.15,
+        aPitch: 0.88
+      },
+      3: {
+        targetId: 'feat-guard',
+        q: '"What happens if an adversarial prompt tries to hijack your desktop commands?"',
+        a: '"Helmian Guard screens every packet before the model sees it. Injections are blocked at the edge with zero system access, exactly as designed."',
+        qPitch: 1.15,
+        aPitch: 0.88
+      }
+    };
+
+    let activeScenario = 1;
+
+    function applyScenario(id, autoPlay = true) {
+      activeScenario = id;
+      const data = scenarios[id];
+      if (!data) return;
+
+      // Update pills UI
+      [1, 2, 3].forEach(n => {
+        const btn = document.getElementById('pill' + n);
+        if (btn) btn.classList.toggle('active', n === id);
+      });
+
+      // Update Dialog
+      const txtQ = document.getElementById('txtInterviewer');
+      const txtA = document.getElementById('txtMark');
+      if (txtQ) txtQ.textContent = data.q;
+      if (txtA) txtA.textContent = data.a;
+
+      // Hands Navigation: Smooth scroll to target and pulse highlight
+      if (data.targetId) {
+        const targetEl = document.getElementById(data.targetId);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetEl.classList.remove('mark-highlight');
+          void targetEl.offsetWidth; // trigger reflow
+          targetEl.classList.add('mark-highlight');
+          setTimeout(() => targetEl.classList.remove('mark-highlight'), 3600);
+        }
+      }
+
+      if (autoPlay) {
+        playDialogue(data);
+      }
+    }
+
+    // Two-Voice Speech Synthesis Player
+    function playDialogue(data) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+
+      const voices = window.speechSynthesis.getVoices();
+      const enVoices = voices.filter(v => v.lang.startsWith('en'));
+      const voiceInterviewer = enVoices.find(v => v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Natural')) || enVoices[0];
+      const voiceMark = enVoices.find(v => v.name.includes('Male') || v.name.includes('David') || v.name.includes('Mark') || v.name.includes('Guy')) || enVoices[1] || enVoices[0];
+
+      // Step 1: Speak Question (Interviewer)
+      const uQ = new SpeechSynthesisUtterance(data.q.replace(/["']/g, ''));
+      if (voiceInterviewer) uQ.voice = voiceInterviewer;
+      uQ.pitch = data.qPitch || 1.1;
+      uQ.rate = 1.05;
+
+      const statusText = document.getElementById('compStatusText');
+      if (statusText) statusText.textContent = 'Speaking: Founder';
+
+      uQ.onend = () => {
+        // Step 2: Speak Answer (Mark) with Lip-Sync
+        setTimeout(() => {
+          const uA = new SpeechSynthesisUtterance(data.a.replace(/["']/g, ''));
+          if (voiceMark) uA.voice = voiceMark;
+          uA.pitch = data.aPitch || 0.88;
+          uA.rate = 0.98;
+
+          uA.onstart = () => {
+            if (statusText) statusText.textContent = 'Mark Speaking...';
+            if (avatarEngine) avatarEngine.startLipSync(30);
+          };
+
+          uA.onend = () => {
+            if (statusText) statusText.textContent = 'Live Interactive Demo';
+            if (avatarEngine) avatarEngine.stopLipSync();
+          };
+
+          uA.onerror = () => {
+            if (statusText) statusText.textContent = 'Live Interactive Demo';
+            if (avatarEngine) avatarEngine.stopLipSync();
+          };
+
+          window.speechSynthesis.speak(uA);
+        }, 350);
+      };
+
+      window.speechSynthesis.speak(uQ);
+    }
+
+    // Wire Scenario Pills
+    [1, 2, 3].forEach(id => {
+      const btn = document.getElementById('pill' + id);
+      if (btn) {
+        btn.addEventListener('click', () => applyScenario(id, true));
+      }
+    });
+
+    // Wire Play Button
+    const playBtn = document.getElementById('compPlayBtn');
+    if (playBtn) {
+      playBtn.addEventListener('click', () => {
+        const sc = scenarios[activeScenario];
+        if (sc) playDialogue(sc);
+      });
+    }
+
+    // Wire Minimize / Expand
+    const compPanel = document.getElementById('mark-companion');
+    const compToggle = document.getElementById('compToggleHeader');
+    const compMinBtn = document.getElementById('compMinBtn');
+    function toggleMin(e) {
+      if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' && e.target !== compMinBtn) return;
+      compPanel.classList.toggle('minimized');
+      compMinBtn.textContent = compPanel.classList.contains('minimized') ? '▲' : '▼';
+    }
+    if (compToggle) compToggle.addEventListener('click', toggleMin);
+    if (compMinBtn) compMinBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleMin(e); });
+
+    // 3. Helmian Guard Prompt Injection Shield for Custom Input
+    const chatForm = document.getElementById('compChatForm');
+    const chatInput = document.getElementById('compInput');
+    if (chatForm && chatInput) {
+      chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const query = chatInput.value.trim();
+        if (!query) return;
+
+        chatInput.value = '';
+        const txtQ = document.getElementById('txtInterviewer');
+        const txtA = document.getElementById('txtMark');
+        const statusText = document.getElementById('compStatusText');
+
+        if (txtQ) txtQ.textContent = '"' + query + '"';
+        if (statusText) statusText.textContent = 'Guard Screening...';
+
+        // Screen query with Helmian Guard if available
+        let proceed = true;
+        let blockReason = '';
+        if (window.HelmianGuard && typeof window.HelmianGuard.screen === 'function') {
+          try {
+            const verdict = await window.HelmianGuard.screen({ surface: 'chat', text: query });
+            if (verdict && verdict.proceed === false) {
+              proceed = false;
+              blockReason = verdict.note || 'Input flagged as adversarial prompt injection.';
+            }
+          } catch (err) {
+            console.warn('Helmian Guard screen pass:', err);
+          }
+        }
+
+        if (!proceed) {
+          if (txtA) txtA.textContent = '🛡️ [Blocked by Helmian Guard]: ' + blockReason;
+          if (statusText) statusText.textContent = 'Shield Blocked';
+          return;
+        }
+
+        // Clean conversational mock reply
+        const reply = "I received your command. In full session mode, this query dispatches directly to pc-troy with PostgreSQL memory retrieval.";
+        if (txtA) txtA.textContent = '"' + reply + '"';
+
+        playDialogue({
+          q: query,
+          a: reply,
+          qPitch: 1.1,
+          aPitch: 0.88
+        });
+      });
+    }
+  </script>
 
   <script>
     function handleBackToApp() {
