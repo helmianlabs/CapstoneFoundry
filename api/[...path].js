@@ -71,6 +71,7 @@ const routes = {
   'ai-test': () => import('../server/handlers/ai-test.js'),
   'alarm': () => import('../server/handlers/alarm.js'),
   'auth': () => import('../server/handlers/auth.js'),
+  'avatar': () => import('../server/handlers/avatar.js'),
   'billing-webhook': () => import('../server/handlers/billing-webhook.js'),
   'browse': () => import('../server/handlers/browse.js'),
   'chat': () => import('../server/handlers/chat.js'),
