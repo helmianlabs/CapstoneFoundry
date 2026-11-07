@@ -54,6 +54,114 @@ async function apiRequest(path, options = {}) {
   }
 }
 
+
+// Client-side media optimizer to prevent HTTP 413 Payload Too Large
+async function optimizeMediaFile(file) {
+  if (file.type && file.type.startsWith('image/')) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 720;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          else { w = Math.round((w * maxDim) / h); h = maxDim; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = () => {
+        const r = new FileReader();
+        r.onload = (e) => resolve(e.target.result);
+        r.readAsDataURL(file);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  if (file.type && file.type.startsWith('video/')) {
+    if (file.size <= 2.5 * 1024 * 1024) {
+      return new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = (e) => resolve(e.target.result);
+        r.readAsDataURL(file);
+      });
+    }
+
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 320;
+        const ctx = canvas.getContext('2d');
+        const minDim = Math.min(video.videoWidth, video.videoHeight);
+        const sx = (video.videoWidth - minDim) / 2;
+        const sy = (video.videoHeight - minDim) / 2;
+
+        try {
+          const stream = canvas.captureStream(24);
+          const mime = (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=vp8'))
+            ? 'video/webm;codecs=vp8'
+            : 'video/webm';
+          const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 450000 });
+          const chunks = [];
+          recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: mime });
+            const reader = new FileReader();
+            reader.onload = (evt) => resolve(evt.target.result);
+            reader.readAsDataURL(blob);
+            URL.revokeObjectURL(video.src);
+          };
+
+          video.play();
+          recorder.start();
+
+          const maxDuration = Math.min(video.duration || 10, 12);
+          const drawLoop = () => {
+            if (video.paused || video.ended || video.currentTime >= maxDuration) {
+              if (recorder.state === 'recording') recorder.stop();
+              video.pause();
+              return;
+            }
+            ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, 320, 320);
+            requestAnimationFrame(drawLoop);
+          };
+          drawLoop();
+        } catch (e) {
+          console.warn('[avatar-ui] Video transcode fallback:', e);
+          const r = new FileReader();
+          r.onload = (evt) => resolve(evt.target.result);
+          r.readAsDataURL(file);
+        }
+      };
+
+      video.onerror = () => {
+        const r = new FileReader();
+        r.onload = (evt) => resolve(evt.target.result);
+        r.readAsDataURL(file);
+      };
+    });
+  }
+
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = (e) => resolve(e.target.result);
+    r.readAsDataURL(file);
+  });
+}
+
 export async function initAvatarSystem() {
   const orb = document.getElementById('orb');
   let orbCanvas = document.getElementById('avatarCanvas');
@@ -177,12 +285,13 @@ export async function initAvatarSystem() {
   }
 
   if (avatarFileInput) {
-    avatarFileInput.addEventListener('change', (e) => {
+    avatarFileInput.addEventListener('change', async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => handleLoadedMedia(evt.target.result);
-      reader.readAsDataURL(file);
+      if (avatarStatusMsg) avatarStatusMsg.textContent = 'Optimizing media for avatar orb...';
+      const dataUrl = await optimizeMediaFile(file);
+      if (avatarStatusMsg) avatarStatusMsg.textContent = '';
+      handleLoadedMedia(dataUrl);
     });
   }
 
@@ -221,12 +330,13 @@ export async function initAvatarSystem() {
   }
 
   if (avatarVideoInput) {
-    avatarVideoInput.addEventListener('change', (e) => {
+    avatarVideoInput.addEventListener('change', async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => handleLoadedMedia(evt.target.result);
-      reader.readAsDataURL(file);
+      if (avatarStatusMsg) avatarStatusMsg.textContent = 'Compressing video for 60fps avatar...';
+      const dataUrl = await optimizeMediaFile(file);
+      if (avatarStatusMsg) avatarStatusMsg.textContent = '';
+      handleLoadedMedia(dataUrl);
     });
   }
 

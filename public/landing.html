@@ -156,6 +156,152 @@
         <a href="/mark-android.apk" class="btn-secondary">Download Android APK</a>
       </div>
 
+      <!-- Interactive Avatar & Voice Intelligence Demo -->
+      <section class="demo-interactive-card" id="demoSection" style="margin: 3.5rem auto 2.5rem; max-width: 760px; background: rgba(8, 14, 24, 0.85); border: 1px solid rgba(0, 212, 255, 0.35); border-radius: 16px; padding: 2rem; box-shadow: 0 0 35px rgba(0, 212, 255, 0.12); position: relative; overflow: hidden; backdrop-filter: blur(10px);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(0, 212, 255, 0.15); padding-bottom: 0.75rem;">
+          <div style="display:flex; align-items:center; gap: 8px;">
+            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#00ff88; box-shadow:0 0 10px #00ff88;"></span>
+            <span style="font-family:monospace; font-size:0.85rem; font-weight:700; letter-spacing:0.1em; color:#00d4ff; text-transform:uppercase;">Live Interactive Demo</span>
+          </div>
+          <span style="font-family:monospace; font-size:0.75rem; color:#64748b;">Zero-Cost Real-Time Lip Sync</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 1.75rem; align-items: center;">
+          <!-- Holographic Orb Preview -->
+          <div style="display:flex; flex-direction:column; align-items:center;">
+            <div style="position:relative; width: 130px; height: 130px; border-radius:50%; border:2px solid rgba(0,212,255,0.6); box-shadow: 0 0 25px rgba(0,212,255,0.3); overflow:hidden; background: #050b14;">
+              <canvas id="demoAvatarCanvas" width="260" height="260" style="width:100%; height:100%; object-fit:cover;"></canvas>
+            </div>
+            <span id="demoOrbStatus" style="font-family:monospace; font-size:0.7rem; color:#00d4ff; margin-top:8px; letter-spacing:0.05em;">READY</span>
+          </div>
+
+          <!-- Scenario Controller & Transcript -->
+          <div>
+            <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:8px; font-weight:600;">Choose a real-world scenario to hear Mark and watch the avatar lip-sync:</div>
+            
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 1rem;">
+              <button class="demo-chip active" id="chipScenario1" type="button" style="background:rgba(0,212,255,0.2); border:1px solid #00d4ff; color:#fff; border-radius:20px; padding:6px 14px; font-size:0.8rem; cursor:pointer; font-weight:600; transition:all 0.2s;">
+                💡 Business with No Education
+              </button>
+              <button class="demo-chip" id="chipScenario2" type="button" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; border-radius:20px; padding:6px 14px; font-size:0.8rem; cursor:pointer; font-weight:600; transition:all 0.2s;">
+                ⚡ Execute with Hands (PC)
+              </button>
+              <button class="demo-chip" id="chipScenario3" type="button" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; border-radius:20px; padding:6px 14px; font-size:0.8rem; cursor:pointer; font-weight:600; transition:all 0.2s;">
+                👥 Family & Legacy Likeness
+              </button>
+            </div>
+
+            <!-- Dialogue Display -->
+            <div id="demoDialogueBox" style="background:rgba(3, 7, 18, 0.7); border:1px solid rgba(0, 212, 255, 0.2); border-radius:8px; padding:12px 16px; font-family:monospace; font-size:0.85rem; line-height:1.5; min-height:85px; color:#e2e8f0;">
+              <div id="demoSpeaker" style="color:#00ff88; font-weight:bold; margin-bottom:4px;">Mark (Executive AI):</div>
+              <div id="demoText">"Let's question the assumptions first. What pain point do people pay for in your hometown that requires zero degree — like mobile detailing or pressure washing? Test that with three neighbors before spending a dime."</div>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:1rem;">
+              <button id="demoPlayBtn" type="button" style="background:#00d4ff; color:#030712; border:none; border-radius:8px; padding:8px 18px; font-weight:bold; font-size:0.85rem; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                ▶ Play Voice & Watch Avatar
+              </button>
+              <a href="/" style="color:#00ff88; text-decoration:none; font-family:monospace; font-size:0.8rem; font-weight:bold;">
+                Talk to Mark Live &rarr;
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <script type="module">
+        import { HolographicAvatarEngine } from '/avatar-engine.js';
+
+        const canvas = document.getElementById('demoAvatarCanvas');
+        let engine = null;
+        if (canvas) {
+          engine = new HolographicAvatarEngine(canvas);
+          // Use default high-tech digital mentor avatar placeholder
+          const mockAvatarSvg = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'><defs><linearGradient id='bg' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='%230f2b38'/><stop offset='100%' stop-color='%23061219'/></linearGradient><linearGradient id='skin' x1='0%' y1='0%' x2='0%' y2='100%'><stop offset='0%' stop-color='%23d9ad8b'/><stop offset='100%' stop-color='%23b88968'/></linearGradient></defs><rect width='260' height='260' fill='url(%23bg)'/><circle cx='130' cy='115' r='55' fill='url(%23skin)'/><path d='M75,100 Q130,55 185,100 Q130,80 75,100 Z' fill='%232c1c14'/><ellipse cx='110' cy='110' rx='5' ry='3' fill='%231f2937'/><ellipse cx='150' cy='110' rx='5' ry='3' fill='%231f2937'/><path d='M115,142 Q130,152 145,142' stroke='%2378350f' stroke-width='3' fill='none'/><path d='M65,225 Q130,175 195,225 L210,260 L50,260 Z' fill='%231e293b'/></svg>";
+          engine.loadPhoto(mockAvatarSvg);
+        }
+
+        const scenarios = {
+          1: {
+            title: "Mark (Executive AI):",
+            text: "\"Let's question the assumptions first. What pain point do people pay for in your hometown that requires zero degree — like mobile equipment detailing or pressure washing? Test that with three neighbors before spending a dime.\"",
+            speechText: "Let's question the assumptions first. What pain point do people pay for in your hometown that requires zero degree? Like mobile equipment detailing or pressure washing. Test that with three neighbors before spending a dime."
+          },
+          2: {
+            title: "Mark (Executive AI with Hands):",
+            text: "\"Connected to pc-troy spoke. I've audited the morning freight logs, calculated the unbilled mileage, and generated the dispatch report. Check your inbox; it's already sent.\"",
+            speechText: "Connected to pc-troy spoke. I have audited the morning freight logs, calculated the unbilled mileage, and generated the dispatch report. Check your inbox, it is already sent."
+          },
+          3: {
+            title: "Family / Legacy Likeness:",
+            text: "\"Hey kiddo, remember what we talked about. Work hard, protect your family, and never let anyone tell you what you can't build. I'm always right here with you.\"",
+            speechText: "Hey kiddo, remember what we talked about. Work hard, protect your family, and never let anyone tell you what you can't build. I am always right here with you."
+          }
+        };
+
+        let currentScenario = 1;
+        function setScenario(num) {
+          currentScenario = num;
+          [1,2,3].forEach(n => {
+            const btn = document.getElementById('chipScenario' + n);
+            if (btn) {
+              if (n === num) {
+                btn.style.background = 'rgba(0,212,255,0.25)';
+                btn.style.borderColor = '#00d4ff';
+                btn.style.color = '#fff';
+              } else {
+                btn.style.background = 'rgba(255,255,255,0.05)';
+                btn.style.borderColor = 'rgba(255,255,255,0.15)';
+                btn.style.color = '#94a3b8';
+              }
+            }
+          });
+          const s = scenarios[num];
+          document.getElementById('demoSpeaker').textContent = s.title;
+          document.getElementById('demoText').textContent = s.text;
+        }
+
+        [1,2,3].forEach(n => {
+          const btn = document.getElementById('chipScenario' + n);
+          if (btn) btn.addEventListener('click', () => setScenario(n));
+        });
+
+        const playBtn = document.getElementById('demoPlayBtn');
+        const statusEl = document.getElementById('demoOrbStatus');
+
+        if (playBtn) {
+          playBtn.addEventListener('click', () => {
+            if ('speechSynthesis' in window) {
+              window.speechSynthesis.cancel();
+              const s = scenarios[currentScenario];
+              const utter = new SpeechSynthesisUtterance(s.speechText);
+              utter.rate = 1.0;
+              utter.pitch = currentScenario === 3 ? 0.95 : 1.02;
+
+              utter.onstart = () => {
+                if (engine) engine.setSpeaking(true);
+                if (statusEl) { statusEl.textContent = 'SPEAKING'; statusEl.style.color = '#00ff88'; }
+                playBtn.textContent = '🔊 Playing...';
+              };
+
+              utter.onend = () => {
+                if (engine) engine.setSpeaking(false);
+                if (statusEl) { statusEl.textContent = 'READY'; statusEl.style.color = '#00d4ff'; }
+                playBtn.textContent = '▶ Play Voice & Watch Avatar';
+              };
+
+              utter.onerror = () => {
+                if (engine) engine.setSpeaking(false);
+                if (statusEl) { statusEl.textContent = 'READY'; statusEl.style.color = '#00d4ff'; }
+                playBtn.textContent = '▶ Play Voice & Watch Avatar';
+              };
+
+              window.speechSynthesis.speak(utter);
+            }
+          });
+        }
+      </script>
+
       <!-- Telemetry Status Card -->
       <div class="telemetry-card">
         <div class="tele-item">
