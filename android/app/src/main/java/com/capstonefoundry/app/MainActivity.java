@@ -34,4 +34,33 @@ public class MainActivity extends BridgeActivity {
                     MIC_REQUEST_CODE);
         }
     }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        // Allow WebAudio and media playback without requiring direct user gesture per element
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Check if an in-app overlay (artifact previewer, gallery modal, lightbox) is open
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().evaluateJavascript(
+                "(function() { " +
+                "  if (typeof window.__cfHandleHardwareBack === 'function' && window.__cfHandleHardwareBack()) { return 'handled'; } " +
+                "  return 'unhandled'; " +
+                "})()",
+                value -> {
+                    if (!"\"handled\"".equals(value)) {
+                        MainActivity.super.onBackPressed();
+                    }
+                }
+            );
+            return;
+        }
+        super.onBackPressed();
+    }
 }

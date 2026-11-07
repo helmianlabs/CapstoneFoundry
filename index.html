@@ -461,10 +461,61 @@
     .footer-note a { color: #6b7280; text-decoration: underline; cursor: pointer; }
     .footer-note a:hover { color: #00d4ff; }
 
-    /* ElevenLabs fallback widget — hidden when using browser voice */
-    .elevenlabs-mode elevenlabs-convai { display: block; z-index: 2; }
-    elevenlabs-convai { display: none; }
-    .elevenlabs-mode .orb, .elevenlabs-mode .status, .elevenlabs-mode .transcript { display: none; }
+    /* ElevenLabs generic widget permanently hidden — our custom glowing Orb is the hero voice surface */
+    elevenlabs-convai, #convai-widget { display: none !important; }
+
+    /* ─── In-App Artifact Viewer Modal ────────────────────────────── */
+    .artifact-viewer {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #07090e; display: flex; flex-direction: column;
+    }
+    .artifact-viewer.hidden { display: none !important; }
+    .artifact-viewer-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(13, 17, 27, 0.98);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(0, 212, 255, 0.25);
+      z-index: 10;
+      gap: 12px;
+      min-height: 54px;
+    }
+    .artifact-back-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(0, 212, 255, 0.16);
+      color: #00d4ff;
+      border: 1px solid rgba(0, 212, 255, 0.5);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem; font-weight: 700;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .artifact-back-btn:hover, .artifact-back-btn:active {
+      background: rgba(0, 212, 255, 0.32);
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.45);
+    }
+    .artifact-viewer-title {
+      flex: 1; text-align: center;
+      color: #f3f4f6; font-size: 0.9rem; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      padding: 0 8px;
+    }
+    .artifact-external-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: #9ca3af; text-decoration: none;
+      font-size: 0.82rem; font-weight: 600;
+      padding: 6px 12px; border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .artifact-external-btn:hover { color: #00d4ff; border-color: rgba(0, 212, 255, 0.4); }
+    .artifact-viewer-frame {
+      flex: 1; width: 100%; height: 100%; border: none; background: #07090e;
+    }
 
     /* Direct voice (app-owned call pill) — the phone app's voice surface */
     #directCallBtn {
@@ -802,6 +853,21 @@
     <img id="galleryLightboxImg" src="" alt="" style="display:none;" />
     <video id="galleryLightboxVideo" playsinline controls style="display:none;"></video>
     <div class="gallery-lightbox-caption" id="galleryLightboxCaption"></div>
+  </div>
+
+  <!-- ─── In-App Artifact Viewer (Preserves Voice Call & App State) ─── -->
+  <div id="artifactViewer" class="artifact-viewer hidden">
+    <div class="artifact-viewer-bar">
+      <button id="artifactViewerBackBtn" class="artifact-back-btn" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to Session
+      </button>
+      <div id="artifactViewerTitle" class="artifact-viewer-title">Artifact Preview</div>
+      <a id="artifactViewerExternalBtn" class="artifact-external-btn" href="#" target="_blank" rel="noopener noreferrer">
+        Open ↗
+      </a>
+    </div>
+    <iframe id="artifactViewerFrame" class="artifact-viewer-frame" src="about:blank"></iframe>
   </div>
 
   <!-- Hidden print container — only visible during window.print() -->
@@ -2031,6 +2097,8 @@
         const turnRole = msg?.source === 'user' ? 'user' : 'agent';
         const turnContent = typeof msg?.message === 'string' ? msg.message : (typeof msg?.text === 'string' ? msg.text : null);
         if (turnContent) {
+          const liveTranscript = document.getElementById('transcript');
+          if (liveTranscript) liveTranscript.textContent = (turnRole === 'user' ? 'You: ' : 'Mark: ') + turnContent;
           fireConversationTurn(turnRole, turnContent, msg);
           // DURING-SESSION AUTOSAVE: every CHECKPOINT_EVERY_TURNS turns,
           // checkpoint what the server has captured so far (see
@@ -2133,43 +2201,93 @@
     }
 
     function directCallUi(state, text) {
-      const btn = document.getElementById('directCallBtn');
-      const status = document.getElementById('directCallStatus');
-      if (!btn || !status) return;
+      const orb = document.getElementById('orb');
+      const status = document.getElementById('status');
       const buddy = (typeof currentUser !== 'undefined' && currentUser && currentUser.buddyName) || 'Mark';
+
+      const btn = document.getElementById('directCallBtn');
+      const directStatus = document.getElementById('directCallStatus');
+      if (btn) {
+        if (state === 'idle') {
+          btn.disabled = false; btn.classList.remove('live');
+          btn.textContent = '🎙 Talk to ' + buddy;
+        } else if (state === 'connecting') {
+          btn.disabled = true; btn.classList.remove('live');
+          btn.textContent = 'Connecting…';
+        } else if (state === 'live') {
+          btn.disabled = false; btn.classList.add('live');
+          btn.textContent = '■ End call';
+        } else if (state === 'error') {
+          btn.disabled = false; btn.classList.remove('live');
+          btn.textContent = '🎙 Talk to ' + buddy;
+        }
+      }
+      if (directStatus) {
+        directStatus.style.display = state === 'idle' ? 'none' : 'block';
+        directStatus.textContent = text || (state === 'connecting' ? 'Starting the call…' : (state === 'live' ? 'Listening…' : 'Something went wrong.'));
+      }
+
+      // Hero Voice Orb & Status
       if (state === 'idle') {
-        btn.disabled = false; btn.classList.remove('live');
-        btn.textContent = '🎙 Talk to ' + buddy;
-        status.style.display = 'none';
+        if (orb) {
+          orb.className = 'orb';
+          orb.innerHTML = '<span class="orb-icon">🎙️</span>';
+        }
+        if (status) {
+          status.className = 'status';
+          status.textContent = 'Tap Mark to talk';
+        }
       } else if (state === 'connecting') {
-        btn.disabled = true; btn.classList.remove('live');
-        btn.textContent = 'Connecting…';
-        status.style.display = 'block'; status.textContent = 'Starting the call…';
+        if (orb) {
+          orb.className = 'orb thinking';
+          orb.innerHTML = '<span class="orb-icon">⚡</span>';
+        }
+        if (status) {
+          status.className = 'status thinking';
+          status.textContent = 'Connecting with ' + buddy + '…';
+        }
       } else if (state === 'live') {
-        btn.disabled = false; btn.classList.add('live');
-        btn.textContent = '■ End call';
-        status.style.display = 'block'; status.textContent = text || 'Listening…';
+        const isSpeaking = text && text.includes('talking');
+        if (orb) {
+          orb.className = 'orb ' + (isSpeaking ? 'speaking' : 'listening');
+          orb.innerHTML = '<span class="orb-icon">' + (isSpeaking ? '🔊' : '🎙️') + '</span>';
+        }
+        if (status) {
+          status.className = 'status ' + (isSpeaking ? 'speaking' : 'listening');
+          status.textContent = (text || 'Listening…') + ' (Tap Mark to end)';
+        }
       } else if (state === 'error') {
-        btn.disabled = false; btn.classList.remove('live');
-        btn.textContent = '🎙 Talk to ' + buddy;
-        status.style.display = 'block'; status.textContent = text || 'Something went wrong.';
+        if (orb) {
+          orb.className = 'orb';
+          orb.innerHTML = '<span class="orb-icon">⚠️</span>';
+        }
+        if (status) {
+          status.className = 'status';
+          status.textContent = text || 'Something went wrong. Tap to retry.';
+        }
       }
     }
 
     function startDirectLevels() {
       stopDirectLevels();
       directLevelsTimer = setInterval(() => {
-        if (!directSession) return;
+        if (!directSession) { stopDirectLevels(); return; }
         try {
-          cfBeacon('voice-levels', {
-            in: +directSession.getInputVolume().toFixed(3),
-            out: +directSession.getOutputVolume().toFixed(3),
-          });
-        } catch (e) { /* session already gone */ }
-      }, 5000);
+          const inVol = typeof directSession.getInputVolume === 'function' ? directSession.getInputVolume() : 0;
+          const outVol = typeof directSession.getOutputVolume === 'function' ? directSession.getOutputVolume() : 0;
+          const orb = document.getElementById('orb');
+          if (orb) {
+            const vol = Math.max(inVol, outVol);
+            const scale = 1 + Math.min(vol * 0.45, 0.4);
+            orb.style.transform = `scale(${scale.toFixed(3)})`;
+          }
+        } catch (e) {}
+      }, 100);
     }
     function stopDirectLevels() {
       if (directLevelsTimer) { clearInterval(directLevelsTimer); directLevelsTimer = null; }
+      const orb = document.getElementById('orb');
+      if (orb) orb.style.transform = '';
     }
 
     async function startDirectVoice(preparedConfig) {
@@ -2271,6 +2389,20 @@
 
     const directBtnEl = document.getElementById('directCallBtn');
     if (directBtnEl) directBtnEl.addEventListener('click', startDirectVoice);
+
+    async function onHeroOrbClick() {
+      if (directSession) {
+        directCallUi('connecting');
+        const s = directSession;
+        directSession = null;
+        try { await s.endSession(); } catch (e) {}
+        directCallUi('idle');
+      } else {
+        await startDirectVoice();
+      }
+    }
+    const heroOrbEl = document.getElementById('orb');
+    if (heroOrbEl) heroOrbEl.addEventListener('click', onHeroOrbClick);
 
     // pagehide fires for TWO very different situations, and treating them the
     // same is what used to end a call the moment the phone was pocketed:
@@ -3410,15 +3542,8 @@
         widget.setAttribute('id', 'convai-widget');
         widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
         mount.appendChild(widget);
-        document.body.classList.add('elevenlabs-mode');
       }
-      if (useDirectVoice) {
-        const pill = document.getElementById('directCallBtn');
-        if (pill) {
-          pill.style.display = 'block';
-          if (typeof directCallUi === 'function') directCallUi('idle');
-        }
-      }
+      if (typeof directCallUi === 'function') directCallUi('idle');
 
       // Mark first visit done
       if (user.firstVisit) {
@@ -4229,7 +4354,7 @@
 
         el.addEventListener('click', () => {
           if (item.type === 'artifact' || item.type === 'document') {
-            window.location.href = item.blobUrl;
+            openArtifactViewer(item);
           } else {
             openLightbox(item);
           }
@@ -4238,6 +4363,63 @@
         galleryGridEl.appendChild(el);
       }
     }
+
+    // ── In-App Artifact Viewer (Preserves Voice Call & App State) ──
+    function openArtifactViewer(item) {
+      const viewer = document.getElementById('artifactViewer');
+      const frame = document.getElementById('artifactViewerFrame');
+      const title = document.getElementById('artifactViewerTitle');
+      const ext = document.getElementById('artifactViewerExternalBtn');
+      if (!viewer || !frame) {
+        window.open(item.blobUrl, '_blank');
+        return;
+      }
+      title.textContent = item.caption || (item.type === 'artifact' ? 'Website / App' : 'Document');
+      if (ext) ext.href = item.blobUrl || '#';
+      frame.src = item.blobUrl || '';
+      viewer.classList.remove('hidden');
+    }
+
+    function closeArtifactViewer() {
+      const viewer = document.getElementById('artifactViewer');
+      const frame = document.getElementById('artifactViewerFrame');
+      if (viewer) viewer.classList.add('hidden');
+      if (frame) frame.src = 'about:blank';
+    }
+
+    const avBackBtn = document.getElementById('artifactViewerBackBtn');
+    if (avBackBtn) avBackBtn.addEventListener('click', closeArtifactViewer);
+
+    window.addEventListener('message', (e) => {
+      if (e.data === 'close-artifact-viewer' || e.data?.type === 'close-artifact-viewer' || e.data === 'close-artifact') {
+        closeArtifactViewer();
+      }
+    });
+
+    window.__cfHandleHardwareBack = function() {
+      const av = document.getElementById('artifactViewer');
+      if (av && !av.classList.contains('hidden')) {
+        closeArtifactViewer();
+        return true;
+      }
+      const lb = document.getElementById('galleryLightbox');
+      if (lb && !lb.classList.contains('hidden')) {
+        closeLightbox();
+        return true;
+      }
+      const gp = document.getElementById('galleryPanel');
+      if (gp && !gp.classList.contains('hidden')) {
+        closeGallery();
+        return true;
+      }
+      const sp = document.getElementById('settingsPanel');
+      if (sp && sp.style.display !== 'none' && !sp.classList.contains('hidden')) {
+        sp.classList.add('hidden');
+        sp.style.display = 'none';
+        return true;
+      }
+      return false;
+    };
 
     // ── Search (debounced, 500ms) ──────────────────────────────────
     gallerySearchEl.addEventListener('input', () => {
