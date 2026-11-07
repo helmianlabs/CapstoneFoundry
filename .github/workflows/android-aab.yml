@@ -1,0 +1,101 @@
+# Android AAB — the Play Store bundle build for Capstone Foundry.
+#
+# Produces a RELEASE .aab on an Ubuntu runner. FIRST VERSION: the bundle
+# is signed with a throwaway debug key generated inside the run itself,
+# so the pipeline can go green with zero secrets configured. That key is
+# NOT the Play upload key — this .aab proves the release build works; it
+# cannot be uploaded to Google Play. Store-ready signing needs the real
+# upload key (see CI-PLAN.md in this repo clone for the shopping list).
+#
+# How the signing works: android/app/build.gradle already reads a
+# signing.properties file from the -PsigningPropsFilePath Gradle property
+# (its built-in fallback path points at a folder on Troy's own build PC,
+# which does not exist on a CI runner — an empty signing config there
+# would fail bundleRelease). So this workflow writes its own
+# signing.properties for the throwaway key and passes the property in.
+
+name: Android AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android-aab.yml'
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  android-aab:
+    name: Release AAB (debug-key signed)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # AGP 8.13 / Gradle 8.14 (android/build.gradle, gradle-wrapper.properties)
+      # need JDK 17+; 21 matches the repo's existing android.yml.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: gradle
+
+      # variables.gradle pins compile/target SDK 36; make sure the
+      # platform and build-tools are present on the runner.
+      - name: Set up Android SDK 36
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # capacitor.config.ts uses webDir 'dist' even in remote-URL mode,
+      # so the web bundle must exist before cap sync.
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Generate the throwaway signing key for this run
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/ci-debug.keystore" \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+          cat > "$RUNNER_TEMP/signing.properties" <<PROPS
+          storeFile=$RUNNER_TEMP/ci-debug.keystore
+          storePassword=android
+          keyAlias=androiddebugkey
+          keyPassword=android
+          PROPS
+          echo "Signing properties written for the throwaway CI key (not a store key)."
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build the release AAB
+        run: |
+          cd android
+          ./gradlew bundleRelease -PsigningPropsFilePath="$RUNNER_TEMP/signing.properties"
+
+      - name: Upload the AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: capstonefoundry-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error

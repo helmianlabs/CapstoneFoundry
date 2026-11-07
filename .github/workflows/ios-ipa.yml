@@ -1,0 +1,108 @@
+# iOS IPA — the device build for Capstone Foundry, on a GitHub Mac.
+#
+# Produces an UNSIGNED .ipa (plus the .xcarchive it was packed from) on
+# a macOS runner. FIRST VERSION: no signing at all, so the pipeline can
+# go green with zero secrets configured. An unsigned .ipa proves the
+# full device build compiles and packages end to end; it cannot be
+# installed on a real iPhone or uploaded to TestFlight / the App Store.
+# Store-ready signing needs an Apple Distribution certificate, a
+# provisioning profile, and an App Store Connect API key (see
+# CI-PLAN.md for the shopping list). The repo's older ios.yml already
+# carries a signed-archive job for that later step.
+#
+# Why macos-15: Capacitor 8 needs Xcode 16+. The macos-15 image ships
+# Xcode 16.x; the repo's older ios.yml pins macos-14 (Xcode 15.x).
+# This repository is public, so macOS runner minutes are free.
+#
+# How an unsigned .ipa is made: xcodebuild archives with code signing
+# switched off, then the App.app inside the archive's
+# Products/Applications is zipped under a Payload/ folder — that zip,
+# renamed .ipa, is the standard unsigned package shape.
+
+name: iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ios-ipa.yml'
+      - 'ios/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  ios-ipa:
+    name: Unsigned IPA (device archive)
+    runs-on: macos-15
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Use the newest stable Xcode on the image
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show the Xcode in use
+        run: xcodebuild -version
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # capacitor.config.ts uses webDir 'dist' even in remote-URL mode,
+      # so the web bundle must exist before cap sync.
+      - name: Build the web bundle
+        run: npm run build
+
+      - name: Sync web assets into the iOS project
+        run: npx cap sync ios
+
+      - name: Install the iOS libraries (CocoaPods)
+        run: |
+          cd ios/App
+          pod install
+
+      - name: Archive the app (signing off)
+        run: |
+          xcodebuild archive \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/CapstoneFoundry.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_IDENTITY=""
+
+      - name: Pack the unsigned .ipa from the archive
+        run: |
+          rm -rf build/Payload
+          mkdir -p build/Payload
+          cp -R "build/CapstoneFoundry.xcarchive/Products/Applications/App.app" build/Payload/
+          cd build
+          zip -qry CapstoneFoundry-unsigned.ipa Payload
+          ls -la CapstoneFoundry-unsigned.ipa
+
+      - name: Zip the .xcarchive as a fallback artifact
+        run: |
+          ditto -c -k --keepParent \
+            build/CapstoneFoundry.xcarchive \
+            build/CapstoneFoundry.xcarchive.zip
+
+      - name: Upload the IPA and archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: capstonefoundry-unsigned-ipa
+          path: |
+            build/CapstoneFoundry-unsigned.ipa
+            build/CapstoneFoundry.xcarchive.zip
+          if-no-files-found: error
