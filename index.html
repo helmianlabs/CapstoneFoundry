@@ -10,6 +10,22 @@
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <title>Capstone Foundry</title>
+  <script>
+    (function() {
+      window.__allAudioContexts = window.__allAudioContexts || [];
+      const OrigAC = window.AudioContext || window.webkitAudioContext;
+      if (OrigAC) {
+        function PatchedAudioContext(opts) {
+          const ctx = opts !== undefined ? new OrigAC(opts) : new OrigAC();
+          window.__allAudioContexts.push(ctx);
+          return ctx;
+        }
+        PatchedAudioContext.prototype = OrigAC.prototype;
+        window.AudioContext = PatchedAudioContext;
+        if (window.webkitAudioContext) window.webkitAudioContext = PatchedAudioContext;
+      }
+    })();
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -2576,14 +2592,42 @@
     if (directBtnEl) directBtnEl.addEventListener('click', startDirectVoice);
 
     async function onHeroOrbClick() {
+      // 1. Direct gesture: resume all AudioContext instances immediately
+      if (Array.isArray(window.__allAudioContexts)) {
+        window.__allAudioContexts.forEach(ctx => {
+          try {
+            if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+              ctx.resume();
+            }
+          } catch (e) {}
+        });
+      }
+
+      function dispatchFullClick(el) {
+        if (!el) return;
+        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
+          try {
+            el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+          } catch (e) {}
+        });
+      }
+
       const widget = document.getElementById('convai-widget') || document.querySelector('elevenlabs-convai');
       const root = widget?.shadowRoot;
       if (root) {
+        // Unlock any shadow <audio> or document <audio>
+        root.querySelectorAll('audio').forEach(a => {
+          try { a.muted = false; a.volume = 1; if (a.paused) a.play().catch(() => {}); } catch (e) {}
+        });
+        document.querySelectorAll('audio').forEach(a => {
+          try { a.muted = false; a.volume = 1; if (a.paused) a.play().catch(() => {}); } catch (e) {}
+        });
+
         const getBtnText = (b) => (b.innerText || b.textContent || b.getAttribute('aria-label') || b.title || '').trim();
         const buttons = Array.from(root.querySelectorAll('button'));
         const agreeBtn = buttons.find(b => getBtnText(b).toLowerCase().includes('agree'));
         if (agreeBtn) {
-          agreeBtn.click();
+          dispatchFullClick(agreeBtn);
           await new Promise(r => setTimeout(r, 200));
         }
         const updatedButtons = Array.from(root.querySelectorAll('button'));
@@ -2603,7 +2647,7 @@
           if (!cfCallSession && !directSession && !endBtn) {
             directCallUi('connecting');
           }
-          targetBtn.click();
+          dispatchFullClick(targetBtn);
           return;
         }
       }
