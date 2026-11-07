@@ -20,7 +20,12 @@ async function apiRequest(path, options = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(path, { ...options, headers });
-  return res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Server returned invalid response: ${text.slice(0, 100)}`);
+  }
 }
 
 export async function initAvatarSystem() {
@@ -191,9 +196,10 @@ export async function initAvatarSystem() {
       const statement = 'I verify and authorize digital replica likeness consent under California AB 2602 / NO FAKES Act.';
 
       try {
-        const res = await apiRequest('/api/avatar/create', {
+        const res = await apiRequest('/api/avatar', {
           method: 'POST',
           body: JSON.stringify({
+            action: 'create',
             name,
             photo_url: photoUrl,
             consent_type: 'self',
@@ -219,7 +225,7 @@ export async function initAvatarSystem() {
           avatarSaveBtn.disabled = false;
         }
       } catch (err) {
-        if (avatarStatusMsg) avatarStatusMsg.textContent = 'Network error: ' + err.message;
+        if (avatarStatusMsg) avatarStatusMsg.textContent = err.message;
         avatarSaveBtn.disabled = false;
       }
     });
@@ -232,9 +238,9 @@ export async function initAvatarSystem() {
       if (!confirm('Are you sure you want to revoke and permanently delete this digital likeness?')) return;
 
       try {
-        await apiRequest('/api/avatar/revoke', {
+        await apiRequest('/api/avatar', {
           method: 'POST',
-          body: JSON.stringify({ avatar_id: currentAvatar.id }),
+          body: JSON.stringify({ action: 'revoke', avatar_id: currentAvatar.id }),
         });
         currentAvatar = null;
         pendingPhotoDataUrl = null;
