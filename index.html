@@ -2579,16 +2579,26 @@
       const widget = document.getElementById('convai-widget') || document.querySelector('elevenlabs-convai');
       const root = widget?.shadowRoot;
       if (root) {
+        const getBtnText = (b) => (b.innerText || b.textContent || b.getAttribute('aria-label') || b.title || '').trim();
         const buttons = Array.from(root.querySelectorAll('button'));
-        const agreeBtn = buttons.find(b => b.innerText && b.innerText.includes('Agree'));
+        const agreeBtn = buttons.find(b => getBtnText(b).toLowerCase().includes('agree'));
         if (agreeBtn) {
           agreeBtn.click();
-          await new Promise(r => setTimeout(r, 150));
+          await new Promise(r => setTimeout(r, 200));
         }
         const updatedButtons = Array.from(root.querySelectorAll('button'));
-        const endBtn = updatedButtons.find(b => (b.innerText && b.innerText.includes('End')) || b.title === 'End');
-        const startBtn = updatedButtons.find(b => (b.innerText && b.innerText.includes('Start a call')) || b.title?.includes('call') || (b.innerText && b.innerText.includes('Call')));
-        const targetBtn = endBtn || startBtn || updatedButtons[0];
+        const endBtn = updatedButtons.find(b => {
+          const t = getBtnText(b).toLowerCase();
+          return t.includes('end') || t.includes('disconnect') || t.includes('hang up');
+        });
+        const startBtn = updatedButtons.find(b => {
+          const t = getBtnText(b).toLowerCase();
+          return t.includes('start') || t.includes('call') || t.includes('talk');
+        });
+        const targetBtn = endBtn || startBtn || updatedButtons.find(b => {
+          const t = getBtnText(b).toLowerCase();
+          return !t.includes('copy') && !t.includes('close') && !t.includes('cancel');
+        });
         if (targetBtn) {
           if (!cfCallSession && !directSession && !endBtn) {
             directCallUi('connecting');
