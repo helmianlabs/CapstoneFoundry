@@ -34,6 +34,13 @@ export class HolographicAvatarEngine {
     if (!canvas) return;
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    const displayW = canvas.clientWidth || parseInt(canvas.style.width, 10) || 240;
+    const displayH = canvas.clientHeight || parseInt(canvas.style.height, 10) || 240;
+    if (displayW > 0 && displayH > 0 && (canvas.width !== Math.round(displayW * dpr))) {
+      canvas.width = Math.round(displayW * dpr);
+      canvas.height = Math.round(displayH * dpr);
+    }
     this.width = canvas.width || 240;
     this.height = canvas.height || 240;
     if (this.isLoaded && !this.rafId) {

@@ -63,19 +63,19 @@ jobs:
       - name: Build the web bundle
         run: npm run build
 
-      # cap sync runs pod install itself; with a stale spec repo it cannot
+      # cap sync runs pod install --repo-update itself; with a stale spec repo it cannot
       # resolve current pods (run #2: PurchasesHybridCommon 20.0.0 not found).
       # Refresh the spec repo first, as CocoaPods' own error suggests.
       - name: Refresh the CocoaPods spec repo
         run: pod repo update
 
       - name: Sync web assets into the iOS project
-        run: npx cap sync ios
+        run: npx cap sync ios --no-pod-install
 
       - name: Install the iOS libraries (CocoaPods)
         run: |
           cd ios/App
-          pod install
+          pod install --repo-update
 
       - name: Archive the app (signing off)
         run: |
