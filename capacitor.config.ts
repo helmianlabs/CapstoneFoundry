@@ -25,7 +25,7 @@ const config: CapacitorConfig = {
 
   // Remote-URL shell — loads live Vercel site
   server: {
-    url: 'https://capstonefoundry.vercel.app/app',
+    url: 'https://capstonefoundry.cloud/app',
     cleartext: false,   // HTTPS only — never allow HTTP
     androidScheme: 'https',
   },

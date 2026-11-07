@@ -46,6 +46,13 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Capstone Foundry listens so you can talk to your buddy hands-free.</string>
+	<string>Capstone Foundry requires microphone access for real-time executive voice pair programming with Mark.</string>
+	<!-- Camera & Photo Library for Digital Avatar (Capacitor Camera) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Capstone Foundry uses your camera to capture photos or short video loops for your custom digital avatar.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Capstone Foundry accesses your photo library so you can select photos or videos to personalize your digital avatar.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Capstone Foundry saves generated avatar renders and project exports to your photo library.</string>
 </dict>
 </plist>
