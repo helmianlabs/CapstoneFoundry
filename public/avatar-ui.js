@@ -93,22 +93,47 @@ export async function initAvatarSystem() {
   }
 
   // Photo upload handler
-  if (avatarUploadBtn && avatarFileInput) {
-    avatarUploadBtn.addEventListener('click', () => avatarFileInput.click());
-    avatarFileInput.addEventListener('change', (e) => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        pendingPhotoDataUrl = evt.target.result;
-        if (studioEngine) {
-          await studioEngine.loadPhoto(pendingPhotoDataUrl);
-          if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
+  if (avatarUploadBtn) {
+    avatarUploadBtn.addEventListener('click', async () => {
+      if (window.Capacitor?.Plugins?.Camera) {
+        try {
+          const image = await window.Capacitor.Plugins.Camera.getPhoto({
+            quality: 85,
+            allowEditing: false,
+            source: 'PHOTOS',
+            resultType: 'dataUrl',
+          });
+          if (image?.dataUrl) {
+            pendingPhotoDataUrl = image.dataUrl;
+            if (studioEngine) {
+              await studioEngine.loadPhoto(pendingPhotoDataUrl);
+              if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
+            }
+            checkCanSave();
+            return;
+          }
+        } catch (err) {
+          console.warn('[avatar-ui] Photos picker canceled or failed:', err);
         }
-        checkCanSave();
-      };
-      reader.readAsDataURL(file);
+      }
+      if (avatarFileInput) avatarFileInput.click();
     });
+    if (avatarFileInput) {
+      avatarFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          pendingPhotoDataUrl = evt.target.result;
+          if (studioEngine) {
+            await studioEngine.loadPhoto(pendingPhotoDataUrl);
+            if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
+          }
+          checkCanSave();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
   }
 
   // Native camera handler
@@ -118,7 +143,8 @@ export async function initAvatarSystem() {
         try {
           const image = await window.Capacitor.Plugins.Camera.getPhoto({
             quality: 85,
-            allowEditing: true,
+            allowEditing: false,
+            source: 'CAMERA',
             resultType: 'dataUrl',
           });
           if (image?.dataUrl) {
