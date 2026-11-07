@@ -188,6 +188,14 @@
       align-items: center;
       gap: 10px;
     }
+    
+    .comp-avatar-mini.speaking {
+      border-color: #00ff88 !important;
+      box-shadow: 0 0 15px #00ff88, 0 0 25px rgba(0, 255, 136, 0.4) !important;
+      transform: scale(1.08);
+      transition: all 0.2s ease;
+    }
+
     .comp-avatar-mini {
       width: 32px;
       height: 32px;
@@ -600,7 +608,7 @@
     <div class="comp-header" id="compToggleHeader" title="Click to minimize/expand">
       <div class="comp-title">
         <div class="comp-avatar-mini">
-          <canvas id="compAvatarCanvas" width="96" height="96"></canvas>
+          <img id="compAvatarImg" src="/mark-avatar.jpg" alt="Mark" style="width:100%; height:100%; object-fit:cover; display:block;" />
         </div>
         <div>
           <div class="comp-name">Mark <span class="comp-tag">Executive AI</span></div>
@@ -742,6 +750,7 @@
     }
 
     // Studio ElevenLabs Audio Player (Real Voices, Zero Robotic TTS)
+    const playDialogue = function(d) { playStudioDialogue(d); };
     function playStudioDialogue(data) {
       if (currentAudio) {
         currentAudio.pause();
@@ -762,14 +771,18 @@
         const audioMark = new Audio(data.markAudio);
         currentAudio = audioMark;
 
+        const avatarBox = document.querySelector('.comp-avatar-mini');
         audioMark.onplay = () => {
+          if (avatarBox) avatarBox.classList.add('speaking');
           if (avatarEngine) avatarEngine.startLipSync(32);
         };
         audioMark.onended = () => {
+          if (avatarBox) avatarBox.classList.remove('speaking');
           if (statusText) statusText.textContent = 'Live Interactive Demo';
           if (avatarEngine) avatarEngine.stopLipSync();
         };
         audioMark.onerror = () => {
+          if (avatarBox) avatarBox.classList.remove('speaking');
           if (statusText) statusText.textContent = 'Live Interactive Demo';
           if (avatarEngine) avatarEngine.stopLipSync();
         };
@@ -792,7 +805,7 @@
     if (playBtn) {
       playBtn.addEventListener('click', () => {
         const sc = scenarios[activeScenario];
-        if (sc) playDialogue(sc);
+        if (sc) playStudioDialogue(sc);
       });
     }
 
