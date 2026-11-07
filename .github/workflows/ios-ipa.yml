@@ -70,7 +70,7 @@ jobs:
         run: pod repo update
 
       - name: Sync web assets into the iOS project
-        run: npx cap sync ios --no-pod-install
+        run: npx cap copy ios
 
       - name: Install the iOS libraries (CocoaPods)
         run: |
