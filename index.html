@@ -461,8 +461,18 @@
     .footer-note a { color: #6b7280; text-decoration: underline; cursor: pointer; }
     .footer-note a:hover { color: #00d4ff; }
 
-    /* ElevenLabs generic widget permanently hidden — our custom glowing Orb is the hero voice surface */
-    elevenlabs-convai, #convai-widget { display: none !important; }
+    /* Off-screen invisible ElevenLabs widget — our custom glowing Orb is the hero voice surface */
+    #widget-mount, elevenlabs-convai, #convai-widget {
+      position: fixed !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0.001 !important;
+      pointer-events: none !important;
+      left: -9999px !important;
+      bottom: -9999px !important;
+      overflow: hidden !important;
+      z-index: -100 !important;
+    }
 
     /* ─── In-App Artifact Viewer Modal ────────────────────────────── */
     .artifact-viewer {
@@ -2080,7 +2090,14 @@
         lastConversationId = info?.conversationId || null;
         console.log('[MEM-HB] onConnect fired — conversationId:', lastConversationId);
         document.dispatchEvent(new CustomEvent('thinkinbuddy:call-connected'));
+        directCallUi('live', 'Listening…');
         if (typeof userOnConnect === 'function') try { userOnConnect(info); } catch {}
+      };
+      const userOnModeChange = cfg.onModeChange;
+      cfg.onModeChange = (m) => {
+        const mode = (m && m.mode) || m;
+        directCallUi('live', mode === 'speaking' ? 'Mark is talking…' : 'Listening…');
+        if (typeof userOnModeChange === 'function') try { userOnModeChange(m); } catch {}
       };
       const userOnMessage = cfg.onMessage;
       cfg.onMessage = (msg) => {
@@ -2095,6 +2112,7 @@
         // Live turn capture: JS SDK onMessage payload is {message, source}
         // (source: 'user'|'ai') per ElevenLabs' documented client SDK shape.
         const turnRole = msg?.source === 'user' ? 'user' : 'agent';
+        directCallUi('live', turnRole === 'agent' ? 'Mark is talking…' : 'Listening…');
         const turnContent = typeof msg?.message === 'string' ? msg.message : (typeof msg?.text === 'string' ? msg.text : null);
         if (turnContent) {
           const liveTranscript = document.getElementById('transcript');
@@ -2156,7 +2174,10 @@
         stopImagePoller();
         stopVideoPoller();
         widgetCallActive = false;
+        cfCallSession = null;
         stopCheckpointTimer();
+        stopDirectLevels();
+        directCallUi('idle');
         // Forced final checkpoint FIRST: it extracts from the turns the
         // server already holds, so the call's memories land even if the
         // extract-memories transcript fetch fails.
@@ -2271,10 +2292,11 @@
     function startDirectLevels() {
       stopDirectLevels();
       directLevelsTimer = setInterval(() => {
-        if (!directSession) { stopDirectLevels(); return; }
+        const s = directSession || cfCallSession;
+        if (!s) { stopDirectLevels(); return; }
         try {
-          const inVol = typeof directSession.getInputVolume === 'function' ? directSession.getInputVolume() : 0;
-          const outVol = typeof directSession.getOutputVolume === 'function' ? directSession.getOutputVolume() : 0;
+          const inVol = typeof s.getInputVolume === 'function' ? s.getInputVolume() : 0;
+          const outVol = typeof s.getOutputVolume === 'function' ? s.getOutputVolume() : 0;
           const orb = document.getElementById('orb');
           if (orb) {
             const vol = Math.max(inVol, outVol);
@@ -2391,6 +2413,15 @@
     if (directBtnEl) directBtnEl.addEventListener('click', startDirectVoice);
 
     async function onHeroOrbClick() {
+      const widget = document.getElementById('convai-widget') || document.querySelector('elevenlabs-convai');
+      const widgetBtn = widget && widget.shadowRoot ? widget.shadowRoot.querySelector('button') : null;
+      if (widgetBtn) {
+        if (!cfCallSession && !directSession) {
+          directCallUi('connecting');
+        }
+        widgetBtn.click();
+        return;
+      }
       if (directSession) {
         directCallUi('connecting');
         const s = directSession;
@@ -3537,11 +3568,14 @@
       // <elevenlabs-convai> — the direct SDK records 0.0s of user audio.
       const useDirectVoice = (typeof directVoiceWanted === 'function') && directVoiceWanted();
       const mount = document.getElementById('widget-mount');
-      if (mount && !useDirectVoice) {
-        const widget = document.createElement('elevenlabs-convai');
-        widget.setAttribute('id', 'convai-widget');
-        widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
-        mount.appendChild(widget);
+      if (mount) {
+        let widget = document.getElementById('convai-widget');
+        if (!widget) {
+          widget = document.createElement('elevenlabs-convai');
+          widget.setAttribute('id', 'convai-widget');
+          widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
+          mount.appendChild(widget);
+        }
       }
       if (typeof directCallUi === 'function') directCallUi('idle');
 
