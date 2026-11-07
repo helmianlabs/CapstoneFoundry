@@ -1,0 +1,1 @@
+postgresql://neondb_owner:npg_FxA6CY3aUSdt@ep-dry-fog-aku9i5gq.c-3.us-west-2.aws.neon.tech/thinkinbuddy_memory?sslmode=require
