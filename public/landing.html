@@ -454,7 +454,7 @@
       </p>
 
       <div class="hero-cta">
-        <a href="/" class="btn-primary">Launch Live Voice Session</a>
+        <a href="/app" class="btn-primary">Launch Live Voice Session</a>
         <a href="/mark-android.apk" class="btn-secondary">Download Android APK</a>
       </div>
 
@@ -646,7 +646,7 @@
         </div>
         <div class="dialog-msg mark" id="msgMark">
           <span class="dialog-speaker mark">Mark (Executive AI):</span>
-          <span class="dialog-text" id="txtMark">"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer."</span>
+          <span class="dialog-text" id="txtMark">"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer."`</span>
         </div>
       </div>
 
@@ -678,7 +678,7 @@
         <button class="comp-voice-btn" id="compPlayBtn" type="button">
           ▶ Play Studio Voice Dialogue
         </button>
-        <a href="/" class="comp-live-link">Open Full App &rarr;</a>
+        <a href="/app" class="comp-live-link">Open Full App &rarr;</a>
       </div>
     </div>
   </aside>
@@ -693,7 +693,7 @@
         mId: 'audioM1',
         targetId: 'features',
         q: '"Mark, I want to launch a mobile equipment detailing business next week. What do I actually need to do first?"',
-        a: '"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer."'
+        a: "\"Don't buy expensive equipment yet. Call five commercial fleet managers, pitch weekly maintenance, and lock down two contracts. Once cash is in hand, we buy the trailer.\""
       },
       2: {
         fId: 'audioF2',
@@ -909,7 +909,7 @@
       } else if (window.history.length > 1) {
         window.history.back();
       } else {
-        window.location.href = '/';
+        window.location.href = '/app';
       }
     }
     const bBtn = document.getElementById('cfBackBtn');

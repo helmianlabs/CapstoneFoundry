@@ -2,6 +2,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/app", "destination": "/app.html" }
+  ],
   "functions": {
     "api/[...path].js": {
       "maxDuration": 300
