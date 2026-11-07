@@ -2534,13 +2534,25 @@
 
     async function onHeroOrbClick() {
       const widget = document.getElementById('convai-widget') || document.querySelector('elevenlabs-convai');
-      const widgetBtn = widget && widget.shadowRoot ? widget.shadowRoot.querySelector('button') : null;
-      if (widgetBtn) {
-        if (!cfCallSession && !directSession) {
-          directCallUi('connecting');
+      const root = widget?.shadowRoot;
+      if (root) {
+        const buttons = Array.from(root.querySelectorAll('button'));
+        const agreeBtn = buttons.find(b => b.innerText && b.innerText.includes('Agree'));
+        if (agreeBtn) {
+          agreeBtn.click();
+          await new Promise(r => setTimeout(r, 150));
         }
-        widgetBtn.click();
-        return;
+        const updatedButtons = Array.from(root.querySelectorAll('button'));
+        const endBtn = updatedButtons.find(b => (b.innerText && b.innerText.includes('End')) || b.title === 'End');
+        const startBtn = updatedButtons.find(b => (b.innerText && b.innerText.includes('Start a call')) || b.title?.includes('call') || (b.innerText && b.innerText.includes('Call')));
+        const targetBtn = endBtn || startBtn || updatedButtons[0];
+        if (targetBtn) {
+          if (!cfCallSession && !directSession && !endBtn) {
+            directCallUi('connecting');
+          }
+          targetBtn.click();
+          return;
+        }
       }
       if (directSession) {
         directCallUi('connecting');
