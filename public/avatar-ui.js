@@ -8,7 +8,24 @@ let pendingPhotoDataUrl = null;
 
 function getAuthToken() {
   try {
-    return localStorage.getItem('thinkinbuddy_session_token') || localStorage.getItem('token') || '';
+    return (
+      localStorage.getItem('tb_token') ||
+      localStorage.getItem('thinkinbuddy_session_token') ||
+      localStorage.getItem('token') ||
+      ''
+    );
+  } catch {
+    return '';
+  }
+}
+
+function getTenantId() {
+  try {
+    return (
+      localStorage.getItem('tb_tenant') ||
+      localStorage.getItem('thinkinbuddy_user_id') ||
+      ''
+    );
   } catch {
     return '';
   }
@@ -16,15 +33,20 @@ function getAuthToken() {
 
 async function apiRequest(path, options = {}) {
   const token = getAuthToken();
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const tenantId = getTenantId();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (tenantId) headers['X-Tenant-Id'] = tenantId;
 
   const res = await fetch(path, { ...options, headers });
   const text = await res.text();
   try {
     return JSON.parse(text);
   } catch (err) {
-    throw new Error(`Server returned invalid response: ${text.slice(0, 100)}`);
+    throw new Error(`Server response error: ${text.slice(0, 100)}`);
   }
 }
 
@@ -194,6 +216,7 @@ export async function initAvatarSystem() {
       const photoUrl = pendingPhotoDataUrl || currentAvatar?.photo_url;
       const name = avatarNameInput ? avatarNameInput.value.trim() : 'Avatar';
       const statement = 'I verify and authorize digital replica likeness consent under California AB 2602 / NO FAKES Act.';
+      const tenantId = getTenantId();
 
       try {
         const res = await apiRequest('/api/avatar', {
@@ -204,6 +227,7 @@ export async function initAvatarSystem() {
             photo_url: photoUrl,
             consent_type: 'self',
             statement,
+            tenantId,
           }),
         });
 
@@ -240,7 +264,7 @@ export async function initAvatarSystem() {
       try {
         await apiRequest('/api/avatar', {
           method: 'POST',
-          body: JSON.stringify({ action: 'revoke', avatar_id: currentAvatar.id }),
+          body: JSON.stringify({ action: 'revoke', avatar_id: currentAvatar.id, tenantId: getTenantId() }),
         });
         currentAvatar = null;
         pendingPhotoDataUrl = null;
