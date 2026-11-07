@@ -51,8 +51,17 @@ async function apiRequest(path, options = {}) {
 }
 
 export async function initAvatarSystem() {
-  const orbCanvas = document.getElementById('avatarCanvas');
-  const orbIcon = document.getElementById('orbIcon') || (document.getElementById('orb') && document.getElementById('orb').querySelector('.orb-icon'));
+  const orb = document.getElementById('orb');
+  let orbCanvas = document.getElementById('avatarCanvas');
+  if (orb && !orbCanvas) {
+    orbCanvas = document.createElement('canvas');
+    orbCanvas.id = 'avatarCanvas';
+    orbCanvas.width = 240;
+    orbCanvas.height = 240;
+    orbCanvas.style.cssText = 'display:none; position:absolute; inset:0; width:100%; height:100%; border-radius:50%; object-fit:cover; z-index:1; pointer-events:none;';
+    orb.insertBefore(orbCanvas, orb.firstChild);
+  }
+  const orbIcon = document.getElementById('orbIcon') || (orb && orb.querySelector('.orb-icon'));
   const studioCanvas = document.getElementById('avatarStudioCanvas');
   const avatarModal = document.getElementById('avatarModal');
   const avatarStudioBtn = document.getElementById('avatarStudioBtn');
@@ -68,13 +77,23 @@ export async function initAvatarSystem() {
   const avatarPlaceholder = document.getElementById('avatarPlaceholder');
 
   if (orbCanvas) {
-    orbEngine = new HolographicAvatarEngine(orbCanvas);
-    window.__cfAvatarEngine = orbEngine;
+    if (!orbEngine) {
+      orbEngine = new HolographicAvatarEngine(orbCanvas);
+      window.__cfAvatarEngine = orbEngine;
+    } else {
+      orbEngine.attachCanvas(orbCanvas);
+    }
   }
 
-  if (studioCanvas) {
+  if (studioCanvas && !studioEngine) {
     studioEngine = new HolographicAvatarEngine(studioCanvas);
   }
+
+  // Expose global controller
+  window.__cfAvatarUi = {
+    initAvatarSystem,
+    getActiveAvatar: () => currentAvatar,
+  };
 
   // Load existing active avatar from Neon DB
   try {

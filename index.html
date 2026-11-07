@@ -40,6 +40,8 @@
     .subtitle { font-size: 0.65rem; letter-spacing: 0.2em; color: #4a5568; margin-bottom: 50px; z-index: 2; text-align: center; padding: 0 20px; }
 
     .orb {
+      position: relative;
+      overflow: hidden;
       width: 120px; height: 120px;
       border-radius: 50%;
       background: radial-gradient(circle at 35% 35%, #1a3a4a, #050508);
@@ -51,6 +53,16 @@
       z-index: 2;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+    }
+    #avatarCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      pointer-events: none;
+      z-index: 1;
     }
     .orb:hover { box-shadow: 0 0 40px rgba(0,212,255,0.15); }
     .orb.listening {
@@ -2365,43 +2377,74 @@
         directStatus.textContent = text || (state === 'connecting' ? 'Starting the call…' : (state === 'live' ? 'Listening…' : 'Something went wrong.'));
       }
 
-      // Hero Voice Orb & Status
-      if (state === 'idle') {
-        if (orb) {
-          orb.className = 'orb';
-          orb.innerHTML = '<span class="orb-icon">🎙️</span>';
+      // Hero Voice Orb & Status — Preserving Holographic Avatar Canvas
+      let orbCanvas = orb ? orb.querySelector('#avatarCanvas') : null;
+      if (orb && !orbCanvas) {
+        orbCanvas = document.createElement('canvas');
+        orbCanvas.id = 'avatarCanvas';
+        orbCanvas.width = 240;
+        orbCanvas.height = 240;
+        orbCanvas.style.cssText = 'display:none; position:absolute; inset:0; width:100%; height:100%; border-radius:50%; object-fit:cover; z-index:1; pointer-events:none;';
+        orb.insertBefore(orbCanvas, orb.firstChild);
+        if (window.__cfAvatarEngine && typeof window.__cfAvatarEngine.attachCanvas === 'function') {
+          window.__cfAvatarEngine.attachCanvas(orbCanvas);
         }
+      }
+      let orbIcon = orb ? orb.querySelector('.orb-icon') : null;
+      if (orb && !orbIcon) {
+        orbIcon = document.createElement('span');
+        orbIcon.className = 'orb-icon';
+        orbIcon.id = 'orbIcon';
+        orbIcon.style.position = 'relative';
+        orbIcon.style.zIndex = '2';
+        orb.appendChild(orbIcon);
+      }
+
+      const hasAvatar = Boolean(window.__cfAvatarEngine && window.__cfAvatarEngine.isLoaded && orbCanvas && orbCanvas.style.display !== 'none');
+      if (orbIcon) {
+        orbIcon.style.display = hasAvatar ? 'none' : 'inline-block';
+      }
+
+      if (state === 'idle') {
+        if (orb) orb.className = 'orb';
+        if (orbIcon && !hasAvatar) orbIcon.textContent = '🎙️';
         if (status) {
           status.className = 'status';
           status.textContent = 'Tap Mark to talk';
         }
-      } else if (state === 'connecting') {
-        if (orb) {
-          orb.className = 'orb thinking';
-          orb.innerHTML = '<span class="orb-icon">⚡</span>';
+        if (window.__cfAvatarEngine && typeof window.__cfAvatarEngine.setSpeaking === 'function') {
+          window.__cfAvatarEngine.setSpeaking(false);
         }
+      } else if (state === 'connecting') {
+        if (orb) orb.className = 'orb thinking';
+        if (orbIcon && !hasAvatar) orbIcon.textContent = '⚡';
         if (status) {
           status.className = 'status thinking';
           status.textContent = 'Connecting with ' + buddy + '…';
         }
+        if (window.__cfAvatarEngine && typeof window.__cfAvatarEngine.setSpeaking === 'function') {
+          window.__cfAvatarEngine.setSpeaking(false);
+        }
       } else if (state === 'live') {
         const isSpeaking = text && text.includes('talking');
-        if (orb) {
-          orb.className = 'orb ' + (isSpeaking ? 'speaking' : 'listening');
-          orb.innerHTML = '<span class="orb-icon">' + (isSpeaking ? '🔊' : '🎙️') + '</span>';
-        }
+        if (orb) orb.className = 'orb ' + (isSpeaking ? 'speaking' : 'listening');
+        if (orbIcon && !hasAvatar) orbIcon.textContent = isSpeaking ? '🔊' : '🎙️';
         if (status) {
           status.className = 'status ' + (isSpeaking ? 'speaking' : 'listening');
           status.textContent = (text || 'Listening…') + ' (Tap Mark to end)';
         }
-      } else if (state === 'error') {
-        if (orb) {
-          orb.className = 'orb';
-          orb.innerHTML = '<span class="orb-icon">⚠️</span>';
+        if (window.__cfAvatarEngine && typeof window.__cfAvatarEngine.setSpeaking === 'function') {
+          window.__cfAvatarEngine.setSpeaking(Boolean(isSpeaking));
         }
+      } else if (state === 'error') {
+        if (orb) orb.className = 'orb';
+        if (orbIcon && !hasAvatar) orbIcon.textContent = '⚠️';
         if (status) {
           status.className = 'status';
           status.textContent = text || 'Something went wrong. Tap to retry.';
+        }
+        if (window.__cfAvatarEngine && typeof window.__cfAvatarEngine.setSpeaking === 'function') {
+          window.__cfAvatarEngine.setSpeaking(false);
         }
       }
     }

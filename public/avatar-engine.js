@@ -5,7 +5,7 @@
 export class HolographicAvatarEngine {
   constructor(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.ctx = canvas ? canvas.getContext('2d') : null;
     this.image = null;
     this.isLoaded = false;
     this.isActive = false;
@@ -17,13 +17,25 @@ export class HolographicAvatarEngine {
     this.mouthOpen = 0;
     this.targetMouthOpen = 0;
     this.audioLevel = 0;
+    this.isSpeaking = false;
     this.time = 0;
 
     // Canvas sizing
-    this.width = canvas.width || 240;
-    this.height = canvas.height || 240;
+    this.width = canvas?.width || 240;
+    this.height = canvas?.height || 240;
 
     this.rafId = null;
+  }
+
+  attachCanvas(canvas) {
+    if (!canvas) return;
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.width = canvas.width || 240;
+    this.height = canvas.height || 240;
+    if (this.isLoaded && !this.rafId) {
+      this.start();
+    }
   }
 
   loadPhoto(url) {
@@ -44,8 +56,14 @@ export class HolographicAvatarEngine {
 
   setAudioLevel(level) {
     this.audioLevel = Math.max(0, Math.min(1, level));
-    // Amplify speech formant energy into mouth opening
     this.targetMouthOpen = Math.min(1, Math.pow(this.audioLevel * 1.8, 1.2));
+  }
+
+  setSpeaking(speaking) {
+    this.isSpeaking = Boolean(speaking);
+    if (!speaking && this.audioLevel === 0) {
+      this.targetMouthOpen = 0;
+    }
   }
 
   start() {
@@ -78,12 +96,22 @@ export class HolographicAvatarEngine {
       }
     }
 
-    // 2. Smooth mouth interpolation
+    // 2. Speech animation
+    if (this.isSpeaking && this.audioLevel < 0.05) {
+      // Natural speech cadence simulation when raw audio volume is not available
+      const syllable = Math.max(0, Math.sin(this.time * 13.0) * Math.cos(this.time * 7.0));
+      this.targetMouthOpen = syllable * 0.7;
+    }
+
+    // 3. Smooth mouth interpolation
     this.mouthOpen += (this.targetMouthOpen - this.mouthOpen) * 0.35;
   }
 
   render() {
+    if (!this.canvas) return;
+    if (!this.ctx) this.ctx = this.canvas.getContext('2d');
     if (!this.ctx || !this.image || !this.isLoaded) return;
+
     const ctx = this.ctx;
     const w = this.canvas.width;
     const h = this.canvas.height;
@@ -137,21 +165,31 @@ export class HolographicAvatarEngine {
       ctx.restore();
     }
 
-    // Natural eye blink overlay
+    // Natural eye blink overlay using eyelid skin texture
     if (this.blinkState > 0.1) {
       const blinkProgress = Math.sin(this.blinkState * Math.PI); // 0 -> 1 -> 0
       const eyeY = h * 0.40;
-      const eyeH = h * 0.12 * blinkProgress;
+      const eyeH = h * 0.08 * blinkProgress;
       const leftEyeX = w * 0.32;
       const rightEyeX = w * 0.68;
       const eyeRadius = w * 0.10;
 
       ctx.save();
-      ctx.fillStyle = 'rgba(20, 25, 35, 0.85)';
       ctx.beginPath();
       ctx.ellipse(leftEyeX, eyeY, eyeRadius, eyeH, 0, 0, Math.PI * 2);
       ctx.ellipse(rightEyeX, eyeY, eyeRadius, eyeH, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.clip();
+      ctx.drawImage(
+        this.image,
+        sx + minDim * 0.22,
+        sy + minDim * 0.34,
+        minDim * 0.56,
+        minDim * 0.08,
+        leftEyeX - eyeRadius,
+        eyeY - eyeH,
+        (rightEyeX + eyeRadius) - (leftEyeX - eyeRadius),
+        eyeH * 2
+      );
       ctx.restore();
     }
 
@@ -173,9 +211,10 @@ export class HolographicAvatarEngine {
     ctx.fillRect(0, 0, w, h);
 
     // 2. Reactive audio flare
-    if (this.audioLevel > 0.15) {
-      ctx.strokeStyle = `rgba(0, 255, 200, ${this.audioLevel * 0.4})`;
-      ctx.lineWidth = 2 + this.audioLevel * 3;
+    if (this.audioLevel > 0.15 || this.isSpeaking) {
+      const lvl = Math.max(this.audioLevel, this.isSpeaking ? 0.35 : 0);
+      ctx.strokeStyle = `rgba(0, 255, 200, ${lvl * 0.4})`;
+      ctx.lineWidth = 2 + lvl * 3;
       ctx.beginPath();
       ctx.arc(w / 2, h / 2, (w / 2) - 3, 0, Math.PI * 2);
       ctx.stroke();
