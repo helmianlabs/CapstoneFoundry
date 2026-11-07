@@ -85,6 +85,13 @@ jobs:
           PROPS
           echo "Signing properties written for the throwaway CI key (not a store key)."
 
+      # The committed android/gradle.properties pins org.gradle.java.home to
+      # the JDK path on Troy's PC; that path does not exist on the runner and
+      # Gradle refuses to start. Strip the line in the runner's copy only —
+      # the repo file is untouched.
+      - name: Drop the PC-specific Java home (runner copy only)
+        run: sed -i '/^org.gradle.java.home/d' android/gradle.properties
+
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
