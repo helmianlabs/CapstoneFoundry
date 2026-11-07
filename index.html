@@ -2631,7 +2631,23 @@
     const directBtnEl = document.getElementById('directCallBtn');
     if (directBtnEl) directBtnEl.addEventListener('click', startDirectVoice);
 
-    async function onHeroOrbClick() {
+    let isOrbThrottled = false;
+    async function onHeroOrbClick(e) {
+      if (e) {
+        try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
+      }
+      if (isOrbThrottled) {
+        console.log('[ORB] Ignored duplicate tap during debounce');
+        return;
+      }
+      isOrbThrottled = true;
+      setTimeout(() => { isOrbThrottled = false; }, 1200);
+
+      // Haptic confirmation
+      if (navigator.vibrate) {
+        try { navigator.vibrate(40); } catch (err) {}
+      }
+
       // 1. Direct gesture: resume all AudioContext instances immediately
       if (Array.isArray(window.__allAudioContexts)) {
         window.__allAudioContexts.forEach(ctx => {
