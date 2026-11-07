@@ -18,12 +18,42 @@
         function PatchedAudioContext(opts) {
           const ctx = opts !== undefined ? new OrigAC(opts) : new OrigAC();
           window.__allAudioContexts.push(ctx);
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(function() {});
+          }
+          ctx.addEventListener('statechange', function() {
+            if (ctx.state === 'suspended') {
+              ctx.resume().catch(function() {});
+            }
+          });
           return ctx;
         }
         PatchedAudioContext.prototype = OrigAC.prototype;
         window.AudioContext = PatchedAudioContext;
         if (window.webkitAudioContext) window.webkitAudioContext = PatchedAudioContext;
       }
+
+      setInterval(function() {
+        if (Array.isArray(window.__allAudioContexts)) {
+          window.__allAudioContexts.forEach(function(ctx) {
+            if (ctx && ctx.state === 'suspended') {
+              ctx.resume().catch(function() {});
+            }
+          });
+        }
+      }, 250);
+
+      ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'click'].forEach(function(evt) {
+        window.addEventListener(evt, function() {
+          if (Array.isArray(window.__allAudioContexts)) {
+            window.__allAudioContexts.forEach(function(ctx) {
+              if (ctx && ctx.state === 'suspended') {
+                ctx.resume().catch(function() {});
+              }
+            });
+          }
+        }, { passive: true, capture: true });
+      });
     })();
   </script>
   <style>
@@ -1296,6 +1326,11 @@
     <span class="orb-icon" id="orbIcon">🎙️</span>
   </div>
   <div class="status" id="status">TAP TO START</div>
+  <div id="endCallContainer" style="display:none; margin-top:14px; z-index:4;">
+    <button id="heroEndCallBtn" type="button" style="background:#dc2626; color:#ffffff; border:1px solid #ef4444; border-radius:9999px; padding:10px 28px; font-family:monospace; font-size:0.85rem; font-weight:bold; letter-spacing:0.05em; cursor:pointer; box-shadow:0 0 20px rgba(220,38,38,0.5); display:inline-flex; align-items:center; gap:8px;">
+      <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#fff;"></span> HANG UP / END CALL
+    </button>
+  </div>
   <div class="transcript" id="transcript"></div>
   <button class="report-answer-btn" id="reportAnswerBtn" type="button">Report this answer</button>
 
@@ -2371,6 +2406,11 @@
       const status = document.getElementById('status');
       const buddy = (typeof currentUser !== 'undefined' && currentUser && currentUser.buddyName) || 'Mark';
 
+      const endCallWrap = document.getElementById('endCallContainer');
+      if (endCallWrap) {
+        endCallWrap.style.display = (state === 'live' || state === 'speaking') ? 'block' : 'none';
+      }
+
       const btn = document.getElementById('directCallBtn');
       const directStatus = document.getElementById('directCallStatus');
       if (btn) {
@@ -2662,7 +2702,39 @@
       }
     }
     const heroOrbEl = document.getElementById('orb');
-    if (heroOrbEl) heroOrbEl.addEventListener('click', onHeroOrbClick);
+    if (heroOrbEl) {
+      heroOrbEl.addEventListener('click', onHeroOrbClick);
+    }
+    const heroEndBtnEl = document.getElementById('heroEndCallBtn');
+    if (heroEndBtnEl) {
+      heroEndBtnEl.addEventListener('click', onHeroOrbClick);
+    }
+
+    // 250ms Sync Watcher: keep Orb UI in lockstep with ElevenLabs shadow DOM state
+    setInterval(() => {
+      const widget = document.getElementById('convai-widget') || document.querySelector('elevenlabs-convai');
+      const root = widget?.shadowRoot;
+      if (!root) return;
+      const getBtnText = (b) => (b.innerText || b.textContent || b.getAttribute('aria-label') || b.title || '').trim();
+      const buttons = Array.from(root.querySelectorAll('button'));
+      const endBtn = buttons.find(b => {
+        const t = getBtnText(b).toLowerCase();
+        return t.includes('end') || t.includes('disconnect') || t.includes('hang up');
+      });
+
+      if (endBtn) {
+        // Call is live!
+        const statusEl = root.querySelector('p[class*="status"], div[class*="status"], [class*="status"]');
+        const statusText = (statusEl ? statusEl.textContent : '').toLowerCase();
+        const isSpeaking = statusText.includes('speaking') || statusText.includes('talking');
+        directCallUi('live', isSpeaking ? 'Mark is talking…' : 'Listening…');
+      } else {
+        // No end button -> call is not live
+        if (window.__directCallState === 'live' || window.__directCallState === 'speaking') {
+          directCallUi('idle');
+        }
+      }
+    }, 250);
 
     // pagehide fires for TWO very different situations, and treating them the
     // same is what used to end a call the moment the phone was pocketed:
@@ -4407,29 +4479,7 @@
         }
       });
 
-      orb.addEventListener('click', () => {
-        if (isSpeaking) {
-          stopSpeaking();
-          if (sessionActive) startListening();
-          return;
-        }
-        if (!sessionActive) {
-          sessionActive = true;
-          setStatus('SESSION ON — TAP TO END', 'active');
-          armPocketMode();
-          startListening();
-        } else {
-          sessionActive = false;
-          recognition.stop();
-          stopSpeaking();
-          disarmPocketMode();
-          // Keep history in localStorage; don't wipe on session end
-          setStatus('TAP TO START', '');
-          transcriptEl.textContent = '';
-          // Final research snapshot for consented users
-          logResearchSnapshot();
-        }
-      });
+      // Legacy Web Speech click listener retired in favor of authoritative onHeroOrbClick
 
       synth.onvoiceschanged = () => synth.getVoices();
     }
