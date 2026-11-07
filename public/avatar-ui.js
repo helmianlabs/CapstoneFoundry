@@ -1,10 +1,14 @@
 // public/avatar-ui.js — UI Controller for Holographic Avatar Studio
+// Zero-cost real-time facial mesh synthesis & lip-sync for Capstone Foundry.
+// Compliant with California AB 2602 / AB 1836, NO FAKES Act & App Store Guidelines.
+// Supports both Photos and Videos (neck-up, waist-up, full-body).
+
 import { HolographicAvatarEngine } from './avatar-engine.js';
 
 let orbEngine = null;
 let studioEngine = null;
 let currentAvatar = null;
-let pendingPhotoDataUrl = null;
+let pendingMediaDataUrl = null;
 
 function getAuthToken() {
   try {
@@ -67,8 +71,10 @@ export async function initAvatarSystem() {
   const avatarStudioBtn = document.getElementById('avatarStudioBtn');
   const avatarModalClose = document.getElementById('avatarModalClose');
   const avatarFileInput = document.getElementById('avatarFileInput');
+  const avatarVideoInput = document.getElementById('avatarVideoInput');
   const avatarUploadBtn = document.getElementById('avatarUploadBtn');
   const avatarCameraBtn = document.getElementById('avatarCameraBtn');
+  const avatarVideoBtn = document.getElementById('avatarVideoBtn');
   const avatarConsentCheck = document.getElementById('avatarConsentCheck');
   const avatarSaveBtn = document.getElementById('avatarSaveBtn');
   const avatarRevokeBtn = document.getElementById('avatarRevokeBtn');
@@ -103,7 +109,7 @@ export async function initAvatarSystem() {
       if (active && active.photo_url) {
         currentAvatar = active;
         if (orbEngine && orbCanvas) {
-          await orbEngine.loadPhoto(active.photo_url);
+          await orbEngine.loadMedia(active.photo_url);
           orbCanvas.style.display = 'block';
           if (orbIcon) orbIcon.style.display = 'none';
         }
@@ -116,7 +122,6 @@ export async function initAvatarSystem() {
   // Modal open / close
   if (avatarStudioBtn) {
     avatarStudioBtn.addEventListener('click', () => {
-      // close menu
       const menu = document.getElementById('appMenuDropdown');
       if (menu) menu.classList.add('hidden');
 
@@ -124,7 +129,7 @@ export async function initAvatarSystem() {
       if (currentAvatar) {
         if (avatarNameInput) avatarNameInput.value = currentAvatar.name;
         if (studioEngine && currentAvatar.photo_url) {
-          studioEngine.loadPhoto(currentAvatar.photo_url);
+          studioEngine.loadMedia(currentAvatar.photo_url);
           if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
         }
         if (avatarRevokeBtn) avatarRevokeBtn.style.display = 'inline-block';
@@ -138,7 +143,17 @@ export async function initAvatarSystem() {
     });
   }
 
-  // Photo upload handler
+  function handleLoadedMedia(dataUrl) {
+    pendingMediaDataUrl = dataUrl;
+    if (studioEngine) {
+      studioEngine.loadMedia(pendingMediaDataUrl).then(() => {
+        if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
+      }).catch((e) => console.error('Media load error:', e));
+    }
+    checkCanSave();
+  }
+
+  // Choose Photo or Video file handler
   if (avatarUploadBtn) {
     avatarUploadBtn.addEventListener('click', async () => {
       if (window.Capacitor?.Plugins?.Camera) {
@@ -150,12 +165,7 @@ export async function initAvatarSystem() {
             resultType: 'dataUrl',
           });
           if (image?.dataUrl) {
-            pendingPhotoDataUrl = image.dataUrl;
-            if (studioEngine) {
-              await studioEngine.loadPhoto(pendingPhotoDataUrl);
-              if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
-            }
-            checkCanSave();
+            handleLoadedMedia(image.dataUrl);
             return;
           }
         } catch (err) {
@@ -164,25 +174,19 @@ export async function initAvatarSystem() {
       }
       if (avatarFileInput) avatarFileInput.click();
     });
-    if (avatarFileInput) {
-      avatarFileInput.addEventListener('change', (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-          pendingPhotoDataUrl = evt.target.result;
-          if (studioEngine) {
-            await studioEngine.loadPhoto(pendingPhotoDataUrl);
-            if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
-          }
-          checkCanSave();
-        };
-        reader.readAsDataURL(file);
-      });
-    }
   }
 
-  // Native camera handler
+  if (avatarFileInput) {
+    avatarFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => handleLoadedMedia(evt.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Native camera photo handler
   if (avatarCameraBtn) {
     avatarCameraBtn.addEventListener('click', async () => {
       if (window.Capacitor?.Plugins?.Camera) {
@@ -194,28 +198,44 @@ export async function initAvatarSystem() {
             resultType: 'dataUrl',
           });
           if (image?.dataUrl) {
-            pendingPhotoDataUrl = image.dataUrl;
-            if (studioEngine) {
-              await studioEngine.loadPhoto(pendingPhotoDataUrl);
-              if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
-            }
-            checkCanSave();
+            handleLoadedMedia(image.dataUrl);
+            return;
           }
         } catch (err) {
-          console.warn('[avatar-ui] Camera canceled or failed:', err);
+          console.warn('[avatar-ui] Camera photo canceled or failed:', err);
         }
-      } else {
-        if (avatarFileInput) avatarFileInput.click();
+      }
+      if (avatarFileInput) avatarFileInput.click();
+    });
+  }
+
+  // Native video recording handler
+  if (avatarVideoBtn) {
+    avatarVideoBtn.addEventListener('click', () => {
+      if (avatarVideoInput) {
+        avatarVideoInput.click();
+      } else if (avatarFileInput) {
+        avatarFileInput.click();
       }
     });
   }
 
+  if (avatarVideoInput) {
+    avatarVideoInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => handleLoadedMedia(evt.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
   function checkCanSave() {
-    const hasPhoto = Boolean(pendingPhotoDataUrl || (currentAvatar && currentAvatar.photo_url));
+    const hasMedia = Boolean(pendingMediaDataUrl || (currentAvatar && currentAvatar.photo_url));
     const hasConsent = avatarConsentCheck ? avatarConsentCheck.checked : false;
     const hasName = avatarNameInput && avatarNameInput.value.trim().length > 0;
     if (avatarSaveBtn) {
-      avatarSaveBtn.disabled = !(hasPhoto && hasConsent && hasName);
+      avatarSaveBtn.disabled = !(hasMedia && hasConsent && hasName);
     }
   }
 
@@ -232,79 +252,117 @@ export async function initAvatarSystem() {
       avatarSaveBtn.disabled = true;
       if (avatarStatusMsg) avatarStatusMsg.textContent = 'Saving avatar & recording statutory consent...';
 
-      const photoUrl = pendingPhotoDataUrl || currentAvatar?.photo_url;
+      const mediaUrl = pendingMediaDataUrl || currentAvatar?.photo_url;
       const name = avatarNameInput ? avatarNameInput.value.trim() : 'Avatar';
       const statement = 'I verify and authorize digital replica likeness consent under California AB 2602 / NO FAKES Act.';
       const tenantId = getTenantId();
 
       try {
-        const res = await apiRequest('/api/avatar', {
+        const payload = {
+          tenant_id: tenantId,
+          name,
+          photo_url: mediaUrl,
+          subject_name: name,
+          consent_statement: statement,
+        };
+
+        const res = await apiRequest('/api/avatar/create', {
           method: 'POST',
-          body: JSON.stringify({
-            action: 'create',
-            name,
-            photo_url: photoUrl,
-            consent_type: 'self',
-            statement,
-            tenantId,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (res.ok && res.avatar) {
           currentAvatar = res.avatar;
-          pendingPhotoDataUrl = null;
+          pendingMediaDataUrl = null;
+
+          // Activate in live Voice Orb
+          await apiRequest('/api/avatar/activate', {
+            method: 'POST',
+            body: JSON.stringify({ avatar_id: res.avatar.id }),
+          });
+
           if (orbEngine && orbCanvas) {
-            await orbEngine.loadPhoto(res.avatar.photo_url);
+            await orbEngine.loadMedia(res.avatar.photo_url);
             orbCanvas.style.display = 'block';
             if (orbIcon) orbIcon.style.display = 'none';
           }
-          if (avatarStatusMsg) avatarStatusMsg.textContent = 'Avatar active! You will now see your avatar in the Voice Orb.';
+
+          if (avatarStatusMsg) {
+            avatarStatusMsg.textContent = '✓ Digital Avatar activated successfully!';
+            avatarStatusMsg.style.color = '#00ff88';
+          }
+          if (avatarRevokeBtn) avatarRevokeBtn.style.display = 'inline-block';
+
           setTimeout(() => {
             if (avatarModal) avatarModal.classList.add('hidden');
             if (avatarStatusMsg) avatarStatusMsg.textContent = '';
-          }, 1500);
+          }, 1200);
         } else {
-          if (avatarStatusMsg) avatarStatusMsg.textContent = 'Error: ' + (res.error || 'Failed to save');
-          avatarSaveBtn.disabled = false;
+          throw new Error(res.error || 'Failed to create avatar profile');
         }
       } catch (err) {
-        if (avatarStatusMsg) avatarStatusMsg.textContent = err.message;
+        console.error('[avatar-ui] Activation error:', err);
+        if (avatarStatusMsg) {
+          avatarStatusMsg.textContent = `Error: ${err.message}`;
+          avatarStatusMsg.style.color = '#ff4466';
+        }
         avatarSaveBtn.disabled = false;
       }
     });
   }
 
-  // Revoke Likeness
+  // Revoke Avatar
   if (avatarRevokeBtn) {
     avatarRevokeBtn.addEventListener('click', async () => {
-      if (!currentAvatar) return;
-      if (!confirm('Are you sure you want to revoke and permanently delete this digital likeness?')) return;
+      if (!confirm('Are you sure you want to revoke this digital avatar license and remove your likeness?')) return;
+      avatarRevokeBtn.disabled = true;
+      if (avatarStatusMsg) avatarStatusMsg.textContent = 'Revoking license & deleting biometric likeness...';
 
       try {
-        await apiRequest('/api/avatar', {
+        const avatarId = currentAvatar?.id;
+        const res = await apiRequest('/api/avatar/revoke', {
           method: 'POST',
-          body: JSON.stringify({ action: 'revoke', avatar_id: currentAvatar.id, tenantId: getTenantId() }),
+          body: JSON.stringify({ avatar_id: avatarId }),
         });
-        currentAvatar = null;
-        pendingPhotoDataUrl = null;
-        if (orbCanvas) orbCanvas.style.display = 'none';
-        if (orbIcon) orbIcon.style.display = 'inline-block';
-        if (studioEngine) studioEngine.stop();
-        if (avatarPlaceholder) avatarPlaceholder.style.display = 'flex';
-        avatarRevokeBtn.style.display = 'none';
-        if (avatarModal) avatarModal.classList.add('hidden');
+
+        if (res.ok) {
+          currentAvatar = null;
+          pendingMediaDataUrl = null;
+          if (orbEngine) orbEngine.stop();
+          if (orbCanvas) orbCanvas.style.display = 'none';
+          if (orbIcon) orbIcon.style.display = 'inline-block';
+          if (studioEngine) studioEngine.stop();
+          if (avatarPlaceholder) avatarPlaceholder.style.display = 'flex';
+          if (avatarNameInput) avatarNameInput.value = '';
+          if (avatarConsentCheck) avatarConsentCheck.checked = false;
+          avatarRevokeBtn.style.display = 'none';
+
+          if (avatarStatusMsg) {
+            avatarStatusMsg.textContent = '✓ Likeness revoked. Data permanently deleted.';
+            avatarStatusMsg.style.color = '#00d4ff';
+          }
+
+          setTimeout(() => {
+            if (avatarModal) avatarModal.classList.add('hidden');
+            if (avatarStatusMsg) avatarStatusMsg.textContent = '';
+          }, 1200);
+        } else {
+          throw new Error(res.error || 'Failed to revoke avatar');
+        }
       } catch (err) {
-        alert('Revocation error: ' + err.message);
+        console.error('[avatar-ui] Revoke error:', err);
+        if (avatarStatusMsg) {
+          avatarStatusMsg.textContent = `Error: ${err.message}`;
+          avatarStatusMsg.style.color = '#ff4466';
+        }
+        avatarRevokeBtn.disabled = false;
       }
     });
   }
 }
 
-// Auto-boot on load
-if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAvatarSystem);
-  } else {
-    initAvatarSystem();
-  }
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAvatarSystem);
+} else {
+  initAvatarSystem();
 }

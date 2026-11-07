@@ -1,298 +1,387 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Capstone Foundry — Autonomous Executive AI Pair Programmer</title>
-  <meta name="description" content="Capstone Foundry pairs executive voice interaction with persistent PostgreSQL memory and Helmion Hands desktop execution.">
-  <link rel="icon" type="image/svg+xml" href="/icon.svg">
-  <style>
-    :root {
-      --bg: #07090e;
-      --card-bg: rgba(13, 17, 27, 0.7);
-      --card-border: rgba(0, 212, 255, 0.25);
-      --accent: #00d4ff;
-      --accent-glow: rgba(0, 212, 255, 0.4);
-      --purple: #8b5cf6;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --green: #10b981;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capstone Foundry | Your Thinking Partner</title>
+<style>
+  :root {
+    --bg: #f7f5f0;
+    --ink: #1d2a33;
+    --muted: #5b6770;
+    --accent: #2f6f5e;
+    --accent-2: #d08c4a;
+    --card: #ffffff;
+    --line: #e2ddd2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141a1f; --ink: #e8edf1; --muted: #9aa7b1;
+      --accent: #5fb59c; --accent-2: #e8a96a; --card: #1d262d; --line: #2c3840;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    body { background: var(--bg); color: var(--text); overflow-x: hidden; line-height: 1.6; }
-    
-    /* Background Glows */
-    .glow-orb {
-      position: absolute; width: 600px; height: 600px; border-radius: 50%;
-      background: radial-gradient(circle, var(--accent-glow) 0%, rgba(0,0,0,0) 70%);
-      top: -200px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 0;
-    }
-    .glow-orb-2 {
-      position: absolute; width: 500px; height: 500px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(0,0,0,0) 70%);
-      top: 600px; right: -100px; pointer-events: none; z-index: 0;
-    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141a1f; --ink: #e8edf1; --muted: #9aa7b1;
+    --accent: #5fb59c; --accent-2: #e8a96a; --card: #1d262d; --line: #2c3840;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; font-family: Georgia, "Times New Roman", serif;
+    background: var(--bg); color: var(--ink); line-height: 1.6; overflow-x: hidden;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 1.25rem; position: relative; z-index: 1; }
 
-    /* Container */
-    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+  /* Animated background canvas */
+  #bg {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none; opacity: 0.55;
+  }
 
-    /* Nav */
-    nav { height: 80px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.25rem; color: #fff; text-decoration: none; }
-    .logo-badge { background: linear-gradient(135deg, var(--accent), var(--purple)); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000; }
-    .nav-links { display: flex; gap: 28px; align-items: center; }
-    .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
-    .nav-links a:hover { color: var(--accent); }
-    .btn-nav { background: rgba(0, 212, 255, 0.12); border: 1px solid var(--accent); color: var(--accent); padding: 8px 18px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
-    .btn-nav:hover { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent-glow); }
+  /* Scroll progress bar */
+  #progress {
+    position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    z-index: 10;
+  }
 
-    /* Hero */
-    .hero { padding: 90px 0 60px; text-align: center; }
-    .hero-pill { display: inline-flex; align-items: center; gap: 8px; background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.3); padding: 6px 16px; border-radius: 999px; font-size: 0.85rem; color: var(--accent); margin-bottom: 24px; }
-    .hero-pill .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
-    .hero h1 { font-size: 3.5rem; font-weight: 800; line-height: 1.15; margin-bottom: 20px; letter-spacing: -0.02em; }
-    .hero h1 span { background: linear-gradient(135deg, #fff 30%, var(--accent) 70%, var(--purple) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .hero p { font-size: 1.25rem; color: var(--text-muted); max-width: 780px; margin: 0 auto 36px; }
-    
-    .hero-cta { display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 48px; }
-    .btn-primary { background: linear-gradient(135deg, var(--accent), #0099ff); color: #000; font-weight: 700; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-size: 1.05rem; box-shadow: 0 0 25px var(--accent-glow); transition: all 0.2s; }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 35px var(--accent-glow); }
-    .btn-secondary { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-weight: 600; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-size: 1.05rem; transition: all 0.2s; }
-    .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
+  nav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1.25rem 0; position: sticky; top: 0;
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: blur(6px); z-index: 5;
+  }
+  .brand { font-weight: bold; font-size: 1.15rem; letter-spacing: 0.02em; }
+  nav a { color: var(--ink); text-decoration: none; margin-left: 1.25rem; font-family: system-ui, sans-serif; font-size: 0.95rem; }
+  nav a:hover { color: var(--accent); }
 
-    /* Live Telemetry Card */
-    .telemetry-card {
-      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
-      padding: 24px; max-width: 900px; margin: 0 auto; backdrop-filter: blur(12px);
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left;
-    }
-    .tele-item { border-left: 2px solid var(--accent); padding-left: 14px; }
-    .tele-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 4px; }
-    .tele-val { font-size: 1.05rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; }
-    .badge-green { color: var(--green); }
+  .hero { padding: 4.5rem 0 3.5rem; text-align: center; }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem); margin: 0 0 1rem; line-height: 1.15;
+    opacity: 0; transform: translateY(24px);
+    animation: rise 0.9s ease forwards 0.1s;
+  }
+  .hero p.lead {
+    font-size: 1.2rem; color: var(--muted); max-width: 640px; margin: 0 auto 2rem;
+    opacity: 0; animation: rise 0.9s ease forwards 0.35s;
+  }
+  .hero .actions { opacity: 0; animation: rise 0.9s ease forwards 0.6s; }
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 
-    /* Features Grid */
-    .features { padding: 90px 0; }
-    .section-title { text-align: center; margin-bottom: 54px; }
-    .section-title h2 { font-size: 2.4rem; font-weight: 800; margin-bottom: 12px; }
-    .section-title p { color: var(--text-muted); font-size: 1.1rem; }
-    
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; }
-    .card { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 32px; backdrop-filter: blur(10px); transition: all 0.3s; }
-    .card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0, 212, 255, 0.15); }
-    .card-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(0, 212, 255, 0.1); border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 20px; }
-    .card h3 { font-size: 1.35rem; font-weight: 700; margin-bottom: 12px; }
-    .card p { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; }
+  /* Typewriter tagline */
+  .tagline {
+    font-family: system-ui, sans-serif; color: var(--accent);
+    font-size: 1rem; min-height: 1.6em; margin-bottom: 1rem;
+  }
+  .tagline .caret {
+    display: inline-block; width: 2px; height: 1em; background: var(--accent);
+    vertical-align: text-bottom; margin-left: 2px; animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
 
-    /* Pricing Table */
-    .pricing { padding: 80px 0; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.06); }
-    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
-    .price-card { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 28px 24px; text-align: center; position: relative; }
-    .price-card.featured { border-color: var(--accent); box-shadow: 0 0 25px rgba(0,212,255,0.2); }
-    .featured-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; font-size: 0.75rem; font-weight: 800; padding: 2px 12px; border-radius: 999px; text-transform: uppercase; }
-    .price-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
-    .price-val { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; color: #fff; }
-    .price-val span { font-size: 0.9rem; color: var(--text-muted); font-weight: 400; }
-    .price-features { list-style: none; margin: 20px 0 24px; text-align: left; font-size: 0.88rem; color: var(--text-muted); }
-    .price-features li { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-    .price-features li::before { content: "✓"; color: var(--accent); font-weight: 700; }
+  .btn {
+    display: inline-block; background: var(--accent); color: #fff;
+    padding: 0.85rem 1.75rem; border-radius: 6px; text-decoration: none;
+    font-family: system-ui, sans-serif; font-weight: 600; border: none; cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(47,111,94,0.25); }
+  .btn.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); margin-left: 0.75rem; }
 
-    /* Footer */
-    footer { padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; color: var(--text-muted); font-size: 0.85rem; }
-    footer a { color: var(--accent); text-decoration: none; }
+  section { position: relative; }
+  h2 { font-size: 1.7rem; margin: 0 0 1rem; }
+  .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
 
-    @media (max-width: 768px) {
-      .hero h1 { font-size: 2.4rem; }
-      nav .nav-links { display: none; }
-    }
-  </style>
+  .grid {
+    display: grid; gap: 1.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    padding: 1rem 0 3rem;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.5rem; position: relative; overflow: hidden;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 14px 30px rgba(0,0,0,0.08); }
+  .card .icon {
+    width: 44px; height: 44px; border-radius: 10px; margin-bottom: 0.9rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; color: #fff; font-family: system-ui, sans-serif; font-weight: 700;
+    transition: transform 0.4s ease;
+  }
+  .card:hover .icon { transform: rotate(-12deg) scale(1.1); }
+  .card h3 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.97rem; }
+
+  /* Clickable step cards that expand */
+  .step { cursor: pointer; }
+  .step .detail {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.5s ease, opacity 0.4s ease, margin-top 0.4s ease;
+    color: var(--muted); font-size: 0.93rem;
+  }
+  .step.open .detail { max-height: 200px; opacity: 1; margin-top: 0.75rem; }
+  .step .hint { font-family: system-ui, sans-serif; font-size: 0.8rem; color: var(--accent); margin-top: 0.6rem; }
+
+  /* Interactive question demo */
+  .demo {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 2rem 1.5rem; margin: 1rem 0 3rem;
+  }
+  .demo label { font-family: system-ui, sans-serif; font-size: 0.95rem; display: block; margin-bottom: 0.6rem; }
+  .demo input[type=text] {
+    width: 100%; padding: 0.8rem 1rem; font-size: 1rem; font-family: Georgia, serif;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .demo input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(47,111,94,0.15); }
+  .demo .output {
+    margin-top: 1.25rem; min-height: 3.5rem; color: var(--muted); font-style: italic;
+    border-left: 3px solid var(--accent); padding-left: 1rem;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+  .chip {
+    font-family: system-ui, sans-serif; font-size: 0.85rem; padding: 0.4rem 0.9rem;
+    border-radius: 999px; border: 1px solid var(--accent); background: transparent;
+    color: var(--accent); cursor: pointer; transition: all 0.2s ease;
+  }
+  .chip:hover, .chip.active { background: var(--accent); color: #fff; }
+
+  /* Counter stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 2rem 0 3rem; text-align: center; }
+  .stat { padding: 1.25rem; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
+  .stat .num { font-size: 2.2rem; color: var(--accent); font-weight: bold; }
+  .stat .label { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
+
+  .cta {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 2.5rem 1.5rem; text-align: center; margin: 2rem 0 4rem; position: relative; overflow: hidden;
+  }
+  .cta::before {
+    content: ""; position: absolute; inset: -50%;
+    background: conic-gradient(from 0deg, transparent, color-mix(in srgb, var(--accent) 25%, transparent), transparent 40%);
+    animation: spin 8s linear infinite; z-index: 0;
+  }
+  .cta > * { position: relative; z-index: 1; }
+  .cta p { color: var(--muted); margin: 0 0 1.5rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer {
+    text-align: center; color: var(--muted); font-family: system-ui, sans-serif;
+    font-size: 0.85rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal { opacity: 1; transform: none; }
+    .hero h1, .hero p.lead, .hero .actions { opacity: 1; transform: none; }
+  }
+  @media (max-width: 600px) {
+    nav a { margin-left: 0.75rem; font-size: 0.85rem; }
+    .btn.secondary { margin-left: 0; margin-top: 0.75rem; }
+  }
+</style>
 </head>
 <body>
-  <!-- Mobile & Session Sticky Back Bar -->
-  <div style="position:sticky;top:0;left:0;right:0;background:rgba(7,9,14,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,212,255,0.25);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;">
-    <button onclick="handleBackToApp()" type="button" style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,212,255,0.2);border:1px solid #00d4ff;color:#00d4ff;padding:8px 16px;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      Back to Session
-    </button>
-    <span style="font-size:0.85rem;color:#00d4ff;font-weight:600;letter-spacing:0.04em;">CAPSTONE FOUNDRY</span>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div id="progress"></div>
+
+<div class="wrap">
+  <nav>
+    <a href="/" class="brand" style="color:var(--ink); text-decoration:none;">Capstone Foundry <span style="font-size:0.75rem; background:rgba(47,111,94,0.15); color:var(--accent); padding:2px 8px; border-radius:12px; margin-left:8px; font-weight:normal;">AI Executive Voice</span></a>
+    <div>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#try">Try it</a>
+      <a href="#start">Get started</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="tagline"><span id="typed"></span><span class="caret"></span></div>
+    <h1>A thinking partner that helps you build the thing you're actually trying to build.</h1>
+    <p class="lead">Capstone Foundry sits beside you while you plan, research, and decide. It asks the hard questions, organizes your ideas, and keeps the work moving forward.</p>
+    <div class="actions">
+      <a class="btn" href="#start">Start thinking</a>
+      <a class="btn secondary" href="#how">See how it works</a>
+    </div>
+  </header>
+
+  <div class="stats reveal">
+    <div class="stat"><div class="num" data-count="4">0</div><div class="label">core ways to think</div></div>
+    <div class="stat"><div class="num" data-count="3">0</div><div class="label">steps to a plan</div></div>
+    <div class="stat"><div class="num" data-count="100">0</div><div class="label">percent under your control</div></div>
   </div>
 
-  <div class="glow-orb"></div>
-  <div class="glow-orb-2"></div>
+  <section id="features">
+    <h2 class="reveal">What it does</h2>
+    <div class="grid">
+      <div class="card reveal"><div class="icon">?</div><h3>Ask better questions</h3><p>Pressure-test an idea before you commit to it. Capstone Foundry finds the assumptions you haven't checked yet.</p></div>
+      <div class="card reveal"><div class="icon">&#9776;</div><h3>Keep ideas organized</h3><p>Notes, plans, and half-formed thoughts stay connected, so nothing good gets lost between conversations.</p></div>
+      <div class="card reveal"><div class="icon">&#10003;</div><h3>Plain-English reasoning</h3><p>Every recommendation comes with the reasoning behind it, written so you can check it and push back.</p></div>
+      <div class="card reveal"><div class="icon">&#9873;</div><h3>Stays in your control</h3><p>It suggests. You decide. Nothing changes in your projects without your approval.</p></div>
+    </div>
+  </section>
 
-  <div class="container">
-    <!-- Navbar -->
-    <nav>
-      <a href="/" class="logo">
-        <div class="logo-badge">CF</div>
-        Capstone Foundry
-      </a>
-      <div class="nav-links">
-        <a href="#features">Capabilities</a>
-        <a href="#hands">Helmion Hands</a>
-        <a href="#security">Security</a>
-        <a href="#pricing">Tiers</a>
-        <button id="cfBackBtn" class="btn-nav" type="button" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,0.2);border-color:#00d4ff;color:#00d4ff;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Session</button>
+  <section id="how">
+    <h2 class="reveal">How it works</h2>
+    <p class="reveal" style="color:var(--muted)">Tap a step to see more.</p>
+    <div class="grid">
+      <div class="card step reveal" onclick="this.classList.toggle('open')">
+        <h3>1. Describe the problem</h3>
+        <div class="detail">Start with a rough idea, a question, or a decision you're stuck on. Messy is fine.</div>
+        <div class="hint">Tap to expand</div>
       </div>
-      <button onclick="handleBackToApp()" class="btn-nav" type="button" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,0.2);border-color:#00d4ff;color:#00d4ff;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Session</button>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="hero">
-      <div class="hero-pill">
-        <span class="dot"></span>
-        Production Live on Vercel • Helmion Spoke Connected
+      <div class="card step reveal" onclick="this.classList.toggle('open')">
+        <h3>2. Think it through</h3>
+        <div class="detail">Capstone Foundry breaks the problem apart and tests each piece against what you've told it.</div>
+        <div class="hint">Tap to expand</div>
       </div>
-      <h1>
-        Build Fast. Remember Everything.<br>
-        <span>Executive Voice AI with Hands.</span>
-      </h1>
-      <p>
-        Capstone Foundry pairs low-latency ElevenLabs conversational voice with persistent PostgreSQL memory categorization and real-world desktop execution via Helmion Hands.
-      </p>
-
-      <div class="hero-cta">
-        <a href="/" class="btn-primary">Open Voice Foundry</a>
-        <a href="/mark-android.apk" class="btn-secondary">Download Android APK</a>
+      <div class="card step reveal" onclick="this.classList.toggle('open')">
+        <h3>3. Leave with a plan</h3>
+        <div class="detail">You walk away with clear next steps, open questions, and the reasons behind each choice.</div>
+        <div class="hint">Tap to expand</div>
       </div>
+    </div>
+  </section>
 
-      <!-- Telemetry Status Card -->
-      <div class="telemetry-card">
-        <div class="tele-item">
-          <div class="tele-label">Persistent Memory</div>
-          <div class="tele-val"><span class="badge-green">●</span> Neon PostgreSQL</div>
-        </div>
-        <div class="tele-item">
-          <div class="tele-label">Hands Spoke</div>
-          <div class="tele-val"><span class="badge-green">●</span> Online (pc-troy)</div>
-        </div>
-        <div class="tele-item">
-          <div class="tele-label">Voice Agent</div>
-          <div class="tele-val"><span class="badge-green">●</span> Mark (11 Tools)</div>
-        </div>
-        <div class="tele-item">
-          <div class="tele-label">Security Shield</div>
-          <div class="tele-val"><span class="badge-green">●</span> Swarm + Injection Gate</div>
-        </div>
+  <section id="try">
+    <h2 class="reveal">Try a quick question</h2>
+    <div class="demo reveal">
+      <label for="idea">What's the idea you're turning over?</label>
+      <input id="idea" type="text" placeholder="e.g. a weekly route report for my drivers" autocomplete="off">
+      <div class="chips">
+        <button class="chip" data-q="assumption">What am I assuming?</button>
+        <button class="chip" data-q="risk">What could go wrong?</button>
+        <button class="chip" data-q="next">What's my next step?</button>
       </div>
-    </section>
+      <div class="output" id="out">Type an idea, then pick a question above.</div>
+    </div>
+  </section>
 
-    <!-- Key Features -->
-    <section class="features" id="features">
-      <div class="section-title">
-        <h2>Engineered for Autonomous Execution</h2>
-        <p>A unified suite built for executives, engineers, and real-world operations.</p>
+  <section id="start">
+    <div class="cta reveal">
+      <h2>Ready to think it through?</h2>
+      <p>Bring the idea you've been turning over. Mark sits beside you while you plan, research, and decide.</p>
+      <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:1.5rem;">
+        <a class="btn" href="/">Open Voice Foundry</a>
+        <a class="btn secondary" href="/mark-android.apk">Download Android APK</a>
       </div>
+    </div>
+  </section>
 
-      <div class="grid">
-        <div class="card">
-          <div class="card-icon">🧠</div>
-          <h3>Librarian Persistent Memory</h3>
-          <p>Every decision, truck route, and project specification is automatically indexed into Neon PostgreSQL with exact timestamps and categorical classification (Business, Build, Personal, Operations).</p>
-        </div>
+  <footer>&copy; Capstone Foundry. A thinking partner for builders.</footer>
+</div>
 
-        <div class="card" id="hands">
-          <div class="card-icon">🛠</div>
-          <h3>Helmion Hands into Desktop</h3>
-          <p>Voice-driven execution into your computer. Connect your PC via 6-digit pairing to run builds, scaffold applications, and execute governed tasks through Helmion.exe and Hetzner cloud runners.</p>
-        </div>
+<script>
+  // Typewriter tagline
+  const phrases = ["Plan with a partner.", "Question the assumptions.", "Leave with a next step."];
+  let pi = 0, ci = 0, deleting = false;
+  const typed = document.getElementById("typed");
+  function type() {
+    const word = phrases[pi];
+    typed.textContent = deleting ? word.slice(0, --ci) : word.slice(0, ++ci);
+    let delay = deleting ? 40 : 80;
+    if (!deleting && ci === word.length) { delay = 1800; deleting = true; }
+    else if (deleting && ci === 0) { deleting = false; pi = (pi + 1) % phrases.length; delay = 400; }
+    setTimeout(type, delay);
+  }
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) type();
+  else typed.textContent = phrases[0];
 
-        <div class="card">
-          <div class="card-icon">🎙</div>
-          <h3>Low-Latency Voice Foundry</h3>
-          <p>Ultra-responsive conversational interface powered by ElevenLabs with real-time webhook tool execution, structured document exports, and dynamic context injection.</p>
-        </div>
+  // Scroll reveal
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add("visible");
+        if (e.target.classList.contains("stats")) countUp(e.target);
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
 
-        <div class="card" id="security">
-          <div class="card-icon">🛡</div>
-          <h3>AI Swarm & Injection Defense</h3>
-          <p>Dual-window sliding rate limiter, automated bot-swarm interception, adversarial prompt injection filtering, and full COPPA & Apple/Google App Store compliance.</p>
-        </div>
+  // Count-up stats
+  let counted = false;
+  function countUp(root) {
+    if (counted) return; counted = true;
+    root.querySelectorAll("[data-count]").forEach(el => {
+      const target = +el.dataset.count; const start = performance.now(); const dur = 1200;
+      function frame(t) {
+        const p = Math.min((t - start) / dur, 1);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+  }
 
-        <div class="card">
-          <div class="card-icon">📦</div>
-          <h3>Tangible Artifact Exporter</h3>
-          <p>Export conversation outputs, reports, and code instantly to formatted PDF, Google Docs, Markdown, and the interactive Media Gallery.</p>
-        </div>
+  // Scroll progress bar
+  const bar = document.getElementById("progress");
+  window.addEventListener("scroll", () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (h > 0 ? (scrollY / h) * 100 : 0) + "%";
+  }, { passive: true });
 
-        <div class="card">
-          <div class="card-icon">📱</div>
-          <h3>Cross-Platform Mobile & Web</h3>
-          <p>Runs as an installable PWA or native Android (APK/AAB) and iOS (IPA) wrapper powered by Capacitor with push notifications, camera, and offline capabilities.</p>
-        </div>
-      </div>
-    </section>
+  // Interactive demo (plain-language canned responses, no backend)
+  const out = document.getElementById("out");
+  const idea = document.getElementById("idea");
+  const replies = {
+    assumption: (t) => `You're assuming ${t} is something people will actually use every week. Test that with three people before you build anything.`,
+    risk: (t) => `The biggest risk with ${t} is that it solves a problem nobody feels strongly about. Find out how often that pain shows up before you invest time.`,
+    next: (t) => `Write one page describing ${t}: who it's for, what it replaces, and how you'd know it worked. Then show it to one person who'd use it.`
+  };
+  document.querySelectorAll(".chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      const t = idea.value.trim();
+      if (!t) { out.textContent = "Type your idea first, then pick a question."; return; }
+      out.textContent = replies[btn.dataset.q](t);
+    });
+  });
 
-    <!-- Pricing Grid -->
-    <section class="pricing" id="pricing">
-      <div class="section-title">
-        <h2>Subscription Tiers</h2>
-        <p>Powered by RevenueCat, supporting Apple In-App Purchase, Google Play Billing, and Stripe.</p>
-      </div>
-
-      <div class="pricing-grid">
-        <div class="price-card">
-          <div class="price-title">Free</div>
-          <div class="price-val">$0<span>/mo</span></div>
-          <ul class="price-features">
-            <li>Core voice conversation</li>
-            <li>50 basic memory recalls</li>
-            <li>Community support</li>
-          </ul>
-        </div>
-
-        <div class="price-card">
-          <div class="price-title">Buddy Starter</div>
-          <div class="price-val">$2.99<span>/mo</span></div>
-          <ul class="price-features">
-            <li>Extended voice minutes</li>
-            <li>Basic memory categorization</li>
-            <li>Curriculum exercises</li>
-          </ul>
-        </div>
-
-        <div class="price-card">
-          <div class="price-title">Buddy</div>
-          <div class="price-val">$9.99<span>/mo</span></div>
-          <ul class="price-features">
-            <li>Unlimited memory Librarian</li>
-            <li>Full Voice Foundry access</li>
-            <li>Document exports (PDF/MD)</li>
-          </ul>
-        </div>
-
-        <div class="price-card featured">
-          <div class="featured-badge">Top Tier</div>
-          <div class="price-title">Helmian Connect</div>
-          <div class="price-val">$29.99<span>/mo</span></div>
-          <ul class="price-features">
-            <li><strong>Hands into Desktop:</strong> Helmion.exe</li>
-            <li>Phone ↔ PC relay execution</li>
-            <li>Hetzner cloud runner access</li>
-            <li>Priority 3D Meshy & Media export</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- Footer -->
-    <footer>
-      <p>&copy; 2026 Capstone Foundry &bull; Built with Helmion Autonomous Systems &bull; <a href="#" onclick="handleBackToApp(); return false;">Back to Session</a></p>
-    </footer>
-  </div>
-
-  <script>
-    function handleBackToApp() {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'close-artifact-viewer' }, '*');
-      } else if (window.history.length > 1) {
-        window.history.back();
-      } else {
-        window.location.href = '/';
+  // Animated background: drifting particles that connect nearby
+  const canvas = document.getElementById("bg");
+  const ctx = canvas.getContext("2d");
+  let W, H, pts = [];
+  function resize() {
+    W = canvas.width = innerWidth; H = canvas.height = innerHeight;
+    const n = Math.min(70, Math.floor((W * H) / 22000));
+    pts = Array.from({ length: n }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4
+    }));
+  }
+  resize();
+  addEventListener("resize", resize);
+  function drawBg() {
+    const style = getComputedStyle(document.documentElement);
+    const accent = style.getPropertyValue("--accent").trim() || "#2f6f5e";
+    ctx.clearRect(0, 0, W, H);
+    pts.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = accent; ctx.fill();
+    });
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
+        const d = Math.hypot(dx, dy);
+        if (d < 130) {
+          ctx.globalAlpha = (1 - d / 130) * 0.5;
+          ctx.strokeStyle = accent; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       }
     }
-    const bBtn = document.getElementById('cfBackBtn');
-    if (bBtn) bBtn.addEventListener('click', handleBackToApp);
-  </script>
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) requestAnimationFrame(drawBg);
+  }
+  drawBg();
+</script>
 </body>
 </html>

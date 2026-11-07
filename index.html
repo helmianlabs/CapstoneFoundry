@@ -4894,10 +4894,12 @@
         <label for="avatarNameInput">Avatar Name (e.g., Troy, Mentor, Mom)</label>
         <input type="text" id="avatarNameInput" placeholder="Avatar name..." value="Troy Halterman" />
 
-        <div class="avatar-photo-actions">
-          <button type="button" class="secondary" id="avatarUploadBtn">📁 Choose Photo</button>
-          <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" />
+        <div class="avatar-photo-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="secondary" id="avatarUploadBtn">📁 Choose Photo / Video</button>
+          <input type="file" id="avatarFileInput" accept="image/*,video/*" style="display:none;" />
           <button type="button" class="secondary" id="avatarCameraBtn">📷 Take Photo</button>
+          <button type="button" class="secondary" id="avatarVideoBtn">🎥 Record Video</button>
+          <input type="file" id="avatarVideoInput" accept="video/*" capture="user" style="display:none;" />
         </div>
 
         <div class="avatar-legal-card">
