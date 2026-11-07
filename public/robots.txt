@@ -1,0 +1,47 @@
+# robots.txt for Capstone Foundry (capstonefoundry.cloud)
+# Allows standard search engines & AI search crawlers (Google, ChatGPT, Perplexity, Claude)
+
+User-agent: *
+Allow: /
+Allow: /landing.html
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+
+# OpenAI / ChatGPT
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+
+# Anthropic Claude
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+# Google Search & Gemini
+User-agent: Googlebot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Bing / Copilot
+User-agent: Bingbot
+Allow: /
+
+# Apple Intelligence
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://capstonefoundry.cloud/sitemap.xml

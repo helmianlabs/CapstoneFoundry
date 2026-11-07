@@ -928,6 +928,32 @@
     .avatar-status-msg {
       font-size: 0.78rem; text-align: center; color: #00d4ff; min-height: 18px;
     }
+  
+    /* Avatar Framing Geometry & Sizes */
+    .orb.shape-circle, .avatar-orb-preview canvas.shape-circle {
+      border-radius: 50% !important;
+      clip-path: none !important;
+    }
+    .orb.shape-card, .avatar-orb-preview canvas.shape-card {
+      border-radius: 20px !important;
+      clip-path: none !important;
+      height: 160px !important;
+    }
+    .orb.shape-hexagon, .avatar-orb-preview canvas.shape-hexagon {
+      border-radius: 0 !important;
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%) !important;
+    }
+    .orb.shape-full, .avatar-orb-preview canvas.shape-full {
+      border-radius: 24px !important;
+      clip-path: none !important;
+      height: 220px !important;
+    }
+    .orb.size-compact { width: 100px !important; height: 100px !important; }
+    .orb.size-standard { width: 130px !important; height: 130px !important; }
+    .orb.size-expanded { width: 190px !important; height: 190px !important; }
+    .orb.size-expanded.shape-card { width: 170px !important; height: 230px !important; }
+    .orb.size-expanded.shape-full { width: 220px !important; height: 300px !important; }
+
   </style>
 </head>
 <body>
@@ -4900,6 +4926,24 @@
           <button type="button" class="secondary" id="avatarCameraBtn">📷 Take Photo</button>
           <button type="button" class="secondary" id="avatarVideoBtn">🎥 Record Video</button>
           <input type="file" id="avatarVideoInput" accept="video/*" capture="user" style="display:none;" />
+        </div>
+
+        
+        <div class="avatar-framing-section" style="margin: 12px 0;">
+          <label style="font-size:0.75rem; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:6px;">Avatar Shape</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
+            <button type="button" class="framing-chip" data-shape="circle" id="shapeCircleBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid #00d4ff; background:rgba(0,212,255,0.2); color:#fff; cursor:pointer;">🔘 Circle</button>
+            <button type="button" class="framing-chip" data-shape="card" id="shapeCardBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#94a3b8; cursor:pointer;">🔲 Card</button>
+            <button type="button" class="framing-chip" data-shape="hexagon" id="shapeHexagonBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#94a3b8; cursor:pointer;">⬡ Hexagon</button>
+            <button type="button" class="framing-chip" data-shape="full" id="shapeFullBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#94a3b8; cursor:pointer;">📱 Full</button>
+          </div>
+
+          <label style="font-size:0.75rem; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:6px;">Avatar Size</label>
+          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+            <button type="button" class="size-chip" data-size="compact" id="sizeCompactBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#94a3b8; cursor:pointer;">Compact</button>
+            <button type="button" class="size-chip" data-size="standard" id="sizeStandardBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid #00d4ff; background:rgba(0,212,255,0.2); color:#fff; cursor:pointer;">Standard</button>
+            <button type="button" class="size-chip" data-size="expanded" id="sizeExpandedBtn" style="padding:7px 4px; font-size:0.75rem; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#94a3b8; cursor:pointer;">Expanded</button>
+          </div>
         </div>
 
         <div class="avatar-legal-card">

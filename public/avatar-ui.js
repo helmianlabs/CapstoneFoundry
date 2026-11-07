@@ -245,6 +245,69 @@ export async function initAvatarSystem() {
     });
   }
 
+  // Avatar Framing (Shape & Size) Controller
+  let selectedShape = localStorage.getItem('cf_avatar_shape') || 'circle';
+  let selectedSize = localStorage.getItem('cf_avatar_size') || 'standard';
+
+  function applyFraming(shape, size) {
+    selectedShape = shape;
+    selectedSize = size;
+    localStorage.setItem('cf_avatar_shape', shape);
+    localStorage.setItem('cf_avatar_size', size);
+
+    ['circle', 'card', 'hexagon', 'full'].forEach(s => {
+      const btn = document.getElementById('shape' + s.charAt(0).toUpperCase() + s.slice(1) + 'Btn');
+      if (btn) {
+        if (s === shape) {
+          btn.style.borderColor = '#00d4ff';
+          btn.style.background = 'rgba(0,212,255,0.25)';
+          btn.style.color = '#fff';
+        } else {
+          btn.style.borderColor = 'rgba(255,255,255,0.15)';
+          btn.style.background = 'rgba(255,255,255,0.05)';
+          btn.style.color = '#94a3b8';
+        }
+      }
+    });
+
+    ['compact', 'standard', 'expanded'].forEach(sz => {
+      const btn = document.getElementById('size' + sz.charAt(0).toUpperCase() + sz.slice(1) + 'Btn');
+      if (btn) {
+        if (sz === size) {
+          btn.style.borderColor = '#00d4ff';
+          btn.style.background = 'rgba(0,212,255,0.25)';
+          btn.style.color = '#fff';
+        } else {
+          btn.style.borderColor = 'rgba(255,255,255,0.15)';
+          btn.style.background = 'rgba(255,255,255,0.05)';
+          btn.style.color = '#94a3b8';
+        }
+      }
+    });
+
+    if (studioCanvas) {
+      studioCanvas.className = 'shape-' + shape;
+    }
+    if (orb) {
+      orb.classList.remove('shape-circle', 'shape-card', 'shape-hexagon', 'shape-full');
+      orb.classList.add('shape-' + shape);
+      orb.classList.remove('size-compact', 'size-standard', 'size-expanded');
+      orb.classList.add('size-' + size);
+    }
+  }
+
+  ['circle', 'card', 'hexagon', 'full'].forEach(s => {
+    const btn = document.getElementById('shape' + s.charAt(0).toUpperCase() + s.slice(1) + 'Btn');
+    if (btn) btn.addEventListener('click', () => applyFraming(s, selectedSize));
+  });
+
+  ['compact', 'standard', 'expanded'].forEach(sz => {
+    const btn = document.getElementById('size' + sz.charAt(0).toUpperCase() + sz.slice(1) + 'Btn');
+    if (btn) btn.addEventListener('click', () => applyFraming(selectedShape, sz));
+  });
+
+  applyFraming(selectedShape, selectedSize);
+
   if (avatarModalClose) {
     avatarModalClose.addEventListener('click', () => {
       if (avatarModal) avatarModal.classList.add('hidden');
