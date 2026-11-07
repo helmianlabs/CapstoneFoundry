@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support & Help Center — Capstone Foundry</title>
+  <meta name="description" content="Support and Help Center for Capstone Foundry. Get assistance with voice pairing, PostgreSQL memory, and Helmion Hands.">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="canonical" href="https://www.capstonefoundry.cloud/support">
+  <style>
+    :root { --bg: #07090e; --card-bg: rgba(13, 17, 27, 0.8); --accent: #00d4ff; --text: #f3f4f6; --muted: #9ca3af; --green: #10b981; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.7; margin: 0; padding: 40px 20px; }
+    .wrap { max-width: 800px; margin: 0 auto; background: var(--card-bg); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 16px; padding: 40px; }
+    h1 { color: #fff; font-size: 2.2rem; margin-top: 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; }
+    h2 { color: var(--accent); font-size: 1.3rem; margin-top: 30px; }
+    p, li { color: var(--muted); font-size: 0.95rem; }
+    strong { color: #fff; }
+    a { color: var(--accent); text-decoration: none; }
+    .back { display: inline-block; margin-bottom: 24px; color: var(--accent); font-weight: 600; }
+    .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; margin: 16px 0; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-weight: 700; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/" class="back">&larr; Back to Capstone Foundry</a>
+    <h1>Support & Assistance</h1>
+    <p>Need help with your Capstone Foundry pairing, voice latency, or Helmion desktop execution?</p>
+
+    <div class="card">
+      <div class="status-badge">● Systems Operational</div>
+      <p style="margin: 8px 0 0;">All edge clusters, PostgreSQL memory stores, and spoke relays are running normally.</p>
+    </div>
+
+    <h2>Direct Support</h2>
+    <p>Our engineering support desk answers operator and subscriber inquiries directly:</p>
+    <ul>
+      <li><strong>Email:</strong> <a href="mailto:support@capstonefoundry.cloud">support@capstonefoundry.cloud</a></li>
+      <li><strong>Security & Abuse Inquiries:</strong> <a href="mailto:security@capstonefoundry.cloud">security@capstonefoundry.cloud</a></li>
+    </ul>
+
+    <h2>Frequently Asked Questions</h2>
+    <p><strong>How do I connect my desktop for Helmion Hands?</strong><br>
+    Launch <code>Helmion.exe</code> on your local workstation, enter your account pairing token from the web console, and authorize the local spoke. Hands commands will then relay directly between your phone and your desktop.</p>
+
+    <p><strong>Where is my memory stored?</strong><br>
+    All conversation records, technical filings, and code decisions are encrypted in dedicated PostgreSQL databases with per-tenant isolation.</p>
+  </div>
+</body>
+</html>

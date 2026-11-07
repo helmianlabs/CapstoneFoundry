@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Capstone Foundry</title>
+  <meta name="description" content="Privacy Policy for Capstone Foundry. Compliant with California AB 2602 / AB 1836, NO FAKES Act, GDPR, and App Store Guidelines.">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="canonical" href="https://www.capstonefoundry.cloud/privacy">
+  <style>
+    :root { --bg: #07090e; --card-bg: rgba(13, 17, 27, 0.8); --accent: #00d4ff; --text: #f3f4f6; --muted: #9ca3af; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.7; margin: 0; padding: 40px 20px; }
+    .wrap { max-width: 800px; margin: 0 auto; background: var(--card-bg); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 16px; padding: 40px; }
+    h1 { color: #fff; font-size: 2.2rem; margin-top: 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; }
+    h2 { color: var(--accent); font-size: 1.3rem; margin-top: 30px; }
+    p, li { color: var(--muted); font-size: 0.95rem; }
+    strong { color: #fff; }
+    a { color: var(--accent); text-decoration: none; }
+    .back { display: inline-block; margin-bottom: 24px; color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/" class="back">&larr; Back to Capstone Foundry</a>
+    <h1>Privacy Policy</h1>
+    <p><em>Last updated: November 7, 2026</em></p>
+
+    <p>Capstone Foundry ("we," "our," or "the Service") respects your privacy and is engineered around local execution, zero data selling, and strict tenant isolation.</p>
+
+    <h2>1. Likeness, Voice & Digital Avatar Governance (AB 2602 / NO FAKES Act)</h2>
+    <p>Capstone Foundry allows users to configure personal digital likenesses (photos or videos) and voice models. In accordance with California AB 2602, AB 1836, and the federal NO FAKES Act:</p>
+    <ul>
+      <li>Your likeness, photo, video, and voice assets belong exclusively to you.</li>
+      <li>We do not license, distribute, sublicense, train public foundation models on, or transfer your biometric likeness or voice to third parties.</li>
+      <li>All client-side video and lip-sync rendering occurs locally on your browser or device via HTML5 Canvas.</li>
+    </ul>
+
+    <h2>2. Data Collection & Storage</h2>
+    <p>We collect only the minimum information necessary to provide executive voice pair programming and memory recall:</p>
+    <ul>
+      <li><strong>Account Credentials:</strong> Email addresses and salted password hashes for session authentication.</li>
+      <li><strong>Autonomous Memory:</strong> Conversation logs, technical decisions, code artifacts, and task reminders, stored in encrypted PostgreSQL database instances with strict tenant isolation.</li>
+      <li><strong>Telemetry:</strong> Operational error reports and heartbeat metrics to ensure continuous execution reliability.</li>
+    </ul>
+
+    <h2>3. Hands Desktop Execution Security</h2>
+    <p>When using Helmion Hands desktop integration, commands execute exclusively on authorized local spokes authenticated via cryptographically signed tokens. No remote arbitrary execution occurs without user authorization.</p>
+
+    <h2>4. Third-Party Integrations</h2>
+    <p>Voice generation leverages ElevenLabs API under secure HTTPS connections with server-side API keys. Audio streams are transient and not retained for public model training.</p>
+
+    <h2>5. Contact & Data Deletion</h2>
+    <p>To request complete deletion of your account and all associated PostgreSQL memory records, email <a href="mailto:support@capstonefoundry.cloud">support@capstonefoundry.cloud</a> or submit a request directly through your account settings.</p>
+  </div>
+</body>
+</html>

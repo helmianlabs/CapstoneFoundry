@@ -4,7 +4,10 @@
   "framework": "vite",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/app", "destination": "/app.html" }
+    { "source": "/app", "destination": "/app.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/support", "destination": "/support.html" }
   ],
   "functions": {
     "api/[...path].js": {
