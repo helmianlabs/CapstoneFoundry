@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const API_KEY = 'sk_80b7a4daca3448ca6f4e808a78b1e6f82c9697091f85ea90';
+const API_KEY = process.env.ELEVENLABS_API_KEY;
 const VOICE_FOUNDER = 'EXAVITQu4vr4xnSDxMaL'; // Sarah (Crisp Executive Founder)
 const VOICE_MARK = 'nPczCjzI2devNBz1zQrb';    // Brian (Authoritative Executive Mark)
 
