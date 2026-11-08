@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-const claudeConn = "postgresql://neondb_owner:npg_u3bKq1lZfRvh@ep-ancient-hill-a5qg9f0y.us-east-2.aws.neon.tech/claude_memory?sslmode=require";
+const claudeConn = process.env.NEON_CLAUDE_MEMORY_URL;
 const client = new pg.Client({ connectionString: claudeConn });
 await client.connect();
 
