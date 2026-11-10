@@ -146,26 +146,10 @@
     .status.thinking { color: #ffc800; }
 
     .transcript {
-      margin-top: 20px;
-      max-width: 320px;
-      text-align: center;
-      font-size: 0.8rem;
-      color: #6b7280;
-      line-height: 1.6;
-      z-index: 2;
-      min-height: 3em;
-      padding: 0 20px;
+      display: none !important;
     }
     .report-answer-btn {
-      margin-top: 6px;
-      background: none;
-      border: none;
-      color: #4b5563;
-      font-size: 0.72rem;
-      text-decoration: underline;
-      cursor: pointer;
-      z-index: 2;
-      padding: 4px 8px;
+      display: none !important;
     }
     .report-answer-btn:disabled { text-decoration: none; cursor: default; }
 
@@ -509,13 +493,7 @@
     }
 
     /* ─── Footer notice ─────────────────────────────────────────────── */
-    .footer-note {
-      position: fixed; bottom: 50px; left: 0; right: 0;
-      text-align: center;
-      font-size: 0.55rem; color: #4a5568;
-      letter-spacing: 0.05em; padding: 0 30px;
-      z-index: 2;
-    }
+    .footer-note { display: none !important; }
     .footer-note a { color: #6b7280; text-decoration: underline; cursor: pointer; }
     .footer-note a:hover { color: #00d4ff; }
 
@@ -2924,7 +2902,7 @@
       const consentText = currentUser.consentResearch
         ? `Conversations may be saved for research as previously discussed. <a id="optoutLink">Opt out</a>`
         : `<a id="optinLink">Enable research mode</a>`;
-      footerNoteEl.innerHTML = tutorToggleHtml + consentText;
+      footerNoteEl.innerHTML = ""; footerNoteEl.style.display = "none";
       const tutorOn = document.getElementById('tutorOnLink');
       const tutorOff = document.getElementById('tutorOffLink');
       if (tutorOn) tutorOn.addEventListener('click', () => {

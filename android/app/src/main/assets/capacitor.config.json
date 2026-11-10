@@ -2,9 +2,16 @@
 	"appId": "com.capstonefoundry.app",
 	"appName": "Capstone Foundry",
 	"server": {
-		"url": "https://capstonefoundry.cloud/app",
+		"url": "https://www.capstonefoundry.cloud/app",
 		"cleartext": false,
-		"androidScheme": "https"
+		"androidScheme": "https",
+		"allowNavigation": [
+			"www.capstonefoundry.cloud",
+			"capstonefoundry.cloud",
+			"*.capstonefoundry.cloud",
+			"capstonefoundry.vercel.app",
+			"*.vercel.app"
+		]
 	},
 	"webDir": "dist",
 	"android": {},

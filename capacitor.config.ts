@@ -25,9 +25,16 @@ const config: CapacitorConfig = {
 
   // Remote-URL shell — loads live Vercel site
   server: {
-    url: 'https://capstonefoundry.cloud/app',
+    url: 'https://www.capstonefoundry.cloud/app',
     cleartext: false,   // HTTPS only — never allow HTTP
     androidScheme: 'https',
+    allowNavigation: [
+      'www.capstonefoundry.cloud',
+      'capstonefoundry.cloud',
+      '*.capstonefoundry.cloud',
+      'capstonefoundry.vercel.app',
+      '*.vercel.app'
+    ],
   },
 
   // webDir is still required by the CLI even in remote-URL mode.
