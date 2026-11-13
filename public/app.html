@@ -2656,6 +2656,27 @@
         });
       }
 
+      // 2. A push while a call is live ENDS the call. The decision comes
+      // from the page's own session state - never from scraping button
+      // labels out of the widget's shadow DOM. The scrape missed the end
+      // control often enough that a push fell through to a start button
+      // and stacked a fresh session on top of the live one, leaving the
+      // old websocket hanging (Troy, 2026-11-13).
+      if (cfCallSession || directSession || (typeof widgetCallActive !== 'undefined' && widgetCallActive)) {
+        directCallUi('connecting');
+        const s = cfCallSession || directSession;
+        cfCallSession = null;
+        directSession = null;
+        try { widgetCallActive = false; } catch (e) {}
+        try { cfNoteHangup('orb-end'); } catch (e) {}
+        if (s && typeof s.endSession === 'function') {
+          try { await s.endSession(); } catch (e) {}
+        }
+        try { stopDirectLevels(); } catch (e) {}
+        directCallUi('idle');
+        return;
+      }
+
       function dispatchFullClick(el) {
         if (!el) return;
         ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
