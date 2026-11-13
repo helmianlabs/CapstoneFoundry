@@ -21,7 +21,6 @@ import { applySwarmGate, detectSuspiciousBotSwarm } from '../lib/swarmDefense.js
 // lower individual ceiling cannot be enforced separately while all
 // routes share this one function — that needs per-route functions.
 export const ROUTE_FUNCTION_CONFIG = {
-  'actionable': { api: { bodyParser: { sizeLimit: '25mb' } } },
   'diary': { api: { bodyParser: { sizeLimit: '10mb' } } },
   'generate-3d': { maxDuration: 180 },
   'export-document': { maxDuration: 60 },
@@ -61,13 +60,6 @@ export const config = {
 // pins every one of those paths. Function budget: Hobby allows 12 —
 // this router + conversation-webhook + 9 shims = 11.
 const routes = {
-  'actionable': () => import('../server/handlers/actionable.js'),
-  'actionable-auth': () => import('../server/handlers/actionable-auth.js'),
-  'actionable-config': () => import('../server/handlers/actionable-config.js'),
-  'actionable-google-callback': () => import('../server/handlers/actionable-google-callback.js'),
-  'actionable-integrations': () => import('../server/handlers/actionable-integrations.js'),
-  'actionable-oauth-callback': () => import('../server/handlers/actionable-oauth-callback.js'),
-  'actionable-search': () => import('../server/handlers/actionable-search.js'),
   'ai-test': () => import('../server/handlers/ai-test.js'),
   'alarm': () => import('../server/handlers/alarm.js'),
   'auth': () => import('../server/handlers/auth.js'),
