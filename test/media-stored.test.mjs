@@ -40,6 +40,10 @@ test('server: setMediaStored snapshots text kinds and scopes like filing', () =>
   assert.match(mediaMem, /category = 'stored'/, 'store sets the stored category');
   assert.match(mediaMem, /snapshot failed/, 'a failed snapshot refuses the store instead of half-storing');
   assert.match(mediaMem, /kind = 'artifact'\)/, 'same identity scope shape as setMediaFiled');
+  // The store UPDATE's params are [snapshot, id, identity] — its scope
+  // must reference the identity as $3, not $2 (the first live round
+  // trip caught user_id compared against the row id: text = uuid).
+  assert.match(mediaMem, /media_content = \$1, updated_at = now\(\)\s+WHERE id = \$2 AND \$\{scope\('\$3'\)\}/, 'store UPDATE binds identity as $3');
 });
 
 test('server: handler routes store/restore and the stored view', () => {
