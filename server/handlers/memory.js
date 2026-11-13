@@ -32,7 +32,6 @@ import { inspectTextSecurity } from '../../lib/injectionDefense.js';
 import { Pool } from 'pg';
 import OpenAI from 'openai';
 import { authorizeMemoryAccess } from '../../lib/tenant.js';
-import { ensureMemoryCategoryColumn } from '../../lib/memorySchema.js';
 
 const DB_URL = process.env.DATABASE_URL_MEMORY || process.env.DATABASE_URL;
 
@@ -49,6 +48,33 @@ function getPool() {
     });
   }
   return _pool;
+}
+
+// ── Schema drift guard (fix 2026-11-13) ─────────────────────────────────
+// The live memory_items table has no `category` column (specced, never
+// migrated), while this module reads and writes it — every memory save
+// and recall failed live with `column "category" does not exist`.
+// Probe information_schema ONCE per process and include the column in
+// SQL only when it exists — the same conditional-column pattern this
+// codebase already uses for tenant_id. Readers default a missing
+// category to 'general' (see mapRow); writers keep classifying and the
+// value is stored again automatically if the column ever lands. If the
+// probe itself fails, take the road that works on BOTH schemas.
+let _hasCategoryCol = null;
+async function memoryItemsHasCategory(pool) {
+  if (_hasCategoryCol !== null) return _hasCategoryCol;
+  try {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'memory_items'
+          AND column_name = 'category'
+        LIMIT 1`
+    );
+    _hasCategoryCol = rows.length > 0;
+  } catch {
+    _hasCategoryCol = false;
+  }
+  return _hasCategoryCol;
 }
 
 let _openai = null;
@@ -268,7 +294,8 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
   const identityId = tenantId || userId;
 
   const pool = getPool();
-  await ensureMemoryCategoryColumn(pool);
+  const hasCategory = await memoryItemsHasCategory(pool);
+  const catSelect = hasCategory ? 'category' : "NULL::text AS category";
   const mapRow = (r) => ({
     key: r.key,
     value: r.value,
@@ -309,7 +336,7 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
                 content AS value,
                 kind,
                 scope,
-                category,
+                ${catSelect},
                 importance,
                 created_at,
                 updated_at
@@ -330,25 +357,25 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
     }
     // Embedding failed → fall through to boot rank rather than erroring,
     // but the mode SAYS so (see the WithMeta contract above).
-    const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow);
+    const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow, false, catSelect);
     return { facts: boot, mode: 'boot-fallback', embedError };
   }
 
   // BOOT path (no query): importance, then recency, then confidence.
   // reserveRecent (prime-agent) also pins the newest rows into the brief.
   const reserveRecent = opts.reserveRecent === true;
-  const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow, reserveRecent);
+  const boot = await bootRank(pool, identityCol, identityId, scopes, limit, mapRow, reserveRecent, catSelect);
   return { facts: boot, mode: 'boot', embedError: null };
 }
 
-async function runBootQuery(pool, identityCol, identityId, scopes, limit, orderBy) {
+async function runBootQuery(pool, identityCol, identityId, scopes, limit, orderBy, catSelect = 'category') {
   const bootParams = [identityId, scopes, limit];
   const { rows } = await pool.query(
     `SELECT subject AS key,
             content AS value,
             kind,
             scope,
-            category,
+            ${catSelect},
             importance,
             created_at,
             updated_at
@@ -363,7 +390,7 @@ async function runBootQuery(pool, identityCol, identityId, scopes, limit, orderB
   return rows;
 }
 
-async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow, reserveRecent) {
+async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow, reserveRecent, catSelect = 'category') {
   // Recency before confidence: an importance-1.0 canary saved today stays
   // ahead of an older importance-1.0 row with a slightly higher confidence.
   const ranked = await runBootQuery(
@@ -371,11 +398,13 @@ async function bootRank(pool, identityCol, identityId, scopes, limit, mapRow, re
     `importance DESC NULLS LAST,
                updated_at DESC,
                confidence DESC NULLS LAST`,
+    catSelect,
   );
   if (!reserveRecent) return ranked.map(mapRow);
   const recent = await runBootQuery(
     pool, identityCol, identityId, scopes, recentSlotCount(limit),
     `updated_at DESC NULLS LAST`,
+    catSelect,
   );
   return mergeBootFacts(ranked.map(mapRow), recent.map(mapRow), limit);
 }
@@ -396,7 +425,6 @@ export async function upsertExtractedFact({
 
 async function upsertFactInternal(userId, key, value, opts = {}) {
   const pool = getPool();
-  await ensureMemoryCategoryColumn(pool);
   const subject = String(key).slice(0, 120);
   const content = String(value).slice(0, 500);
   const importance = typeof opts.importance === 'number' ? opts.importance : 0.5;
@@ -440,7 +468,8 @@ async function upsertFactInternal(userId, key, value, opts = {}) {
   }
 
   const category = classifyMemoryCategory(subject, content);
-  const insCols = ['user_id', 'scope', 'kind', 'subject', 'content', 'embedding', 'confidence', 'importance', 'source_session', 'category'];
+  const hasCategory = await memoryItemsHasCategory(pool);
+  const insCols = ['user_id', 'scope', 'kind', 'subject', 'content', 'embedding', 'confidence', 'importance', 'source_session'];
   const insParams = [userId, subject, content];
   const insVals = ['$1', `'semantic'`, `'fact'`, '$2', '$3'];
   if (vec) { insParams.push(vecLiteral(vec)); insVals.push(`$${insParams.length}::vector`); }
@@ -448,7 +477,7 @@ async function upsertFactInternal(userId, key, value, opts = {}) {
   insVals.push('0.7');
   insParams.push(importance); insVals.push(`$${insParams.length}`);
   insParams.push(sourceSession); insVals.push(`$${insParams.length}`);
-  insParams.push(category); insVals.push(`$${insParams.length}`);
+  if (hasCategory) { insCols.push('category'); insParams.push(category); insVals.push(`$${insParams.length}`); }
   if (tenantId) { insCols.push('tenant_id'); insParams.push(tenantId); insVals.push(`$${insParams.length}`); }
   const insert = await pool.query(
     `INSERT INTO memory_items (${insCols.join(', ')})
@@ -590,7 +619,7 @@ async function classifyContradiction(llm, existing, incoming) {
  */
 export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenantId = null) {
   if (!pool) pool = getPool();
-  await ensureMemoryCategoryColumn(pool);
+  const hasCategory = await memoryItemsHasCategory(pool);
   let inserted = 0, updated = 0, superseded = 0, skipped = 0;
   if (!user_id || !Array.isArray(candidates) || candidates.length === 0) {
     return { inserted, updated, superseded, skipped };
@@ -611,7 +640,9 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
     if (!vec) {
       const cat = c.category || classifyMemoryCategory(c.subject, c.content);
       const nvParams = [user_id, c.scope, c.kind, c.subject, c.content,
-        c.confidence, c.importance, c.valid_until, c.source_session, cat];
+        c.confidence, c.importance, c.valid_until, c.source_session];
+      let nvCatCol = '', nvCatVal = '';
+      if (hasCategory) { nvParams.push(cat); nvCatCol = ', category'; nvCatVal = `, $${nvParams.length}`; }
       let nvTenantCol = '', nvTenantVal = '';
       if (tenantId) { nvParams.push(tenantId); nvTenantCol = ', tenant_id'; nvTenantVal = `, $${nvParams.length}`; }
       let nvSpanVal = 'NULL';
@@ -619,8 +650,8 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
       await pool.query(
         `INSERT INTO memory_items
            (user_id, scope, kind, subject, content,
-            confidence, importance, valid_until, source_session, category, source_span${nvTenantCol})
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,${nvSpanVal}${nvTenantVal})`,
+            confidence, importance, valid_until, source_session${nvCatCol}, source_span${nvTenantCol})
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9${nvCatVal},${nvSpanVal}${nvTenantVal})`,
         nvParams
       );
       inserted++;
@@ -690,8 +721,11 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
             `UPDATE memory_items SET valid_until = now() WHERE id = $1${tenantId ? ' AND tenant_id = $2' : ''}`,
             tenantId ? [top.id, tenantId] : [top.id]
           );
+          const ssCat = c.category || classifyMemoryCategory(c.subject, c.content);
           const ssParams = [user_id, c.scope, c.kind, c.subject, c.content, vlit,
             c.confidence, c.importance, c.valid_until, top.id, c.source_session];
+          let ssCatCol = '', ssCatVal = '';
+          if (hasCategory) { ssParams.push(ssCat); ssCatCol = ', category'; ssCatVal = `, $${ssParams.length}`; }
           let ssTenantCol = '', ssTenantVal = '';
           if (tenantId) { ssParams.push(tenantId); ssTenantCol = ', tenant_id'; ssTenantVal = `, $${ssParams.length}`; }
           let ssSpanVal = 'NULL';
@@ -700,8 +734,8 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
             `INSERT INTO memory_items
                (user_id, scope, kind, subject, content, embedding,
                 confidence, importance, valid_until, supersedes,
-                source_session, category, source_span${ssTenantCol})
-             VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,$12,${ssSpanVal}${ssTenantVal})`,
+                source_session${ssCatCol}, source_span${ssTenantCol})
+             VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11${ssCatVal},${ssSpanVal}${ssTenantVal})`,
             ssParams
           );
           await client.query('COMMIT');
@@ -720,7 +754,9 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
     // FRESH INSERT (spec :440-451).
     const cat = c.category || classifyMemoryCategory(c.subject, c.content);
     const fiParams = [user_id, c.scope, c.kind, c.subject, c.content, vlit,
-      c.confidence, c.importance, c.valid_until, c.source_session, cat];
+      c.confidence, c.importance, c.valid_until, c.source_session];
+    let fiCatCol = '', fiCatVal = '';
+    if (hasCategory) { fiParams.push(cat); fiCatCol = ', category'; fiCatVal = `, $${fiParams.length}`; }
     let fiTenantCol = '', fiTenantVal = '';
     if (tenantId) { fiParams.push(tenantId); fiTenantCol = ', tenant_id'; fiTenantVal = `, $${fiParams.length}`; }
     let fiSpanVal = 'NULL';
@@ -728,8 +764,8 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
     await pool.query(
       `INSERT INTO memory_items
          (user_id, scope, kind, subject, content, embedding,
-          confidence, importance, valid_until, source_session, category, source_span${fiTenantCol})
-       VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10,$11,${fiSpanVal}${fiTenantVal})`,
+          confidence, importance, valid_until, source_session${fiCatCol}, source_span${fiTenantCol})
+       VALUES ($1,$2,$3,$4,$5,$6::vector,$7,$8,$9,$10${fiCatVal},${fiSpanVal}${fiTenantVal})`,
       fiParams
     );
     inserted++;
@@ -740,7 +776,6 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
 
 async function readFacts(userId, tenantId = null) {
   const pool = getPool();
-  await ensureMemoryCategoryColumn(pool);
   // Same tenant-era identity rule as retrieveMemories: tenant_id alone
   // in enforced mode, user_id in compat mode.
   const rfParams = [tenantId || userId];
@@ -762,7 +797,6 @@ async function readFacts(userId, tenantId = null) {
 
 async function upsertFact(userId, key, value, tenantId = null) {
   const pool = getPool();
-  await ensureMemoryCategoryColumn(pool);
   const subject = String(key).slice(0, 120);
   const content = String(value).slice(0, 500);
 
@@ -805,13 +839,19 @@ async function upsertFact(userId, key, value, tenantId = null) {
   }
 
   const category = classifyMemoryCategory(subject, content);
+  const hasCategory = await memoryItemsHasCategory(pool);
+  const ufParams = [userId, subject, content];
+  if (vec) ufParams.push(vecLiteral(vec));
+  let ufCatCol = '', ufCatVal = '';
+  if (hasCategory) { ufParams.push(category); ufCatCol = ', category'; ufCatVal = `, $${ufParams.length}`; }
+  let ufTenantCol = '', ufTenantVal = '';
+  if (tenantId) { ufParams.push(tenantId); ufTenantCol = ', tenant_id'; ufTenantVal = `, $${ufParams.length}`; }
   const insert = await pool.query(
     `INSERT INTO memory_items
-       (user_id, scope, kind, subject, content, embedding, confidence, importance, category${tenantId ? ', tenant_id' : ''})
-     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, 0.5, $${vec ? 5 : 4}${tenantId ? `, $${vec ? 6 : 5}` : ''})
+       (user_id, scope, kind, subject, content, embedding, confidence, importance${ufCatCol}${ufTenantCol})
+     VALUES ($1, 'semantic', 'fact', $2, $3, ${vec ? '$4::vector' : 'NULL'}, 0.7, 0.5${ufCatVal}${ufTenantVal})
      RETURNING id`,
-    vec ? [userId, subject, content, vecLiteral(vec), category, ...(tenantId ? [tenantId] : [])]
-        : [userId, subject, content, category, ...(tenantId ? [tenantId] : [])]
+    ufParams
   );
   try {
     await pool.query(
