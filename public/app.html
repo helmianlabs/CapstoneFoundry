@@ -573,6 +573,20 @@
     }
     .artifact-save-btn:hover { background: rgba(0, 212, 255, 0.28); }
     .artifact-save-btn:disabled { opacity: 0.55; cursor: wait; }
+    .artifact-store-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(52, 211, 153, 0.12);
+      color: #34d399;
+      font-size: 0.82rem; font-weight: 600;
+      font-family: inherit;
+      padding: 6px 12px; border-radius: 6px;
+      border: 1px solid rgba(52, 211, 153, 0.45);
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .artifact-store-btn:hover { background: rgba(52, 211, 153, 0.28); }
+    .artifact-store-btn:disabled { opacity: 0.55; cursor: wait; }
     .artifact-viewer-frame {
       flex: 1; width: 100%; height: 100%; border: none; background: #07090e;
     }
@@ -819,6 +833,33 @@
       display: flex; align-items: center; justify-content: center;
     }
     .gallery-lightbox-report:disabled { opacity: 0.6; cursor: default; }
+    .gallery-lightbox-store {
+      position: absolute; bottom: 18px; right: 20px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(52,211,153,0.5);
+      color: #34d399;
+      height: 36px; padding: 0 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gallery-lightbox-store:disabled { opacity: 0.6; cursor: default; }
+    /* Per-card store affordance: a small database icon at the thumb's
+       top-right (the badge owns the top-left). */
+    .gallery-item-store {
+      position: absolute; top: 4px; right: 4px; z-index: 3;
+      width: 30px; height: 30px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(52,211,153,0.5);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 0;
+    }
+    .gallery-item-store:active { background: rgba(52,211,153,0.35); }
 
     /* ─── Holographic Avatar Studio Modal ──────────────────────────── */
     .avatar-modal {
@@ -1047,6 +1088,7 @@
       <button class="gallery-pill" data-type="video">▶ Videos</button>
       <button class="gallery-pill" data-type="model3d">🧊 3D Models</button>
       <button class="gallery-pill" data-type="saved">🗂 Saved</button>
+      <button class="gallery-pill" data-type="database">🗄 Database</button>
     </div>
     <select class="gallery-filter" id="galleryFilter" style="display:none;">
       <option value="all">All Media & Files</option>
@@ -1066,6 +1108,7 @@
     <button class="gallery-lightbox-close" id="galleryLightboxClose">✕</button>
     <button class="gallery-lightbox-cast" id="galleryLightboxCast" type="button" aria-label="Watch on TV" style="display:none;">📺 TV</button>
     <button class="gallery-lightbox-report" id="galleryLightboxReport" type="button">Report this</button>
+    <button class="gallery-lightbox-store" id="galleryLightboxStore" type="button">🗄 Store in database</button>
     <img id="galleryLightboxImg" src="" alt="" style="display:none;" />
     <video id="galleryLightboxVideo" playsinline controls style="display:none;"></video>
     <div class="gallery-lightbox-caption" id="galleryLightboxCaption"></div>
@@ -1080,6 +1123,7 @@
       </button>
       <div id="artifactViewerTitle" class="artifact-viewer-title">Artifact Preview</div>
       <button id="artifactViewerSaveBtn" class="artifact-save-btn" type="button">💾 Save</button>
+      <button id="artifactViewerStoreBtn" class="artifact-store-btn" type="button">🗄 Store in database</button>
       <a id="artifactViewerExternalBtn" class="artifact-external-btn" href="#" target="_blank" rel="noopener noreferrer">
         Open ↗
       </a>
@@ -4612,12 +4656,57 @@
     const galleryLbCloseEl   = document.getElementById('galleryLightboxClose');
     const galleryLbCastEl    = document.getElementById('galleryLightboxCast');
     const galleryLbReportEl  = document.getElementById('galleryLightboxReport');
+    const galleryLbStoreEl   = document.getElementById('galleryLightboxStore');
 
     let gallerySearchTimer = null;
 
     // Saved view state: when true, the grid lists only items the user
     // filed away (the Saved place) instead of the main list.
     let galleryFiledMode = false;
+
+    // Database view state: when true, the grid lists only items the
+    // user stored into the database (the Database place, 'stored'
+    // category server-side) — a separate place from Saved, by name.
+    let galleryStoredMode = false;
+
+    // The gallery caller's identity + auth wiring, shared by every
+    // gallery write below (file, store, restore).
+    function galleryUserId() {
+      return currentUser?.userId || (typeof tbCallUserId === 'function' && tbCallUserId()) || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
+    }
+    function galleryWriteHeaders() {
+      return typeof tbAuthHeaders === 'function'
+        ? { 'Content-Type': 'application/json', ...tbAuthHeaders() }
+        : { 'Content-Type': 'application/json' };
+    }
+    async function postGalleryState(payload) {
+      const res = await fetch('/api/media-gallery', {
+        method: 'POST',
+        headers: galleryWriteHeaders(),
+        body: JSON.stringify({ userId: galleryUserId(), ...payload }),
+      });
+      return res.json().catch(() => ({}));
+    }
+    function reloadGallery() {
+      const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
+      loadGallery(q || undefined);
+    }
+
+    // Store / restore one item, then refresh the grid. Storing moves
+    // the item into the Database place (text pages also snapshot their
+    // content into the database row server-side); restoring moves it
+    // back to the main list.
+    async function toggleItemStored(item) {
+      if (!item || item.id == null) return false;
+      try {
+        const data = await postGalleryState({ id: item.id, stored: !item.stored });
+        if (data.ok) { reloadGallery(); return true; }
+        console.warn('[gallery] store/restore not ok:', data);
+      } catch (e) {
+        console.warn('[gallery] store/restore failed:', e);
+      }
+      return false;
+    }
 
     // An item's display name: the server sends `name` (the page title for
     // built websites); fall back to the caption's part before " — ".
@@ -4726,10 +4815,11 @@
     async function loadGallery(query) {
       const userId = currentUser?.userId || (typeof tbCallUserId === 'function' && tbCallUserId()) || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
 
-      const type    = galleryFiledMode ? 'all' : (galleryFilterEl.value || 'all');
+      const type    = (galleryFiledMode || galleryStoredMode) ? 'all' : (galleryFilterEl.value || 'all');
       const limit   = 60;
       const params  = new URLSearchParams({ userId, limit, type });
       if (galleryFiledMode) params.set('filed', '1');
+      if (galleryStoredMode) params.set('stored', '1');
       if (query) params.set('query', query);
 
       let items = [];
@@ -4753,7 +4843,9 @@
         galleryEmptyEl.style.display = 'block';
         galleryEmptyEl.textContent = query
           ? `No media found matching "${query}".`
-          : galleryFiledMode
+          : galleryStoredMode
+            ? 'Nothing stored in the database yet — open any item and tap "Store in database".'
+            : galleryFiledMode
             ? 'Nothing filed away yet — open a website and tap Save to file it here.'
             : (galleryFilterEl && galleryFilterEl.value === 'artifact'
                 ? 'No websites yet — ask Mark to build you a landing page.'
@@ -4817,13 +4909,50 @@
           thumb.appendChild(img);
         }
 
+        // Store affordance — a small database icon on every card.
+        // From the main list it stores the item in the database; in
+        // the Database view it restores the item to the gallery.
+        const storeBtn = document.createElement('button');
+        storeBtn.type = 'button';
+        storeBtn.className = 'gallery-item-store';
+        storeBtn.textContent = item.stored ? '↩' : '🗄';
+        storeBtn.title = item.stored ? 'Restore to gallery' : 'Store in database';
+        storeBtn.setAttribute('aria-label', storeBtn.title);
+        storeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleItemStored(item);
+        });
+        thumb.appendChild(storeBtn);
+
         // Caption — the item's name, in flow at the card's foot.
         const cap = document.createElement('div');
         cap.className = 'gallery-item-caption';
         cap.textContent = galleryItemName(item);
         el.appendChild(cap);
 
+        // Long-press offers the same store/restore, for users who
+        // never notice the icon. The click that ends a long-press is
+        // swallowed so the item doesn't also open.
+        let pressTimer = null;
+        let longPressed = false;
+        const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+        el.addEventListener('pointerdown', () => {
+          longPressed = false;
+          clearPress();
+          pressTimer = setTimeout(() => {
+            longPressed = true;
+            const verb = item.stored ? 'Restore' : 'Store';
+            const place = item.stored ? 'back in the gallery' : 'in the database';
+            if (window.confirm(`${verb} "${galleryItemName(item)}" ${place}?`)) {
+              toggleItemStored(item);
+            }
+          }, 600);
+        });
+        ['pointerup', 'pointerleave', 'pointercancel', 'pointermove'].forEach(evt =>
+          el.addEventListener(evt, clearPress));
+
         el.addEventListener('click', () => {
+          if (longPressed) { longPressed = false; return; }
           if (item.type === 'artifact' || item.type === 'document') {
             openArtifactViewer(item);
           } else {
@@ -4853,14 +4982,21 @@
       const title = document.getElementById('artifactViewerTitle');
       const ext = document.getElementById('artifactViewerExternalBtn');
       const saveBtn = document.getElementById('artifactViewerSaveBtn');
+      const storeBtn = document.getElementById('artifactViewerStoreBtn');
       if (!viewer || !frame) {
         window.open(item.blobUrl, '_blank');
         return;
       }
       viewerItem = item;
       title.textContent = galleryItemName(item);
-      if (saveBtn) saveBtn.textContent = item.filed ? '↩ Move back' : '💾 Save';
-      if (item.type === 'artifact' && item.id != null) {
+      if (saveBtn) {
+        saveBtn.textContent = item.filed ? '↩ Move back' : '💾 Save';
+        // A database-stored item's way back is Restore, not Save —
+        // keep the two places from mixing on one screen.
+        saveBtn.style.display = item.stored ? 'none' : '';
+      }
+      if (storeBtn) storeBtn.textContent = item.stored ? '↩ Restore to gallery' : '🗄 Store in database';
+      if ((item.type === 'artifact' || item.type === 'document') && item.id != null) {
         frame.src = artifactViewUrl(item);
         if (ext) ext.href = artifactViewUrl(item);
       } else {
@@ -4890,25 +5026,31 @@
       const item = viewerItem;
       avSaveBtn.disabled = true;
       try {
-        const userId = currentUser?.userId || (typeof tbCallUserId === 'function' && tbCallUserId()) || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
-        const headers = typeof tbAuthHeaders === 'function'
-          ? { 'Content-Type': 'application/json', ...tbAuthHeaders() }
-          : { 'Content-Type': 'application/json' };
-        const res = await fetch('/api/media-gallery', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ userId, id: item.id, filed: !item.filed }),
-        });
-        const data = await res.json().catch(() => ({}));
+        const data = await postGalleryState({ id: item.id, filed: !item.filed });
         if (data.ok) {
           closeArtifactViewer();
-          const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
-          loadGallery(q || undefined);
+          reloadGallery();
         }
       } catch (e) {
         console.warn('[gallery] file/unfile failed:', e);
       } finally {
         avSaveBtn.disabled = false;
+      }
+    });
+
+    // Store in database — the Database place (distinct from Saved).
+    // For a website/document the server also snapshots the page's full
+    // content into the database row. On an item opened from the
+    // Database view the same button restores it to the gallery.
+    const avStoreBtn = document.getElementById('artifactViewerStoreBtn');
+    if (avStoreBtn) avStoreBtn.addEventListener('click', async () => {
+      if (!viewerItem || viewerItem.id == null) return;
+      const item = viewerItem;
+      avStoreBtn.disabled = true;
+      try {
+        if (await toggleItemStored(item)) closeArtifactViewer();
+      } finally {
+        avStoreBtn.disabled = false;
       }
     });
 
@@ -4962,8 +5104,14 @@
           // The Saved place: filed items of every type. The type filter
           // select keeps its value for when the user comes back.
           galleryFiledMode = true;
+          galleryStoredMode = false;
+        } else if (selectedType === 'database') {
+          // The Database place: stored items of every type, by name.
+          galleryFiledMode = false;
+          galleryStoredMode = true;
         } else {
           galleryFiledMode = false;
+          galleryStoredMode = false;
           if (galleryFilterEl) galleryFilterEl.value = selectedType;
         }
         const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
@@ -4974,6 +5122,7 @@
     if (galleryFilterEl) {
       galleryFilterEl.addEventListener('change', () => {
         galleryFiledMode = false;
+        galleryStoredMode = false;
         const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
         loadGallery(q || undefined);
       });
@@ -4988,6 +5137,10 @@
       if (galleryLbReportEl) {
         galleryLbReportEl.disabled = false;
         galleryLbReportEl.textContent = 'Report this';
+      }
+      if (galleryLbStoreEl) {
+        galleryLbStoreEl.disabled = false;
+        galleryLbStoreEl.textContent = item.stored ? '↩ Restore to gallery' : '🗄 Store in database';
       }
       galleryLbImg.style.display   = 'none';
       galleryLbVideo.style.display = 'none';
@@ -5048,6 +5201,18 @@
           ? REPORT_THANKS_TEXT
           : 'Could not send the report — try again.';
         if (!ok) galleryLbReportEl.disabled = false;
+      });
+    }
+    // "Store in database" — same Database place as the viewer button:
+    // stores the shown media item, or restores it when it was opened
+    // from the Database view.
+    if (galleryLbStoreEl) {
+      galleryLbStoreEl.addEventListener('click', async () => {
+        if (!lightboxItem || lightboxItem.id == null || galleryLbStoreEl.disabled) return;
+        const item = lightboxItem;
+        galleryLbStoreEl.disabled = true;
+        if (await toggleItemStored(item)) closeLightbox();
+        else galleryLbStoreEl.disabled = false;
       });
     }
     galleryLightboxEl.addEventListener('click', (e) => {

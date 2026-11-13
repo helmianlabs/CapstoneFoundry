@@ -5,7 +5,7 @@
 // calls (memoized), reports success, and after a failure it reports
 // false and retries on the next call instead of caching the failure.
 
-import { ensureMemoryCategoryColumn, _resetMemorySchemaMemo } from '../lib/memorySchema.js';
+import { ensureMemoryCategoryColumn, ensureMediaContentColumn, _resetMemorySchemaMemo } from '../lib/memorySchema.js';
 
 let passed = 0;
 function check(name, cond) {
@@ -56,6 +56,31 @@ function fakePool(failFirst = 0) {
   _resetMemorySchemaMemo();
   check('null pool -> false', (await ensureMemoryCategoryColumn(null)) === false);
   check('non-pool -> false', (await ensureMemoryCategoryColumn({})) === false);
+}
+
+// 4. The media_content guard (gallery "Store in database" snapshot
+// column) behaves the same way: one idempotent ALTER, memoized.
+{
+  _resetMemorySchemaMemo();
+  const pool = fakePool();
+  const a = await ensureMediaContentColumn(pool);
+  const b = await ensureMediaContentColumn(pool);
+  check('media_content ensure reports success', a === true && b === true);
+  check('media_content: exactly one statement issued', pool.calls.length === 1);
+  check(
+    'statement is the idempotent media_content ALTER',
+    /ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS media_content text/.test(pool.calls[0])
+  );
+}
+
+// 5. The two guards keep separate memos: each issues its own ALTER.
+{
+  _resetMemorySchemaMemo();
+  const pool = fakePool();
+  await ensureMemoryCategoryColumn(pool);
+  await ensureMediaContentColumn(pool);
+  check('both guards issue their own ALTER', pool.calls.length === 2);
+  check('media_content guard: null pool -> false', (await ensureMediaContentColumn(null)) === false);
 }
 
 console.log(`\n${passed} checks passed`);
