@@ -981,7 +981,7 @@
       <button id="appMenuBtn" class="menu-trigger" title="Open Menu" aria-label="Open Menu">☰ Menu</button>
       <div class="app-menu-dropdown hidden" id="appMenuDropdown">
         <button id="avatarStudioBtn" class="menu-action-btn" title="Holographic Avatar Studio">👤 Holographic Avatar</button>
-        <button id="handsBuildBtn" class="menu-action-btn" title="Trigger Helmion Hands">🛠 Hands Build</button>
+        <button id="handsBuildBtn" class="menu-action-btn" title="Ask Mark to build a page">🛠 Build a Page</button>
         <button id="galleryBtn" class="menu-action-btn" title="View media & artifacts">◫ Gallery & Files</button>
         <div class="menu-divider"></div>
         <div id="exportWrapper">
@@ -2323,18 +2323,16 @@
           // surfaces its own failures, so a dead relay can never
           // break turn capture.
           if (turnRole === 'user') relaySend(turnContent);
-          if (turnRole === 'user' && /\b(?:build|create|spin up|generate)\b.{0,30}\b(?:landing page|landing\.html|landing|website)\b/i.test(turnContent)) {
-            if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Building Capstone Foundry landing page at /landing.html...';
-            fetch('/api/hands-build', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt: turnContent, target_path: 'landing.html' }),
-            }).then(r => r.json()).then(data => {
-              if (data.ok && transcriptEl) {
-                transcriptEl.textContent = 'Helmion Hands: Tangible landing page ready at /landing.html';
-              }
-            }).catch(() => {});
-          }
+          // BUILDS GO THROUGH MARK'S TOOL ONLY (2026-11-13 fix). This
+          // hook used to fire its own unauthenticated POST to
+          // /api/hands-build alongside the agent's trigger_hands_build
+          // tool call — a second, shadow build path that (a) double-built
+          // once the endpoint became real, (b) carried no user identity,
+          // and (c) printed a canned "tangible landing page ready" line
+          // regardless of what the server did. Removed: when the user
+          // asks Mark to build something, Mark calls his tool himself,
+          // the tool result is the truth, and what Mark says about it is
+          // governed by his instructions. Nothing here announces builds.
         }
         if (idleTimer) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
@@ -4604,32 +4602,55 @@
     if (handsBuildBtnEl) {
       handsBuildBtnEl.addEventListener('click', async () => {
         const defaultPrompt = 'Capstone Foundry landing page';
-        const userPrompt = window.prompt('What would you like Helmion Hands to build?', defaultPrompt);
+        const userPrompt = window.prompt('What would you like Mark to build?', defaultPrompt);
         if (!userPrompt || !userPrompt.trim()) return;
 
         handsBuildBtnEl.disabled = true;
         handsBuildBtnEl.textContent = '⏳ Building...';
-        if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: Triggering build of ' + userPrompt + '...';
-        if (typeof relaySend === 'function') {
-          relaySend('Build ' + userPrompt);
-        }
+        if (transcriptEl) transcriptEl.textContent = 'Mark is building: ' + userPrompt + '...';
+        // The relay mirror is best-effort decoration around the real
+        // request. It used to be called unguarded BEFORE the try block:
+        // if it ever threw, this handler died before its finally ran
+        // and the button sat on "Building..." forever (the 2026-11-13
+        // audit's stuck-button phone test). It can never block a build.
         try {
+          if (typeof relaySend === 'function') relaySend('Build ' + userPrompt);
+        } catch (e) { /* relay is optional; the build is not */ }
+        // Every path out of this handler terminates: the fetch carries
+        // a hard timeout, success opens the Gallery on Websites & Apps
+        // where the new page is listed, failure says so plainly, and
+        // the finally always restores the button.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        try {
+          const headers = typeof tbAuthHeaders === 'function'
+            ? { 'Content-Type': 'application/json', ...tbAuthHeaders() }
+            : { 'Content-Type': 'application/json' };
+          const userId = (typeof tbCallUserId === 'function' && tbCallUserId()) || currentUser?.userId || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
           const res = await fetch('/api/hands-build', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: userPrompt.trim(), target_path: 'landing.html' }),
+            headers,
+            body: JSON.stringify({ prompt: userPrompt.trim(), userId }),
+            signal: controller.signal,
           });
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           if (data.ok) {
-            window.location.href = data.url || '/landing.html';
+            if (transcriptEl) transcriptEl.textContent = 'Built "' + (data.title || 'your page') + '" — it is in Gallery → Websites & Apps.';
+            if (galleryFilterEl) galleryFilterEl.value = 'artifact';
+            document.querySelectorAll('.gallery-pill').forEach(b => b.classList.toggle('active', b.dataset.type === 'artifact'));
+            openGallery();
           } else {
-            alert('Helmion Hands: ' + (data.error || 'build failed'));
+            const msg = data.message || data.error || 'build failed';
+            if (transcriptEl) transcriptEl.textContent = 'Build did not finish: ' + msg;
+            alert('Build did not finish: ' + msg);
           }
         } catch (err) {
-          if (transcriptEl) transcriptEl.textContent = 'Helmion Hands: ' + err.message;
+          const msg = err?.name === 'AbortError' ? 'the build took too long and was stopped' : (err?.message || 'network error');
+          if (transcriptEl) transcriptEl.textContent = 'Build did not finish: ' + msg;
         } finally {
+          clearTimeout(timeout);
           handsBuildBtnEl.disabled = false;
-          handsBuildBtnEl.textContent = '🛠 Hands Build';
+          handsBuildBtnEl.textContent = '🛠 Build a Page';
         }
       });
     }
@@ -4664,7 +4685,9 @@
         galleryEmptyEl.style.display = 'block';
         galleryEmptyEl.textContent = query
           ? `No media found matching "${query}".`
-          : 'No media yet — ask Mark to generate an image or video.';
+          : (galleryFilterEl && galleryFilterEl.value === 'artifact'
+              ? 'No websites yet — ask Mark to build you a landing page.'
+              : 'No media yet — ask Mark to generate an image or video.');
         return;
       }
 
