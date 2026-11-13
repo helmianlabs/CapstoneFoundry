@@ -379,7 +379,7 @@ describe('meterGate', () => {
   });
 });
 
-describe('fitted bucket edges + Free media capability (billing/grants bite)', () => {
+describe('fitted bucket edges + media capability (2026-11-13: media on every plan)', () => {
   const FITTED = { starter: 2000, buddy: 7500, buddy_media: 15000, helmian_connect: 24000 };
 
   for (const [plan, grant] of Object.entries(FITTED)) {
@@ -402,46 +402,45 @@ describe('fitted bucket edges + Free media capability (billing/grants bite)', ()
       }));
   }
 
-  it('planAllowsMedia: only the Free plan excludes media by definition', () => {
-    assert.equal(planAllowsMedia('free'), false);
-    for (const plan of ['starter', 'buddy', 'buddy_media', 'helmian_connect']) {
+  it('planAllowsMedia: every plan includes media (2026-11-13 owner order)', () => {
+    for (const plan of ['free', 'starter', 'buddy', 'buddy_media', 'helmian_connect']) {
       assert.equal(planAllowsMedia(plan), true, plan);
     }
     assert.deepEqual([...MEDIA_ACTIONS].sort(), ['image', 'video', 'video_higgsfield', 'video_omni']);
   });
 
-  it('free + image at FULL balance: denied media_not_included — capability, not balance',
+  it('free + image at FULL balance: allowed — the bucket is the only cap',
     withSecret('test-secret', async () => {
       const db = new FakeDb();
       db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
       // No usage at all: the whole 100-credit taste is unspent and the
-      // 5-credit image would fit the balance easily. The denial must
-      // therefore be the capability refusal, never credits_exhausted.
+      // 5-credit image fits the balance. Before 2026-11-13 this was
+      // denied media_not_included by capability; the owner's order
+      // reversed that settlement, so the gate must now allow it.
       const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 5, action: 'image' });
-      assert.equal(gate.allowed, false);
-      assert.equal(gate.reason, 'media_not_included');
+      assert.equal(gate.allowed, true);
       assert.equal(gate.state.plan, 'free');
       assert.equal(gate.state.remaining, 100);
     }));
 
-  it('free + video actions: every media action is refused by capability',
+  it('free + video actions: capability passes for every media action',
     withSecret('test-secret', async () => {
       for (const action of ['video', 'video_omni', 'video_higgsfield']) {
         const db = new FakeDb();
         db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
         const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 30, action });
-        assert.equal(gate.allowed, false, action);
-        assert.equal(gate.reason, 'media_not_included', action);
+        assert.equal(gate.allowed, true, action);
       }
     }));
 
-  it('free + media with a spent bucket still reports capability, not balance',
+  it('free + media with a spent bucket reports the balance, not capability',
     withSecret('test-secret', async () => {
       const db = new FakeDb();
       db.entitlements.set(TENANT_A, { tenant_id: TENANT_A, plan: 'free', status: 'active' });
       db.seed({ tenantId: TENANT_A, micros: 100_000, at: new Date() }); // taste fully spent
       const gate = await meterGate({ db, tenantId: TENANT_A, keySource: 'env', estCredits: 5, action: 'image' });
-      assert.equal(gate.reason, 'media_not_included'); // capability is checked first
+      assert.equal(gate.allowed, false);
+      assert.equal(gate.reason, 'credits_exhausted'); // no capability refusal masks the balance anymore
     }));
 
   it('paid plan + media: capability passes and the bucket alone decides',
