@@ -27,8 +27,10 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
 
   const id = String(req.query?.id || '').trim();
-  if (!/^\d+$/.test(id)) {
-    return res.status(400).json({ error: 'numeric id required' });
+  // Row ids are uuids in this deployment (older rows may be numeric);
+  // the lookup itself is parameterized either way.
+  if (!/^[0-9a-zA-Z-]{1,64}$/.test(id)) {
+    return res.status(400).json({ error: 'id required' });
   }
 
   let blobUrl = null;
