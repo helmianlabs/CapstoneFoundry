@@ -1942,6 +1942,7 @@
     }
 
     let cfCallSession = null;
+    let cfEndLatchUntil = 0;
     let cfHangupNoted = false;
 
     function cfAndroidOutputUnlock() {
@@ -2017,6 +2018,7 @@
     function cfNoteHangup(reason) {
       if (cfHangupNoted) return;
       cfHangupNoted = true;
+      cfEndLatchUntil = Date.now() + 5000;
       let conv = '';
       try { conv = lastConversationId ? String(lastConversationId).slice(0, 48) : ''; } catch (e) {}
       cfBeacon('call-end', {
@@ -2645,6 +2647,13 @@
         try { navigator.vibrate(40); } catch (err) {}
       }
 
+      // End latch: while a hang-up is settling, taps are swallowed -
+      // never treated as a start. People tap again when nothing seems
+      // to happen; a tap landing mid-teardown used to find no session
+      // and take the start path, stacking a new call on the dying one
+      // or leaving the orb lit on a half-ended widget (Troy, 2026-11-13).
+      if (Date.now() < cfEndLatchUntil) return;
+
       // 1. Direct gesture: resume all AudioContext instances immediately
       if (Array.isArray(window.__allAudioContexts)) {
         window.__allAudioContexts.forEach(ctx => {
@@ -2668,6 +2677,7 @@
         cfCallSession = null;
         directSession = null;
         try { widgetCallActive = false; } catch (e) {}
+        cfEndLatchUntil = Date.now() + 5000;
         try { cfNoteHangup('orb-end'); } catch (e) {}
         // Press the widget's own end control too, when it can be found,
         // so the widget runs its own teardown and resets its face. A
