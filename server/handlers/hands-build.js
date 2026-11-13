@@ -72,7 +72,15 @@ export default async function handleHandsBuild(req, res) {
         generate: (p) => completeText({
           system: BUILD_SYSTEM_PROMPT,
           user: `Build request: ${p}`,
-          maxTokens: 2600,
+          // 4500, raised from 2600 on 2026-11-13: at 2600 every
+          // full-size landing-page request failed the completeness
+          // check (the model spends part of the budget thinking, and
+          // a polished multi-section page does not fit in the rest),
+          // while a tiny one-section page succeeded end to end in
+          // ~4 s. 4500 leaves the whole round trip — generation,
+          // storage, registration, read-back — inside the tool's
+          // 25 s window with headroom.
+          maxTokens: 4500,
           req,
         }),
         store: async (pathname, html) => {
