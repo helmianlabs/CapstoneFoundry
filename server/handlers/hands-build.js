@@ -69,18 +69,29 @@ export default async function handleHandsBuild(req, res) {
       owner,
       tenantId,
       deps: {
-        generate: (p) => completeText({
+        generate: (p, { attempt } = {}) => completeText({
           system: BUILD_SYSTEM_PROMPT,
-          user: `Build request: ${p}`,
-          // 4500, raised from 2600 on 2026-11-13: at 2600 every
-          // full-size landing-page request failed the completeness
-          // check (the model spends part of the budget thinking, and
-          // a polished multi-section page does not fit in the rest),
-          // while a tiny one-section page succeeded end to end in
-          // ~4 s. 4500 leaves the whole round trip — generation,
-          // storage, registration, read-back — inside the tool's
-          // 25 s window with headroom.
-          maxTokens: 4500,
+          user: attempt > 1
+            ? `Build request: ${p}\n\nIMPORTANT: a previous attempt at this page ran too long and was cut off before it could finish. Build a COMPLETE, MORE COMPACT version of the same page: fewer sections, shorter copy, simpler styling. A finished smaller page that ends with </html> is the goal.`
+            : `Build request: ${p}`,
+          // Budget history: 2600 failed every full-size page; 4500
+          // (2026-11-13) still failed INTERMITTENTLY on elaborate
+          // requests — Troy's live Capstone Foundry page 502'd twice
+          // in one call at stage "generate" (page incomplete), then
+          // the identical request succeeded once with a ~18.8K-char
+          // page (≈4,500 output tokens). The budget was the size of
+          // the page, so variance in hidden thinking + page length
+          // decided success. Fixes: hidden thinking is now OFF for
+          // this call (thinkingBudget 0 — page writing does not need
+          // it, and it was sharing the output budget), attempt 1 gets
+          // 6000 output tokens, and lib/handsBuild.js retries an
+          // incomplete page once at 3200 with the compact steer
+          // above. The tool's response window was raised 25 s → 60 s
+          // the same day so a slow-but-complete build is not reported
+          // as a timeout; the verified-before-success contract is
+          // unchanged.
+          maxTokens: attempt > 1 ? 3200 : 6000,
+          thinkingBudget: 0,
           req,
         }),
         store: async (pathname, html) => {

@@ -81,6 +81,33 @@ test('incomplete page (fragment): rejected at stage "generate", nothing stored',
   assert.equal(calls.stored.length, 0);
 });
 
+test('incomplete first attempt: retried once, complete retry builds', async () => {
+  let calls = 0;
+  const { deps, calls: rec } = fakeDeps({
+    generate: async (_p, { attempt } = {}) => {
+      calls++;
+      return attempt > 1 ? GOOD_HTML : GOOD_HTML.slice(0, 200); // cut off mid-document
+    },
+  });
+  const built = await buildArtifact({ prompt: 'big page', owner: 'troy', deps });
+  assert.equal(calls, 2);
+  assert.equal(built.title, 'Purple Zucchini Farms');
+  assert.equal(rec.stored.length, 1);
+});
+
+test('incomplete on both attempts: still an honest stage "generate" error, nothing stored', async () => {
+  let calls = 0;
+  const { deps, calls: rec } = fakeDeps({
+    generate: async () => { calls++; return GOOD_HTML.slice(0, 200); },
+  });
+  await assert.rejects(
+    buildArtifact({ prompt: 'big page', owner: 'troy', deps }),
+    (e) => e instanceof HandsBuildError && e.stage === 'generate' && /incomplete/.test(e.message),
+  );
+  assert.equal(calls, 2);
+  assert.equal(rec.stored.length, 0);
+});
+
 test('store failure: honest error at stage "store", nothing registered', async () => {
   const { deps, calls } = fakeDeps({ store: async () => { throw new Error('blob 500'); } });
   await assert.rejects(
