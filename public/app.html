@@ -2669,6 +2669,20 @@
         directSession = null;
         try { widgetCallActive = false; } catch (e) {}
         try { cfNoteHangup('orb-end'); } catch (e) {}
+        // Press the widget's own end control too, when it can be found,
+        // so the widget runs its own teardown and resets its face. A
+        // session ended only from the page side left the widget showing
+        // its in-call face, and the sync watcher kept repainting the orb
+        // as live from it (Troy, 2026-11-13).
+        try {
+          const wgt = document.getElementById('convai-widget') || document.querySelector('elevenlabs-convai');
+          const sroot = wgt && wgt.shadowRoot;
+          if (sroot) {
+            const wbtns = Array.from(sroot.querySelectorAll('button'));
+            const web2 = wbtns.find(b => /end|disconnect|hang up/i.test((b.innerText || b.textContent || b.getAttribute('aria-label') || b.title || '')));
+            if (web2 && typeof dispatchFullClick === 'function') dispatchFullClick(web2);
+          }
+        } catch (e) {}
         if (s && typeof s.endSession === 'function') {
           try { await s.endSession(); } catch (e) {}
         }
@@ -2753,7 +2767,8 @@
         return t.includes('end') || t.includes('disconnect') || t.includes('hang up');
       });
 
-      if (endBtn) {
+      const cfSessionActive = !!(cfCallSession || directSession || (typeof widgetCallActive !== 'undefined' && widgetCallActive));
+      if (endBtn && cfSessionActive) {
         // Call is live!
         const statusEl = root.querySelector('p[class*="status"], div[class*="status"], [class*="status"]');
         const statusText = (statusEl ? statusEl.textContent : '').toLowerCase();
