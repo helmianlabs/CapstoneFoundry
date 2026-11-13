@@ -32,6 +32,7 @@ import { inspectTextSecurity } from '../../lib/injectionDefense.js';
 import { Pool } from 'pg';
 import OpenAI from 'openai';
 import { authorizeMemoryAccess } from '../../lib/tenant.js';
+import { ensureMemoryCategoryColumn } from '../../lib/memorySchema.js';
 
 const DB_URL = process.env.DATABASE_URL_MEMORY || process.env.DATABASE_URL;
 
@@ -267,6 +268,7 @@ export async function retrieveMemoriesWithMeta(userId, optsOrLimit = 30) {
   const identityId = tenantId || userId;
 
   const pool = getPool();
+  await ensureMemoryCategoryColumn(pool);
   const mapRow = (r) => ({
     key: r.key,
     value: r.value,
@@ -394,6 +396,7 @@ export async function upsertExtractedFact({
 
 async function upsertFactInternal(userId, key, value, opts = {}) {
   const pool = getPool();
+  await ensureMemoryCategoryColumn(pool);
   const subject = String(key).slice(0, 120);
   const content = String(value).slice(0, 500);
   const importance = typeof opts.importance === 'number' ? opts.importance : 0.5;
@@ -587,6 +590,7 @@ async function classifyContradiction(llm, existing, incoming) {
  */
 export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenantId = null) {
   if (!pool) pool = getPool();
+  await ensureMemoryCategoryColumn(pool);
   let inserted = 0, updated = 0, superseded = 0, skipped = 0;
   if (!user_id || !Array.isArray(candidates) || candidates.length === 0) {
     return { inserted, updated, superseded, skipped };
@@ -736,6 +740,7 @@ export async function saveMemoryCandidates(pool, user_id, candidates, llm, tenan
 
 async function readFacts(userId, tenantId = null) {
   const pool = getPool();
+  await ensureMemoryCategoryColumn(pool);
   // Same tenant-era identity rule as retrieveMemories: tenant_id alone
   // in enforced mode, user_id in compat mode.
   const rfParams = [tenantId || userId];
@@ -757,6 +762,7 @@ async function readFacts(userId, tenantId = null) {
 
 async function upsertFact(userId, key, value, tenantId = null) {
   const pool = getPool();
+  await ensureMemoryCategoryColumn(pool);
   const subject = String(key).slice(0, 120);
   const content = String(value).slice(0, 500);
 
