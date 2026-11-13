@@ -62,6 +62,7 @@ export const config = {
 const routes = {
   'ai-test': () => import('../server/handlers/ai-test.js'),
   'alarm': () => import('../server/handlers/alarm.js'),
+  'artifact-view': () => import('../server/handlers/artifact-view.js'),
   'auth': () => import('../server/handlers/auth.js'),
   'avatar': () => import('../server/handlers/avatar.js'),
   'billing-webhook': () => import('../server/handlers/billing-webhook.js'),

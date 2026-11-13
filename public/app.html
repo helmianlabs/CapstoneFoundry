@@ -559,6 +559,20 @@
       transition: all 0.2s;
     }
     .artifact-external-btn:hover { color: #00d4ff; border-color: rgba(0, 212, 255, 0.4); }
+    .artifact-save-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(0, 212, 255, 0.12);
+      color: #00d4ff;
+      font-size: 0.82rem; font-weight: 600;
+      font-family: inherit;
+      padding: 6px 12px; border-radius: 6px;
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .artifact-save-btn:hover { background: rgba(0, 212, 255, 0.28); }
+    .artifact-save-btn:disabled { opacity: 0.55; cursor: wait; }
     .artifact-viewer-frame {
       flex: 1; width: 100%; height: 100%; border: none; background: #07090e;
     }
@@ -694,21 +708,34 @@
       background: rgba(0,212,255,0.03);
       transition: border-color 0.2s, box-shadow 0.2s;
       aspect-ratio: 1;
-      display: flex; align-items: center; justify-content: center;
+      /* Contained column: a flexible thumbnail area over an in-flow
+         caption. Every part is sized by the card itself, so nothing can
+         paint outside it — the old centered-flex card let the
+         placeholder + caption stack spill over neighbouring cards. */
+      display: flex; flex-direction: column;
+      align-items: stretch; justify-content: flex-start;
+      min-height: 0;
     }
     .gallery-item:hover {
       border-color: rgba(0,212,255,0.6);
       box-shadow: 0 0 16px rgba(0,212,255,0.2);
     }
-    .gallery-item img,
-    .gallery-item video {
+    .gallery-item-thumb {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      overflow: hidden;
+    }
+    .gallery-item-thumb img,
+    .gallery-item-thumb video {
       width: 100%; height: 100%;
       object-fit: cover;
       display: block;
       pointer-events: none;
     }
     .gallery-item-badge {
-      position: absolute; top: 4px; left: 4px;
+      position: absolute; top: 4px; left: 4px; z-index: 2;
       background: rgba(0,0,0,0.75);
       border-radius: 3px;
       padding: 2px 6px;
@@ -718,9 +745,10 @@
       color: #00d4ff;
     }
     .gallery-item-caption {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      background: linear-gradient(transparent, rgba(0,0,0,0.85));
-      padding: 18px 6px 5px;
+      flex: none;
+      height: 32px;
+      background: rgba(0,0,0,0.55);
+      padding: 5px 6px;
       font-size: 0.6rem;
       color: #a0aec0;
       line-height: 1.3;
@@ -1018,6 +1046,7 @@
       <button class="gallery-pill" data-type="image">⬜ Images</button>
       <button class="gallery-pill" data-type="video">▶ Videos</button>
       <button class="gallery-pill" data-type="model3d">🧊 3D Models</button>
+      <button class="gallery-pill" data-type="saved">🗂 Saved</button>
     </div>
     <select class="gallery-filter" id="galleryFilter" style="display:none;">
       <option value="all">All Media & Files</option>
@@ -1050,11 +1079,12 @@
         Back to Session
       </button>
       <div id="artifactViewerTitle" class="artifact-viewer-title">Artifact Preview</div>
+      <button id="artifactViewerSaveBtn" class="artifact-save-btn" type="button">💾 Save</button>
       <a id="artifactViewerExternalBtn" class="artifact-external-btn" href="#" target="_blank" rel="noopener noreferrer">
         Open ↗
       </a>
     </div>
-    <iframe id="artifactViewerFrame" class="artifact-viewer-frame" src="about:blank"></iframe>
+    <iframe id="artifactViewerFrame" class="artifact-viewer-frame" src="about:blank" sandbox="allow-scripts allow-modals allow-popups allow-forms" title="Built page preview"></iframe>
   </div>
 
   <!-- Hidden print container — only visible during window.print() -->
@@ -2385,7 +2415,7 @@
     // so the handler above still builds the per-user prompt, voice,
     // dynamic variables, and turn capture, then the SDK runs it.
     // It is not the default on Android WebView.
-    const DIRECT_VOICE_AGENT_ID = 'agent_8801m7bdq6bne8y88dsqytvdbkt0';
+    const DIRECT_VOICE_AGENT_ID = 'agent_9101m6kwm1sqe0ctz33pn1q7p07w';
     let directSession = null;
     let directLevelsTimer = null;
 
@@ -3951,7 +3981,7 @@
         if (!widget) {
           widget = document.createElement('elevenlabs-convai');
           widget.setAttribute('id', 'convai-widget');
-          widget.setAttribute('agent-id', 'agent_8801m7bdq6bne8y88dsqytvdbkt0');
+          widget.setAttribute('agent-id', 'agent_9101m6kwm1sqe0ctz33pn1q7p07w');
           mount.appendChild(widget);
         }
       }
@@ -4585,6 +4615,20 @@
 
     let gallerySearchTimer = null;
 
+    // Saved view state: when true, the grid lists only items the user
+    // filed away (the Saved place) instead of the main list.
+    let galleryFiledMode = false;
+
+    // An item's display name: the server sends `name` (the page title for
+    // built websites); fall back to the caption's part before " — ".
+    function galleryItemName(item) {
+      if (item?.name) return item.name;
+      const c = String(item?.caption || '').trim();
+      const cut = c.indexOf(' — ');
+      return (cut > 0 ? c.slice(0, cut) : c).trim()
+        || (item?.type === 'artifact' ? 'Website / App' : 'Untitled');
+    }
+
     // ── Open / close gallery panel ─────────────────────────────────
     function openGallery() {
       galleryPanelEl.classList.remove('hidden');
@@ -4682,9 +4726,10 @@
     async function loadGallery(query) {
       const userId = currentUser?.userId || (typeof tbCallUserId === 'function' && tbCallUserId()) || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
 
-      const type    = galleryFilterEl.value || 'all';
+      const type    = galleryFiledMode ? 'all' : (galleryFilterEl.value || 'all');
       const limit   = 60;
       const params  = new URLSearchParams({ userId, limit, type });
+      if (galleryFiledMode) params.set('filed', '1');
       if (query) params.set('query', query);
 
       let items = [];
@@ -4708,9 +4753,11 @@
         galleryEmptyEl.style.display = 'block';
         galleryEmptyEl.textContent = query
           ? `No media found matching "${query}".`
-          : (galleryFilterEl && galleryFilterEl.value === 'artifact'
-              ? 'No websites yet — ask Mark to build you a landing page.'
-              : 'No media yet — ask Mark to generate an image or video.');
+          : galleryFiledMode
+            ? 'Nothing filed away yet — open a website and tap Save to file it here.'
+            : (galleryFilterEl && galleryFilterEl.value === 'artifact'
+                ? 'No websites yet — ask Mark to build you a landing page.'
+                : 'No media yet — ask Mark to generate an image or video.');
         return;
       }
 
@@ -4722,12 +4769,21 @@
         el.dataset.url     = item.blobUrl || '';
         el.dataset.type    = item.type || 'image';
         el.dataset.caption = item.caption || '';
+        if (item.id != null) el.dataset.id = item.id;
+
+        // Thumbnail area — the card's flexible top. The badge and the
+        // media live inside it, clipped to the card; the caption below
+        // is in normal flow, so no part of one card can paint over the
+        // next (the overlap in Troy's 2026-11-13 screenshot).
+        const thumb = document.createElement('div');
+        thumb.className = 'gallery-item-thumb';
+        el.appendChild(thumb);
 
         // Badge
         const badge = document.createElement('div');
         badge.className = 'gallery-item-badge';
         badge.textContent = item.type === 'video' ? '▶ video' : item.type === 'model3d' ? '🧊 3d' : item.type === 'artifact' ? '🌐 web' : item.type === 'document' ? '📄 doc' : '⬜ image';
-        el.appendChild(badge);
+        thumb.appendChild(badge);
 
         // Thumbnail
         if (item.type === 'video') {
@@ -4737,34 +4793,34 @@
           vid.preload = 'metadata';
           // Pause at first frame as poster substitute
           vid.addEventListener('loadedmetadata', () => { vid.currentTime = 0.1; });
-          el.appendChild(vid);
+          thumb.appendChild(vid);
         } else if (item.type === 'model3d') {
           const mdiv = document.createElement('div');
           mdiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#00d4ff;font-size:2.2rem;background:rgba(0,212,255,0.06);';
           mdiv.innerHTML = '🧊<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#00d4ff;font-weight:600;">3D MODEL</span>';
-          el.appendChild(mdiv);
+          thumb.appendChild(mdiv);
         } else if (item.type === 'artifact') {
           const adiv = document.createElement('div');
           adiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#00e5ff;font-size:2.2rem;background:rgba(0,229,255,0.06);padding:10px;text-align:center;';
           adiv.innerHTML = '🌐<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#00e5ff;font-weight:600;">WEBSITE / APP</span>';
-          el.appendChild(adiv);
+          thumb.appendChild(adiv);
         } else if (item.type === 'document') {
           const ddiv = document.createElement('div');
           ddiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#a78bfa;font-size:2.2rem;background:rgba(167,139,250,0.06);padding:10px;text-align:center;';
           ddiv.innerHTML = '📄<span style="font-size:0.65rem;letter-spacing:0.12em;margin-top:6px;color:#a78bfa;font-weight:600;">DOCUMENT</span>';
-          el.appendChild(ddiv);
+          thumb.appendChild(ddiv);
         } else {
           const img = document.createElement('img');
           img.src = item.blobUrl || '';
           img.alt = item.caption || 'Generated image';
           img.loading = 'lazy';
-          el.appendChild(img);
+          thumb.appendChild(img);
         }
 
-        // Caption
+        // Caption — the item's name, in flow at the card's foot.
         const cap = document.createElement('div');
         cap.className = 'gallery-item-caption';
-        cap.textContent = item.caption || '';
+        cap.textContent = galleryItemName(item);
         el.appendChild(cap);
 
         el.addEventListener('click', () => {
@@ -4780,18 +4836,37 @@
     }
 
     // ── In-App Artifact Viewer (Preserves Voice Call & App State) ──
+    // Built websites render through the app's own /api/artifact-view
+    // route: the raw Blob URL is served as a forced download under a
+    // block-everything CSP, which is why this viewer used to open black.
+    // The route returns the stored page inline from the app's origin,
+    // and the iframe's sandbox keeps it in an opaque origin.
+    let viewerItem = null;
+
+    function artifactViewUrl(item) {
+      return '/api/artifact-view?id=' + encodeURIComponent(item.id);
+    }
+
     function openArtifactViewer(item) {
       const viewer = document.getElementById('artifactViewer');
       const frame = document.getElementById('artifactViewerFrame');
       const title = document.getElementById('artifactViewerTitle');
       const ext = document.getElementById('artifactViewerExternalBtn');
+      const saveBtn = document.getElementById('artifactViewerSaveBtn');
       if (!viewer || !frame) {
         window.open(item.blobUrl, '_blank');
         return;
       }
-      title.textContent = item.caption || (item.type === 'artifact' ? 'Website / App' : 'Document');
-      if (ext) ext.href = item.blobUrl || '#';
-      frame.src = item.blobUrl || '';
+      viewerItem = item;
+      title.textContent = galleryItemName(item);
+      if (saveBtn) saveBtn.textContent = item.filed ? '↩ Move back' : '💾 Save';
+      if (item.type === 'artifact' && item.id != null) {
+        frame.src = artifactViewUrl(item);
+        if (ext) ext.href = artifactViewUrl(item);
+      } else {
+        frame.src = item.blobUrl || '';
+        if (ext) ext.href = item.blobUrl || '#';
+      }
       viewer.classList.remove('hidden');
     }
 
@@ -4800,10 +4875,42 @@
       const frame = document.getElementById('artifactViewerFrame');
       if (viewer) viewer.classList.add('hidden');
       if (frame) frame.src = 'about:blank';
+      viewerItem = null;
     }
 
     const avBackBtn = document.getElementById('artifactViewerBackBtn');
     if (avBackBtn) avBackBtn.addEventListener('click', closeArtifactViewer);
+
+    // Save files the open item away into the Saved place — out of the
+    // main list, never deleted, reopenable from the Saved pill. On an
+    // already-filed item the same button moves it back.
+    const avSaveBtn = document.getElementById('artifactViewerSaveBtn');
+    if (avSaveBtn) avSaveBtn.addEventListener('click', async () => {
+      if (!viewerItem || viewerItem.id == null) return;
+      const item = viewerItem;
+      avSaveBtn.disabled = true;
+      try {
+        const userId = currentUser?.userId || (typeof tbCallUserId === 'function' && tbCallUserId()) || localStorage.getItem('thinkinbuddy_user_id') || 'troy';
+        const headers = typeof tbAuthHeaders === 'function'
+          ? { 'Content-Type': 'application/json', ...tbAuthHeaders() }
+          : { 'Content-Type': 'application/json' };
+        const res = await fetch('/api/media-gallery', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ userId, id: item.id, filed: !item.filed }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.ok) {
+          closeArtifactViewer();
+          const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
+          loadGallery(q || undefined);
+        }
+      } catch (e) {
+        console.warn('[gallery] file/unfile failed:', e);
+      } finally {
+        avSaveBtn.disabled = false;
+      }
+    });
 
     window.addEventListener('message', (e) => {
       if (e.data === 'close-artifact-viewer' || e.data?.type === 'close-artifact-viewer' || e.data === 'close-artifact') {
@@ -4851,7 +4958,14 @@
         pillButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const selectedType = btn.dataset.type || 'all';
-        if (galleryFilterEl) galleryFilterEl.value = selectedType;
+        if (selectedType === 'saved') {
+          // The Saved place: filed items of every type. The type filter
+          // select keeps its value for when the user comes back.
+          galleryFiledMode = true;
+        } else {
+          galleryFiledMode = false;
+          if (galleryFilterEl) galleryFilterEl.value = selectedType;
+        }
         const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
         loadGallery(q || undefined);
       });
@@ -4859,6 +4973,7 @@
 
     if (galleryFilterEl) {
       galleryFilterEl.addEventListener('change', () => {
+        galleryFiledMode = false;
         const q = gallerySearchEl ? gallerySearchEl.value.trim() : '';
         loadGallery(q || undefined);
       });
