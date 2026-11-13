@@ -2529,7 +2529,18 @@
 
     async function startDirectVoice(preparedConfig) {
       if (directSession) {
-        try { await directSession.endSession(); } catch (e) { /* already closed */ }
+        // End the call — and ALWAYS clear the local session state, even
+        // when endSession() resolves without an onDisconnect. The SDK
+        // does exactly that when the server already closed the session
+        // (e.g. a guardrail kill, close 1008: the socket is gone, no
+        // disconnect event ever fires). Before this fix the orb stayed
+        // on LISTENING forever and every tap just re-ended the dead
+        // session — the "still says listening" hang.
+        const ending = directSession;
+        directSession = null;
+        try { await ending.endSession(); } catch (e) { /* already closed */ }
+        stopDirectLevels();
+        directCallUi('idle');
         return;
       }
       if (!window.__cfVoice || typeof window.__cfVoice.startSession !== 'function') {
@@ -2578,6 +2589,19 @@
           },
           onError: (err) => {
             cfBeacon('direct-voice-error', { message: String((err && err.message) || err || '').slice(0, 200) });
+            // An SDK error ends the call (the UI below already says so).
+            // Close and clear the session as well: leaving directSession
+            // set after a server-side kill trapped the orb on LISTENING
+            // with no way to start a new call.
+            const dying = directSession;
+            directSession = null;
+            if (dying) {
+              try {
+                const p = dying.endSession();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              } catch (e) { /* already closed */ }
+            }
+            stopDirectLevels();
             directCallUi('error', 'The call hit a problem — ' + String((err && err.message) || 'unknown error').slice(0, 120));
           },
           onModeChange: (m) => {
