@@ -72,7 +72,7 @@ export default async function handleHandsBuild(req, res) {
         generate: (p) => completeText({
           system: BUILD_SYSTEM_PROMPT,
           user: `Build request: ${p}`,
-          maxTokens: 4096,
+          maxTokens: 2600,
           req,
         }),
         store: async (pathname, html) => {
